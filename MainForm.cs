@@ -625,6 +625,50 @@ namespace AntigravityCompanion
                         }
                     }
 
+                    // Prune targetIdSet for projects configured with ConflictResolutionStrategy.Skip
+                    if (backupPbBytes != null && backupPbBytes.Length > 0 && request.ProjectStrategies != null && request.ProjectStrategies.Count > 0)
+                    {
+                        try
+                        {
+                            List<ConversationSummaryInfo> backupInfos = SessionMetadataExtractor.ExtractSummaries(backupPbBytes, null);
+                            if (backupInfos != null)
+                            {
+                                for (int i = 0; i < backupInfos.Count; i++)
+                                {
+                                    ConversationSummaryInfo info = backupInfos[i];
+                                    if (info != null && !string.IsNullOrEmpty(info.ConversationId))
+                                    {
+                                        bool isSkipped = false;
+                                        if (!string.IsNullOrEmpty(info.ProjectName) &&
+                                            request.ProjectStrategies.ContainsKey(info.ProjectName) &&
+                                            request.ProjectStrategies[info.ProjectName] == ConflictResolutionStrategy.Skip)
+                                        {
+                                            isSkipped = true;
+                                        }
+                                        else if (!string.IsNullOrEmpty(info.FolderUri))
+                                        {
+                                            string folderProj = SessionMetadataExtractor.ExtractProjectNameFromUri(info.FolderUri);
+                                            if (!string.IsNullOrEmpty(folderProj) &&
+                                                request.ProjectStrategies.ContainsKey(folderProj) &&
+                                                request.ProjectStrategies[folderProj] == ConflictResolutionStrategy.Skip)
+                                            {
+                                                isSkipped = true;
+                                            }
+                                        }
+
+                                        if (isSkipped)
+                                        {
+                                            targetIdSet.Remove(info.ConversationId);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch
+                        {
+                        }
+                    }
+
                     // 3. Extract selected files
                     for (int i = 0; i < archive.Entries.Count; i++)
                     {
@@ -939,21 +983,67 @@ namespace AntigravityCompanion
 
         private static void RemapEntryProject(ProtoNode entryNode, string newProjectName)
         {
-            if (entryNode == null || entryNode.Children == null) return;
-            for (int i = 0; i < entryNode.Children.Count; i++)
+            if (entryNode == null || string.IsNullOrEmpty(newProjectName)) return;
+            RemapEntryProjectRecursive(entryNode, newProjectName);
+        }
+
+        private static void RemapEntryProjectRecursive(ProtoNode node, string newProjectName)
+        {
+            if (node == null) return;
+
+            if (node.FieldNumber == 17)
             {
-                ProtoNode child = entryNode.Children[i];
-                if (child.FieldNumber == 17 && child.Children != null)
+                if (node.Children != null && node.Children.Count > 0)
                 {
-                    ProtoNode nameNode = child.FindChild(1);
+                    ProtoNode nameNode = node.FindChild(1);
                     if (nameNode != null)
                     {
                         nameNode.SetString(newProjectName);
                     }
+                    ProtoNode uriNode = node.FindChild(7);
+                    if (uriNode != null)
+                    {
+                        string oldUri = uriNode.GetString();
+                        if (!string.IsNullOrEmpty(oldUri))
+                        {
+                            string clean = oldUri.Replace('\\', '/').TrimEnd('/');
+                            int lastSlash = clean.LastIndexOf('/');
+                            if (lastSlash >= 0)
+                            {
+                                string newUri = clean.Substring(0, lastSlash + 1) + newProjectName;
+                                uriNode.SetString(newUri);
+                            }
+                        }
+                    }
                 }
-                else if (child.FieldNumber == 9)
+                else if (node.WireType == 2 && node.RawBytes != null && node.RawBytes.Length > 0)
                 {
-                    string oldUri = child.GetString();
+                    node.SetString(newProjectName);
+                }
+            }
+            else if (node.FieldNumber == 9)
+            {
+                if (node.Children != null && node.Children.Count > 0)
+                {
+                    ProtoNode furi = node.FindChild(1);
+                    if (furi != null)
+                    {
+                        string oldUri = furi.GetString();
+                        if (!string.IsNullOrEmpty(oldUri))
+                        {
+                            string clean = oldUri.Replace('\\', '/').TrimEnd('/');
+                            int lastSlash = clean.LastIndexOf('/');
+                            if (lastSlash >= 0)
+                            {
+                                string newUri = clean.Substring(0, lastSlash + 1) + newProjectName;
+                                furi.SetString(newUri);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    string oldUri = node.GetString();
                     if (!string.IsNullOrEmpty(oldUri))
                     {
                         string clean = oldUri.Replace('\\', '/').TrimEnd('/');
@@ -961,9 +1051,17 @@ namespace AntigravityCompanion
                         if (lastSlash >= 0)
                         {
                             string newUri = clean.Substring(0, lastSlash + 1) + newProjectName;
-                            child.SetString(newUri);
+                            node.SetString(newUri);
                         }
                     }
+                }
+            }
+
+            if (node.Children != null && node.Children.Count > 0)
+            {
+                for (int i = 0; i < node.Children.Count; i++)
+                {
+                    RemapEntryProjectRecursive(node.Children[i], newProjectName);
                 }
             }
         }
@@ -3205,7 +3303,7 @@ namespace AntigravityCompanion
 
         public void WriteTo(Stream stream)
         {
-            ulong key = (ulong)((FieldNumber << 3) | (WireType & 0x07));
+            ulong key = (((ulong)(uint)FieldNumber) << 3) | (ulong)(uint)(WireType & 0x07);
             WriteVarint(stream, key);
 
             if (WireType == 0) // Varint
@@ -3477,7 +3575,7 @@ namespace AntigravityCompanion
             for (int i = 0; i < nodes.Count; i++)
             {
                 ProtoNode node = nodes[i];
-                ulong tag = (ulong)((node.FieldNumber << 3) | (node.WireType & 0x07));
+                ulong tag = (((ulong)(uint)node.FieldNumber) << 3) | (ulong)(uint)(node.WireType & 0x07);
                 WriteVarint(stream, tag);
 
                 if (node.WireType == 0) // Varint
@@ -3960,7 +4058,7 @@ namespace AntigravityCompanion
                 info.ProjectName = p.Name;
                 if (string.IsNullOrEmpty(info.FolderUri)) info.FolderUri = p.FolderUri;
             }
-            else if (!string.IsNullOrEmpty(info.FolderUri))
+            else if (string.IsNullOrEmpty(info.ProjectName) && !string.IsNullOrEmpty(info.FolderUri))
             {
                 info.ProjectName = ExtractProjectNameFromUri(info.FolderUri);
             }
