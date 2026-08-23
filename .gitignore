@@ -1,6 +1,39 @@
-/.codegraph
-Antigravity_Companion.exe
+# =====================================================================
+# Antigravity Companion - Git Ignore Configuration
+# =====================================================================
+
+# Build & Execution Outputs
+*.exe
+*.dll
+*.pdb
+*.obj
+*.bin
+
+# Backup Archives & Compression Packages
 *.agy
 *.zip
+*.7z
+*.tar
+*.gz
+*.bak
+
+# Temporary Files & Runtime Logs
 *.log
 *.tmp
+*.temp
+Thumbs.db
+[dD]esktop.ini
+
+# Test Execution Sandboxes & Test Binaries
+tests/sandbox/
+tests/sandboxes/
+tests/*.exe
+tests/*.pdb
+sandbox/
+
+# IDE & Toolchain Metadata
+.vs/
+.vscode/
+.idea/
+/.codegraph/
+.agents/
