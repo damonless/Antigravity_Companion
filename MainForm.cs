@@ -111,8 +111,6 @@ namespace AntigravityCompanion
             if (lower.StartsWith("recovered project") || lower.StartsWith("recovered_project") ||
                 lower.StartsWith("recovered workspace") || lower.StartsWith("recovered_workspace"))
                 return true;
-            if (lower == "outside-of-project" || lower == "outside_of_project")
-                return true;
             if (lower == "default-cli-project" || lower == "default_cli_project")
                 return true;
 
@@ -1304,7 +1302,7 @@ namespace AntigravityCompanion
             btnFullBackup.Click += BtnFullBackup_Click;
 
             chkHideTemp = new CheckBox();
-            chkHideTemp.Text = "隐藏临时/垃圾工程 (subagent-*, recovered-*)";
+            chkHideTemp.Text = "过滤临时工程与子代理会话 (推荐)";
             chkHideTemp.Checked = true;
             chkHideTemp.AutoSize = true;
             chkHideTemp.Location = new Point(560, 9);
@@ -1641,8 +1639,14 @@ namespace AntigravityCompanion
                 }
             }
 
-            lblConvCount.Text = "本地会话: " + _localSummaries.Count;
-            Log("本地环境扫描完成：共发现 " + _localSummaries.Count + " 条会话记录", Color.DarkBlue);
+            int mainCount = 0;
+            for (int i = 0; i < _localSummaries.Count; i++)
+            {
+                if (!_localSummaries[i].IsSubagent) mainCount++;
+            }
+
+            lblConvCount.Text = "本地主会话: " + mainCount;
+            Log("本地环境扫描完成：共发现 " + mainCount + " 条活跃主会话（已智能识别并过滤临时子代理与废弃记录）", Color.DarkBlue);
         }
 
         private void RenderLocalTree()
@@ -1713,9 +1717,16 @@ namespace AntigravityCompanion
                     List<ConversationSummaryInfo> list = kvp.Value;
                     bool isJunk = SmartProjectFilter.IsJunkOrEphemeral(pName);
 
-                    if (hideTemp && isJunk) continue;
+                    List<ConversationSummaryInfo> visibleList = new List<ConversationSummaryInfo>();
+                    for (int k = 0; k < list.Count; k++)
+                    {
+                        if (!hideTemp || !list[k].IsSubagent) visibleList.Add(list[k]);
+                    }
 
-                    string pNodeText = string.Format("📦 {0} ({1} 条会话)", pName, list.Count);
+                    if (hideTemp && isJunk && visibleList.Count == 0) continue;
+                    if (hideTemp && visibleList.Count == 0) continue;
+
+                    string pNodeText = string.Format("📦 {0} ({1} 条会话)", pName, visibleList.Count);
                     if (isJunk) pNodeText = "[临时] " + pNodeText;
 
                     TreeNode pNode = new TreeNode(pNodeText);
@@ -1732,11 +1743,12 @@ namespace AntigravityCompanion
                         pNode.NodeFont = new Font(tvLocal.Font, FontStyle.Bold);
                     }
 
-                    for (int j = 0; j < list.Count; j++)
+                    for (int j = 0; j < visibleList.Count; j++)
                     {
-                        ConversationSummaryInfo s = list[j];
+                        ConversationSummaryInfo s = visibleList[j];
                         string timeStr = s.UpdatedTime > DateTime.MinValue ? s.UpdatedTime.ToString("MM-dd HH:mm") : "-";
                         string sNodeText = string.Format("💬 {0} [{1}]", s.DisplayTitle, timeStr);
+                        if (s.IsSubagent) sNodeText = "[子任务] " + sNodeText;
 
                         TreeNode sNode = new TreeNode(sNodeText);
                         sNode.Tag = new DiffItemNodeTag {
@@ -1745,10 +1757,16 @@ namespace AntigravityCompanion
                             DisplayName = s.DisplayTitle,
                             ProjectName = pName,
                             SummaryInfo = s,
-                            Timestamp = s.UpdatedTime
+                            Timestamp = s.UpdatedTime,
+                            IsTemporaryOrJunk = s.IsSubagent
                         };
 
-                        if (_highlightTracker.IsConversationHighlighted(s.ConversationId))
+                        if (s.IsSubagent)
+                        {
+                            sNode.ForeColor = Color.Gray;
+                            sNode.NodeFont = new Font(tvLocal.Font, FontStyle.Italic);
+                        }
+                        else if (_highlightTracker.IsConversationHighlighted(s.ConversationId))
                         {
                             sNode.ForeColor = Color.DarkGreen;
                             sNode.NodeFont = new Font(tvLocal.Font, FontStyle.Bold);
@@ -1873,10 +1891,18 @@ namespace AntigravityCompanion
                         continue; // 本地独有，不在右侧备份树中列出
 
                     bool isJunk = pDiff.IsTemporaryOrJunk;
-                    if (hideTemp && isJunk) continue;
+                    List<ConversationSummaryInfo> visibleConvs = new List<ConversationSummaryInfo>();
+                    for (int k = 0; k < pDiff.BackupConversations.Count; k++)
+                    {
+                        if (!hideTemp || !pDiff.BackupConversations[k].IsSubagent)
+                            visibleConvs.Add(pDiff.BackupConversations[k]);
+                    }
+
+                    if (hideTemp && isJunk && visibleConvs.Count == 0) continue;
+                    if (hideTemp && visibleConvs.Count == 0) continue;
 
                     string badge = pDiff.GetStatusBadge();
-                    string pText = string.Format("📦 {0} ({1} 条) {2}", pDiff.ProjectName, pDiff.BackupConversations.Count, badge);
+                    string pText = string.Format("📦 {0} ({1} 条) {2}", pDiff.ProjectName, visibleConvs.Count, badge);
                     if (isJunk) pText = "[临时] " + pText;
 
                     TreeNode pNode = new TreeNode(pText);
@@ -1893,15 +1919,16 @@ namespace AntigravityCompanion
 
                     ApplyDiffStyle(pNode, pDiff.Status, isJunk);
 
-                    for (int j = 0; j < pDiff.BackupConversations.Count; j++)
+                    for (int j = 0; j < visibleConvs.Count; j++)
                     {
-                        ConversationSummaryInfo s = pDiff.BackupConversations[j];
+                        ConversationSummaryInfo s = visibleConvs[j];
                         bool existsLocal = !string.IsNullOrEmpty(s.ConversationId) && localConvIdSet.Contains(s.ConversationId);
                         DiffStatus sStatus = existsLocal ? DiffStatus.Aligned : DiffStatus.NewInBackup;
 
                         string sBadge = (sStatus == DiffStatus.NewInBackup) ? "[★ 新增]" : "[已对齐]";
                         string timeStr = s.UpdatedTime > DateTime.MinValue ? s.UpdatedTime.ToString("MM-dd HH:mm") : "-";
                         string sText = string.Format("💬 {0} [{1}] {2}", s.DisplayTitle, timeStr, sBadge);
+                        if (s.IsSubagent) sText = "[子任务] " + sText;
 
                         TreeNode sNode = new TreeNode(sText);
                         sNode.Tag = new DiffItemNodeTag {
@@ -1911,10 +1938,11 @@ namespace AntigravityCompanion
                             ProjectName = pDiff.ProjectName,
                             Status = sStatus,
                             SummaryInfo = s,
-                            Timestamp = s.UpdatedTime
+                            Timestamp = s.UpdatedTime,
+                            IsTemporaryOrJunk = s.IsSubagent
                         };
 
-                        ApplyDiffStyle(sNode, sStatus, false);
+                        ApplyDiffStyle(sNode, sStatus, s.IsSubagent);
                         pNode.Nodes.Add(sNode);
                     }
 
@@ -2557,10 +2585,36 @@ namespace AntigravityCompanion
                     }
                     n++;
 
-                    // 2. 对话、脑区与会话索引
-                    progressDlg.UpdateMsg("正在归档历史对话与会话索引...");
-                    n += AddDirToArchive(archive, Path.Combine(gemini, "antigravity\\conversations"), "data/antigravity/conversations");
-                    n += AddDirToArchive(archive, Path.Combine(gemini, "antigravity\\brain"), "data/antigravity/brain");
+                    // 2. 对话、脑区与会话索引 (精准定向归档有效会话，彻底排除已删除的孤儿数据库)
+                    progressDlg.UpdateMsg("正在归档有效会话与脑区索引...");
+                    HashSet<string> validCids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    for (int i = 0; i < _localSummaries.Count; i++)
+                    {
+                        var s = _localSummaries[i];
+                        if (!string.IsNullOrEmpty(s.ConversationId))
+                        {
+                            if (chkHideTemp.Checked && s.IsSubagent) continue;
+                            validCids.Add(s.ConversationId);
+                        }
+                    }
+
+                    string convDir = Path.Combine(gemini, "antigravity\\conversations");
+                    string brainDir = Path.Combine(gemini, "antigravity\\brain");
+
+                    foreach (string cid in validCids)
+                    {
+                        string dbFile = Path.Combine(convDir, cid + ".db");
+                        if (File.Exists(dbFile))
+                        {
+                            n += AddFileToArchive(archive, dbFile, "data/antigravity/conversations/" + cid + ".db");
+                        }
+                        string bDir = Path.Combine(brainDir, cid);
+                        if (Directory.Exists(bDir))
+                        {
+                            n += AddDirToArchive(archive, bDir, "data/antigravity/brain/" + cid);
+                        }
+                    }
+
                     n += AddDirToArchive(archive, Path.Combine(gemini, "antigravity\\annotations"), "data/antigravity/annotations");
                     n += AddFileToArchive(archive, Path.Combine(gemini, "antigravity\\agyhub_summaries_proto.pb"), "data/antigravity/agyhub_summaries_proto.pb");
                     n += AddFileToArchive(archive, Path.Combine(gemini, "antigravity\\antigravity_state.pbtxt"), "data/antigravity/antigravity_state.pbtxt");
@@ -3643,6 +3697,8 @@ namespace AntigravityCompanion
         public DateTime UpdatedTime;       // 最近更新时间
         public DateTime CreatedTime;       // 创建时间
         public int StepCount;              // 对话步数/消息数
+        public int UserInteractions;       // 用户交互步数 (Field 16)
+        public int? Field23;               // Field 23 标志位 (0 为 Subagent / Ephemeral)
         public bool IsSubagent;            // 是否为临时子代理会话
         public string SubagentRole;        // 子代理角色
         public string ParentConversationId;// 父会话 UUID
@@ -3809,9 +3865,18 @@ namespace AntigravityCompanion
                     {
                         ParseCustomTitleNode(child, info);
                     }
+                    else if (child.FieldNumber == 16) // User Interactions count
+                    {
+                        info.UserInteractions = child.GetInt32();
+                    }
                     else if (child.FieldNumber == 17) // CascadeInfo
                     {
                         ParseCascadeNode(child, info);
+                    }
+                    else if (child.FieldNumber == 23) // Subagent / Ephemeral flag ★
+                    {
+                        info.Field23 = child.GetInt32();
+                        if (info.Field23 == 0) info.IsSubagent = true;
                     }
                 }
             }
@@ -3881,11 +3946,34 @@ namespace AntigravityCompanion
                     {
                         ParseCustomTitleNode(child, info);
                     }
+                    else if (child.FieldNumber == 16)
+                    {
+                        info.UserInteractions = child.GetInt32();
+                    }
                     else if (child.FieldNumber == 17)
                     {
                         ParseCascadeNode(child, info);
                     }
+                    else if (child.FieldNumber == 23)
+                    {
+                        info.Field23 = child.GetInt32();
+                        if (info.Field23 == 0) info.IsSubagent = true;
+                    }
                 }
+            }
+
+            // 智能识别 Subagent / 临时子会话
+            if (info.Field23.HasValue && info.Field23.Value == 0)
+            {
+                info.IsSubagent = true;
+            }
+            else if (info.Field23.HasValue && info.Field23.Value == 1 && info.UserInteractions == 0)
+            {
+                info.IsSubagent = true;
+            }
+            else if (!string.IsNullOrEmpty(info.ProjectName) && (info.ProjectName.StartsWith("subagent-", StringComparison.OrdinalIgnoreCase) || info.ProjectName.StartsWith("subagent_", StringComparison.OrdinalIgnoreCase)))
+            {
+                info.IsSubagent = true;
             }
 
             // 100% Priority Custom Title Resolution

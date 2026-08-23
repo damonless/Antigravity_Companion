@@ -91,13 +91,19 @@ V0.5 采用 **StreamingZipIndexReader** 技术：
 
 ---
 
-### 3. 智能垃圾工程过滤机制 (Smart Project Filter)
+### 3. 智能垃圾工程与子代理会话过滤机制 (Smart Project & Session Filter)
 
-在日常使用中，Antigravity 会产生大量内部子代理衍生工程（如 `subagent-*`）、未关联工作区的孤立会话（`outside-of-project`）、以及崩溃恢复工程（`Recovered project`）。
+在日常与自动化协作（如多智能体团队、Subagent 审查）使用中，Antigravity 会产生大量的底层子代理会话（在 Protobuf 中标记为 `Field 23 == 0`）、崩溃恢复工程（`Recovered project`）以及物理磁盘残留的已删除废弃数据库（Orphaned DB）。
 
-V0.5 内置 **SmartProjectFilter** 规则库：
-- 自动识别并过滤包含 `subagent-`、`outside-of-project`、`default-cli-project`、`Recovered project`、`temp-` 前缀或特征的工程。
-- 工具栏配备 **`[x] 隐藏临时/垃圾工程`** 复选框，默认开启过滤。用户可随时取消勾选以查看完整的底层工程。
+V0.5 建立了 **三维智能过滤与死会话隔离引擎**：
+1. **子代理会话精准过滤 (Subagent Filter)**：
+   - 深度解析 Protobuf 的 `Field 23` 标志与 `Field 16` 交互计数，自动识别并过滤 90% 以上由系统自动派生的内部 Subagent 子会话；
+   - 确保每个工程（如 `Antigravity_Companion`、`BMS_Protocol_Simulator`）及全局非项目会话（`Outside of Project`）下**仅呈现用户真正发起的主会话**。
+2. **已删除死会话源头隔离 (Deleted Session Isolation)**：
+   - 当用户在 Antigravity 界面删除会话时，IDE 仅从 `.pb` 索引中移除而未删除磁盘文件。上位机以 `.pb` 索引为唯一主干，在列表呈现与一键备份中**彻底跳过孤儿死数据库**，杜绝垃圾数据带入备份包。
+3. **临时工程过滤与全局会话保留**：
+   - 自动识别并过滤 `subagent-*`、`Recovered project`、`temp-` 前缀工程；
+   - 完美保留 `Outside of Project` 中的真实全局会话，提供工具栏 **`[x] 过滤临时工程与子代理会话 (推荐)`** 复选框，支持自由切换。
 
 ---
 
