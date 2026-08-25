@@ -13,7 +13,7 @@ if exist "%~dp0app.ico" (
     set ICON_FLAG=/win32icon:"%~dp0app.ico"
 )
 
-%CSC% /target:winexe /platform:anycpu /optimize+ %ICON_FLAG% /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll /out:"%~dp0Antigravity_Companion.exe" "%~dp0MainForm.cs"
+%CSC% /target:winexe /platform:anycpu /optimize+ %ICON_FLAG% /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll /out:"%~dp0Antigravity_Companion.exe" "%~dp0*.cs"
 
 if %ERRORLEVEL% equ 0 (
     echo [SUCCESS] Build completed! Output: %~dp0Antigravity_Companion.exe

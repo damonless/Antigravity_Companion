@@ -1,4 +1,4 @@
-# Antigravity Companion 使用说明书 (V0.5)
+# Antigravity Companion 使用说明书 (V0.6)
 
 ---
 
@@ -6,11 +6,11 @@
 
 **Antigravity Companion** 是专为 Google DeepMind Antigravity (Gemini Code Assistant / AGY) 生态打造的一站式原生本地伴侣、双栏可视化差异对比与细粒度选择性数据导入管理工具。
 
-本工具基于纯原生 C# 5 / WinForms 与 .NET Framework 4.0/4.5+ 类库开发，**无任何 Python、Node.js、外部 Native DLL 或三方 NuGet 依赖**。程序采用零警告单文件编译，内置 Win32 原生应用图标，免安装、即开即用、内存占用极低，全面支持 Windows 7 / 10 / 11 操作系统。
+本工具基于纯原生 C# 5 / WinForms 与 .NET Framework 4.0/4.5+ 类库开发，**无任何 Python、Node.js、外部 Native DLL 或三方 NuGet 依赖**。程序采用高度模块化架构设计（`ProtoAstCodec`, `SessionMetadataExtractor`, `VisualDiffEngine`, `StreamingZipIndexReader`, `ConfigBrowserEngine`, `MainForm`），支持零警告单文件一键编译，内置 Win32 原生应用图标，免安装、即开即用、内存占用极低，全面支持 Windows 7 / 10 / 11 操作系统。
 
 ```mermaid
 graph TD
-    A[Antigravity Companion V0.5] --> B[双栏可视化差异对比与细粒度导入]
+    A[Antigravity Companion V0.6] --> B[双栏可视化差异对比与细粒度导入]
     A --> C[会话自定义标题与元数据无损提取]
     A --> D[临时与垃圾工程智能过滤]
     A --> E[工程冲突解决向导 - 四大策略]
