@@ -26,8 +26,25 @@ namespace AntigravityCompanion
         public ulong VarintValue;
         public byte[] RawBytes;
         public List<ProtoNode> Children;
+        public bool IsModified;
 
         public bool HasChildren { get { return Children != null && Children.Count > 0; } }
+
+        public bool IsAnyModified
+        {
+            get
+            {
+                if (IsModified) return true;
+                if (Children != null)
+                {
+                    for (int i = 0; i < Children.Count; i++)
+                    {
+                        if (Children[i].IsAnyModified) return true;
+                    }
+                }
+                return false;
+            }
+        }
 
         public ProtoNode()
         {
@@ -211,7 +228,7 @@ namespace AntigravityCompanion
 
                     case 2: // Length-delimited
                         byte[] payload;
-                        if (node.HasChildren)
+                        if (node.HasChildren && (node.IsAnyModified || node.RawBytes == null || node.RawBytes.Length == 0))
                         {
                             payload = Encode(node.Children);
                         }
@@ -252,6 +269,11 @@ namespace AntigravityCompanion
                     return count;
                 }
                 shift += 7;
+            }
+
+            if (count == 10)
+            {
+                return 10;
             }
 
             value = 0;
@@ -418,6 +440,7 @@ namespace AntigravityCompanion
                         }
 
                         node.RawBytes = Encoding.UTF8.GetBytes(str);
+                        node.IsModified = true;
                     }
                 }
             }

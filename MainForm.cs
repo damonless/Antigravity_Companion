@@ -46,7 +46,15 @@ namespace AntigravityCompanion
                 string logFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log");
                 File.WriteAllText(logFile, msg, Encoding.UTF8);
             }
-            catch {}
+            catch
+            {
+                try
+                {
+                    string tempLog = Path.Combine(Path.GetTempPath(), "antigravity_companion_crash.log");
+                    File.WriteAllText(tempLog, msg, Encoding.UTF8);
+                }
+                catch {}
+            }
             MessageBox.Show(msg, "启动异常捕获", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
@@ -131,12 +139,19 @@ namespace AntigravityCompanion
         private bool _isUpdatingChecks = false;
         private BackgroundWorker _worker;
 
+        private bool _splitterInitialized = false;
+
         public MainForm()
         {
-            // 自动解析当前机器的用户主目录
+            // 自动解析当前机器的用户主目录 (安全跨盘符推导)
             string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             if (string.IsNullOrEmpty(userProfile))
-                userProfile = Environment.GetEnvironmentVariable("USERPROFILE") ?? "C:\\Users\\Administrator";
+                userProfile = Environment.GetEnvironmentVariable("USERPROFILE");
+            if (string.IsNullOrEmpty(userProfile))
+            {
+                string sysDrive = Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\";
+                userProfile = Path.Combine(sysDrive, "Users", Environment.UserName);
+            }
             HomePath = userProfile;
 
             BuildUI();
@@ -145,40 +160,42 @@ namespace AntigravityCompanion
                 AdjustSplitterLayouts();
                 DetectPaths();
             };
-            this.Resize += (s, e) => {
-                AdjustSplitterLayouts();
-            };
         }
 
         private void AdjustSplitterLayouts()
         {
-            // 主分栏 50%/50% 对称安全调整
-            try
+            if (!_splitterInitialized)
             {
-                if (splitMain != null && splitMain.ClientSize.Width > 200)
+                // 主分栏 50%/50% 对称安全调整
+                try
                 {
-                    int target = (splitMain.ClientSize.Width - splitMain.SplitterWidth) / 2;
-                    if (target > 50 && target < splitMain.ClientSize.Width - 50)
+                    if (splitMain != null && splitMain.ClientSize.Width > 200)
                     {
-                        splitMain.SplitterDistance = target;
+                        int target = (splitMain.ClientSize.Width - splitMain.SplitterWidth) / 2;
+                        if (target > 50 && target < splitMain.ClientSize.Width - 50)
+                        {
+                            splitMain.SplitterDistance = target;
+                        }
                     }
                 }
-            }
-            catch {}
+                catch {}
 
-            // 配置编辑器分栏自适应
-            try
-            {
-                if (splitConfig != null && splitConfig.ClientSize.Width > 300)
+                // 配置编辑器分栏自适应
+                try
                 {
-                    int target = 360;
-                    if (target > 50 && target < splitConfig.ClientSize.Width - 50)
+                    if (splitConfig != null && splitConfig.ClientSize.Width > 300)
                     {
-                        splitConfig.SplitterDistance = target;
+                        int target = 360;
+                        if (target > 50 && target < splitConfig.ClientSize.Width - 50)
+                        {
+                            splitConfig.SplitterDistance = target;
+                        }
                     }
                 }
+                catch {}
+
+                _splitterInitialized = true;
             }
-            catch {}
         }
 
         // ══════════════════════════════════════════════════════════
@@ -200,30 +217,40 @@ namespace AntigravityCompanion
             }
             catch {}
 
-            // 1. 顶部操作栏与状态看板
+            // 1. 顶部操作栏与状态看板 (DPI 自适应流式排版)
             Panel pnlTop = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 78,
+                Height = 84,
                 BackColor = Color.White,
-                Padding = new Padding(16, 10, 16, 8)
+                Padding = new Padding(12, 8, 12, 4)
             };
             pnlTop.Paint += (s, pe) =>
             {
                 pe.Graphics.DrawLine(new Pen(Color.FromArgb(226, 232, 240)), 0, pnlTop.Height - 1, pnlTop.Width, pnlTop.Height - 1);
             };
 
+            FlowLayoutPanel flowTopControls = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 42,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                AutoSize = false,
+                BackColor = Color.Transparent
+            };
+
             // 操作按钮栏
             btnDetect = MakeNeutralBtn("重新检测本地", 115);
-            btnDetect.Location = new Point(16, 10);
+            btnDetect.Margin = new Padding(0, 4, 8, 4);
             btnDetect.Click += (s, e) => DetectPaths();
 
             btnOpenBackup = MakeNeutralBtn("打开备份包...", 115);
-            btnOpenBackup.Location = new Point(139, 10);
+            btnOpenBackup.Margin = new Padding(0, 4, 8, 4);
             btnOpenBackup.Click += BtnOpenBackup_Click;
 
             btnFullBackup = MakeNeutralBtn("全量备份导出...", 125);
-            btnFullBackup.Location = new Point(262, 10);
+            btnFullBackup.Margin = new Padding(0, 4, 16, 4);
             btnFullBackup.Click += BtnFullBackup_Click;
 
             chkHideTemp = new CheckBox
@@ -231,7 +258,7 @@ namespace AntigravityCompanion
                 Text = "过滤临时工程与子代理会话",
                 Checked = true,
                 AutoSize = true,
-                Location = new Point(405, 14),
+                Margin = new Padding(0, 9, 16, 4),
                 Font = new Font("Segoe UI", 9f, FontStyle.Regular),
                 ForeColor = Color.FromArgb(51, 65, 85)
             };
@@ -243,43 +270,48 @@ namespace AntigravityCompanion
 
             Label lblSearchIcon = new Label
             {
-                Text = "搜索会话/工程:",
+                Text = "搜索:",
                 AutoSize = true,
-                Location = new Point(630, 15),
+                Margin = new Padding(0, 10, 4, 4),
                 Font = new Font("Segoe UI", 9f, FontStyle.Regular),
                 ForeColor = Color.FromArgb(100, 116, 139)
             };
 
             txtSearch = new TextBox
             {
-                Location = new Point(735, 11),
-                Width = 200,
+                Width = 160,
+                Margin = new Padding(0, 7, 16, 4),
                 Font = new Font("Segoe UI", 9f),
                 BorderStyle = BorderStyle.FixedSingle
             };
             txtSearch.TextChanged += TxtSearch_TextChanged;
 
             btnImportSelected = MakePrimaryBtn("导入所选项到本地", 150);
-            btnImportSelected.Location = new Point(948, 9);
+            btnImportSelected.Margin = new Padding(0, 4, 8, 4);
             btnImportSelected.Enabled = false;
             btnImportSelected.Click += BtnPerformSelectiveImport_Click;
 
             txtGeminiPath = new TextBox { Visible = false };
 
+            flowTopControls.Controls.AddRange(new Control[] {
+                btnDetect, btnOpenBackup, btnFullBackup, chkHideTemp, 
+                lblSearchIcon, txtSearch, btnImportSelected, txtGeminiPath
+            });
+
             // 状态指示条
             lblStatsSummary = new Label
             {
+                Dock = DockStyle.Bottom,
+                Height = 24,
                 Text = "本地: 正在扫描... | 备份包: 未加载 | 待合流选中: 0 个工程 (0 条会话)",
-                Location = new Point(16, 48),
-                Size = new Size(1300, 22),
                 Font = new Font("Segoe UI", 9f, FontStyle.Regular),
-                ForeColor = Color.FromArgb(71, 85, 105)
+                ForeColor = Color.FromArgb(71, 85, 105),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(4, 0, 0, 0)
             };
 
-            pnlTop.Controls.AddRange(new Control[] {
-                btnDetect, btnOpenBackup, btnFullBackup, chkHideTemp, 
-                lblSearchIcon, txtSearch, btnImportSelected, txtGeminiPath, lblStatsSummary
-            });
+            pnlTop.Controls.Add(flowTopControls);
+            pnlTop.Controls.Add(lblStatsSummary);
 
             // 2. 主体 SplitContainer (纯净初始化，无内部越界陷阱)
             splitMain = new SplitContainer
@@ -1238,6 +1270,7 @@ namespace AntigravityCompanion
             // 冲突检测与解决向导
             Dictionary<string, string> projectUriOverrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             Dictionary<string, string> projectNewNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> projectOverwriteNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             ConflictChoice? globalStrategy = null;
 
             foreach (string pName in selectedProjects)
@@ -1251,6 +1284,10 @@ namespace AntigravityCompanion
                     if (globalStrategy.HasValue)
                     {
                         choice = globalStrategy.Value;
+                        if (choice == ConflictChoice.Rename)
+                        {
+                            targetName = pName + "_Imported";
+                        }
                     }
                     else
                     {
@@ -1279,6 +1316,11 @@ namespace AntigravityCompanion
                     {
                         projectUriOverrides[pName] = pDiff.BackupFolderUri;
                         projectNewNames[pName] = targetName;
+                    }
+                    else if (choice == ConflictChoice.Overwrite)
+                    {
+                        projectUriOverrides[pName] = pDiff.BackupFolderUri;
+                        projectOverwriteNames.Add(pName);
                     }
                 }
             }
@@ -1321,13 +1363,18 @@ namespace AntigravityCompanion
                             ZipArchiveEntry entry = archive.Entries[i];
                             string norm = entry.FullName.Replace('\\', '/');
 
-                            // 对话数据库
-                            if (norm.Contains("antigravity/conversations/") && norm.EndsWith(".db", StringComparison.OrdinalIgnoreCase))
+                            // 对话数据库及 WAL / SHM 伴随文件
+                            if (norm.Contains("antigravity/conversations/"))
                             {
-                                string cid = Path.GetFileNameWithoutExtension(norm);
+                                string fn = Path.GetFileName(norm);
+                                string cid = fn;
+                                if (cid.EndsWith(".db-wal", StringComparison.OrdinalIgnoreCase)) cid = cid.Substring(0, cid.Length - 7);
+                                else if (cid.EndsWith(".db-shm", StringComparison.OrdinalIgnoreCase)) cid = cid.Substring(0, cid.Length - 7);
+                                else if (cid.EndsWith(".db", StringComparison.OrdinalIgnoreCase)) cid = cid.Substring(0, cid.Length - 3);
+
                                 if (convIdsToExtract.Contains(cid))
                                 {
-                                    string dest = Path.Combine(gemini, "antigravity", "conversations", cid + ".db");
+                                    string dest = Path.Combine(gemini, "antigravity", "conversations", fn);
                                     ExtractZipEntrySafe(entry, dest);
                                     filesImported++;
                                 }
@@ -1348,21 +1395,24 @@ namespace AntigravityCompanion
                                     }
                                 }
                             }
-                            // 工程配置 JSON 同步/提取 (包含跨机器路径重映射)
+                            // 工程配置 JSON 同步/提取 (包含跨机器路径重映射与覆盖逻辑)
                             else if (norm.Contains("config/projects/") && norm.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                             {
                                 string pId = Path.GetFileNameWithoutExtension(norm);
                                 string dest = Path.Combine(gemini, "config", "projects", pId + ".json");
-                                if (!File.Exists(dest))
+                                
+                                using (StreamReader sr = new StreamReader(entry.Open(), Encoding.UTF8))
                                 {
-                                    // 读取并执行跨机器路径重映射
-                                    using (StreamReader sr = new StreamReader(entry.Open(), Encoding.UTF8))
+                                    string rawJson = sr.ReadToEnd();
+                                    string pNameInJson = DirectStreamArchiver.ExtractJsonValue(rawJson, "name");
+                                    bool shouldOverwrite = !string.IsNullOrEmpty(pNameInJson) && projectOverwriteNames.Contains(pNameInJson);
+
+                                    if (!File.Exists(dest) || shouldOverwrite)
                                     {
-                                        string rawJson = sr.ReadToEnd();
                                         string remappedJson = DirectStreamArchiver.RemapAllPathFormats(rawJson, srcHome, curHome);
                                         File.WriteAllText(dest, remappedJson, Encoding.UTF8);
+                                        filesImported++;
                                     }
-                                    filesImported++;
                                 }
                             }
                             // 全局规则
@@ -1438,7 +1488,7 @@ namespace AntigravityCompanion
 
             _worker.RunWorkerCompleted += (ws, we) =>
             {
-                progress.Close();
+                progress.SafeClose();
                 if (we.Error != null)
                 {
                     Log("导入失败: " + we.Error.Message, Color.FromArgb(220, 38, 38));
@@ -1454,7 +1504,10 @@ namespace AntigravityCompanion
             };
 
             _worker.RunWorkerAsync();
-            progress.ShowDialog(this);
+            if (_worker.IsBusy)
+            {
+                progress.ShowDialog(this);
+            }
         }
 
         private static void ExtractZipEntrySafe(ZipArchiveEntry entry, string destPath)
@@ -1547,7 +1600,7 @@ namespace AntigravityCompanion
                     }
                     n++;
 
-                    // 2. 对话与脑区 (定向白名单打包有效会话，彻底排除已删除死数据库)
+                    // 2. 对话与脑区 (定向白名单打包有效会话及 WAL/SHM 事务日志，彻底排除已删除死数据库)
                     progressDlg.UpdateMsg("正在归档有效会话与脑区索引...");
                     HashSet<string> validCids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     for (int i = 0; i < _localSummaries.Count; i++)
@@ -1569,6 +1622,16 @@ namespace AntigravityCompanion
                         if (File.Exists(dbFile))
                         {
                             n += AddFileToArchive(archive, dbFile, "data/antigravity/conversations/" + cid + ".db");
+                        }
+                        string walFile = Path.Combine(convDir, cid + ".db-wal");
+                        if (File.Exists(walFile))
+                        {
+                            n += AddFileToArchive(archive, walFile, "data/antigravity/conversations/" + cid + ".db-wal");
+                        }
+                        string shmFile = Path.Combine(convDir, cid + ".db-shm");
+                        if (File.Exists(shmFile))
+                        {
+                            n += AddFileToArchive(archive, shmFile, "data/antigravity/conversations/" + cid + ".db-shm");
                         }
                         string bDir = Path.Combine(brainDir, cid);
                         if (Directory.Exists(bDir))
@@ -1606,7 +1669,7 @@ namespace AntigravityCompanion
 
             _worker.RunWorkerCompleted += (ws, we) =>
             {
-                progressDlg.Close();
+                progressDlg.SafeClose();
                 if (we.Error != null)
                 {
                     Log("备份失败: " + we.Error.Message, Color.FromArgb(220, 38, 38));
@@ -1620,7 +1683,10 @@ namespace AntigravityCompanion
             };
 
             _worker.RunWorkerAsync();
-            progressDlg.ShowDialog(this);
+            if (_worker.IsBusy)
+            {
+                progressDlg.ShowDialog(this);
+            }
         }
 
         private static int AddFileToArchive(ZipArchive archive, string filePath, string entryName)
@@ -1707,6 +1773,11 @@ namespace AntigravityCompanion
                 {
                     if (File.Exists(_currentEditingItem.FilePath))
                     {
+                        FileAttributes attr = File.GetAttributes(_currentEditingItem.FilePath);
+                        if ((attr & FileAttributes.ReadOnly) == FileAttributes.ReadOnly)
+                        {
+                            File.SetAttributes(_currentEditingItem.FilePath, attr & ~FileAttributes.ReadOnly);
+                        }
                         string bak = _currentEditingItem.FilePath + ".bak";
                         if (File.Exists(bak)) File.Delete(bak);
                         File.Copy(_currentEditingItem.FilePath, bak);
@@ -1836,6 +1907,22 @@ namespace AntigravityCompanion
                     try { running[i].Kill(); running[i].WaitForExit(3000); }
                     catch {}
                 }
+
+                // 重新检查是否仍有未退出的进程 (例如权限不足)
+                List<Process> stillRunning = new List<Process>();
+                foreach (string name in targetProcessNames)
+                {
+                    Process[] procs = Process.GetProcessesByName(name);
+                    if (procs != null && procs.Length > 0) stillRunning.AddRange(procs);
+                }
+
+                if (stillRunning.Count > 0)
+                {
+                    MessageBox.Show(
+                        "无法完全终止 Antigravity 进程（可能权限不足）。请手动关闭 Antigravity 后再试，以防数据冲突！",
+                        "进程占用提示", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return false;
+                }
             }
             return true;
         }
@@ -1848,6 +1935,7 @@ namespace AntigravityCompanion
     {
         private ProgressBar pb;
         private Label lbl;
+        private bool _isClosed = false;
 
         public ProgressForm(string title, string initialMsg)
         {
@@ -1865,13 +1953,40 @@ namespace AntigravityCompanion
 
             this.Controls.Add(lbl);
             this.Controls.Add(pb);
+
+            this.Shown += (s, e) => {
+                if (_isClosed)
+                {
+                    this.Close();
+                }
+            };
+        }
+
+        public void SafeClose()
+        {
+            _isClosed = true;
+            if (this.IsDisposed) return;
+            if (this.InvokeRequired)
+            {
+                try { this.Invoke(new Action(() => this.Close())); }
+                catch {}
+            }
+            else
+            {
+                this.Close();
+            }
         }
 
         public void UpdateMsg(string msg)
         {
+            if (this.IsDisposed || !this.IsHandleCreated) return;
             if (lbl.InvokeRequired)
             {
-                lbl.Invoke(new Action(() => UpdateMsg(msg)));
+                try
+                {
+                    lbl.Invoke(new Action(() => UpdateMsg(msg)));
+                }
+                catch {}
                 return;
             }
             lbl.Text = msg;

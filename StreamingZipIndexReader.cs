@@ -65,10 +65,18 @@ namespace AntigravityCompanion
                             pbData = ms.ToArray();
                         }
                     }
-                    else if (name.Contains("antigravity/conversations/") && name.EndsWith(".db", StringComparison.OrdinalIgnoreCase))
+                    else if (name.Contains("antigravity/conversations/") && 
+                            (name.EndsWith(".db", StringComparison.OrdinalIgnoreCase) || 
+                             name.EndsWith(".db-wal", StringComparison.OrdinalIgnoreCase) || 
+                             name.EndsWith(".db-shm", StringComparison.OrdinalIgnoreCase)))
                     {
-                        string cid = Path.GetFileNameWithoutExtension(name);
-                        index.ExistingConvoDbFiles.Add(cid);
+                        string fn = Path.GetFileName(name);
+                        string cid = fn;
+                        if (cid.EndsWith(".db-wal", StringComparison.OrdinalIgnoreCase)) cid = cid.Substring(0, cid.Length - 7);
+                        else if (cid.EndsWith(".db-shm", StringComparison.OrdinalIgnoreCase)) cid = cid.Substring(0, cid.Length - 7);
+                        else if (cid.EndsWith(".db", StringComparison.OrdinalIgnoreCase)) cid = cid.Substring(0, cid.Length - 3);
+                        
+                        if (!string.IsNullOrEmpty(cid)) index.ExistingConvoDbFiles.Add(cid);
                     }
                     else if (name.Contains("antigravity/brain/"))
                     {
@@ -130,9 +138,11 @@ namespace AntigravityCompanion
         public static string ExtractJsonValue(string json, string key)
         {
             if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(key)) return string.Empty;
-            string pattern = "\"" + key + "\"\\s*:\\s*\"([^\"]+)\"";
-            System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(json, pattern);
-            return m.Success ? m.Groups[1].Value : string.Empty;
+            string pattern = "\"" + key + "\"\\s*:\\s*\"((?:\\\\.|[^\"])*)\"";
+            System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(json, pattern, System.Text.RegularExpressions.RegexOptions.Singleline);
+            if (!m.Success) return string.Empty;
+            string val = m.Groups[1].Value;
+            return val.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\/", "/").Replace("\\r", "\r").Replace("\\n", "\n").Replace("\\t", "\t");
         }
 
         public static string NormalizeUri(string uriStr)

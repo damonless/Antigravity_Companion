@@ -60,7 +60,7 @@ graph TD
 
 在 Antigravity IDE 中，用户重命名的会话标题存储于 `agyhub_summaries_proto.pb` 的二进制 Protocol Buffers 数据流中（嵌套在 `Field 15 custom_title_meta -> Field 1 custom_title`）。若未正确解析该字段，迁移后界面将不可逆地回退为初次提问时自动生成的简短英文摘要。
 
-Antigravity Companion V0.5 实现了轻量级纯原生 **ProtoAstCodec** 语法树编解码器：
+Antigravity Companion V0.6 实现了轻量级纯原生 **ProtoAstCodec** 语法树编解码器：
 - **Wire Format 原生解析**：完整支持 Varint (0)、Fixed64 (1)、Length-Delimited (2)、Fixed32 (5) 编码。
 - **递归 AST 重构**：对 Length-Delimited 字段进行推测试探解码，精准定位 `Field 15` 自定义标题、`Field 1` 自动摘要、`Field 9 / Field 17` 关联工作区 URI、时间戳及对话轮次。
 - **跨平台中文编码保真**：完全基于 UTF-8 字节流解码，完美保留各类中文、特殊字符与表情符号。
@@ -83,7 +83,7 @@ flowchart TD
 
 大型备份包通常包含数百兆甚至数吉字节的脑区嵌入向量与历史记录。如果将整个压缩包解压到磁盘临时目录再读取，不仅速度慢（耗时 5~30 秒），还会造成磁盘磨损与空间浪费。
 
-V0.5 采用 **StreamingZipIndexReader** 技术：
+V0.6 采用 **StreamingZipIndexReader** 技术：
 1. 以只读流打开 `.agy` 归档文件；
 2. 仅在内存中检索并读取总计不超过 `150KB` 的核心元数据文件（`metadata.json`、`config/projects/*.json`、`agyhub_summaries_proto.pb`）；
 3. 直接在内存流中解析出备份包中的完整工程架构与会话列表；
@@ -95,7 +95,7 @@ V0.5 采用 **StreamingZipIndexReader** 技术：
 
 在日常与自动化协作（如多智能体团队、Subagent 审查）使用中，Antigravity 会产生大量的底层子代理会话（在 Protobuf 中标记为 `Field 23 == 0`）、崩溃恢复工程（`Recovered project`）以及物理磁盘残留的已删除废弃数据库（Orphaned DB）。
 
-V0.5 建立了 **三维智能过滤与死会话隔离引擎**：
+V0.6 建立了 **三维智能过滤与死会话隔离引擎**：
 1. **子代理会话精准过滤 (Subagent Filter)**：
    - 深度解析 Protobuf 的 `Field 23` 标志与 `Field 16` 交互计数，自动识别并过滤 90% 以上由系统自动派生的内部 Subagent 子会话；
    - 确保每个工程（如 `Antigravity_Companion`、`BMS_Protocol_Simulator`）及全局非项目会话（`Outside of Project`）下**仅呈现用户真正发起的主会话**。
@@ -204,7 +204,7 @@ sequenceDiagram
 
 ```
 +-------------------------------------------------------------------------------------------------------------+
-| Antigravity Companion V0.5 - 双栏可视化差异对比与细粒度选择性导入管理器                                     |
+| Antigravity Companion V0.6 - 双栏可视化差异对比与细粒度选择性导入管理器                                     |
 +-------------------------------------------------------------------------------------------------------------+
 | 备份包路径: [ D:\Backups\antigravity_backup_20260823.agy       ] [ 浏览... ] [ 探测比对 ] [ ★ 全量备份 ]     |
 | 工具栏: [x] 隐藏临时/垃圾工程 (subagent/outside)  |  [ 全选 ]  [ 全不选 ]  [ 仅选新增 (★) ]   |  [ ★ 导入所选项 ] |
@@ -369,7 +369,7 @@ cmd /c tests\build_tests.bat
 ## 五、 常见问题解答 (FAQ)
 
 ### Q1: 跨机器导入后，为什么会话自定义中文标题不会丢失？
-- **解答**：Antigravity Companion V0.5 内置了纯原生的 Protobuf AST 编解码器，能穿透解析 `agyhub_summaries_proto.pb` 中的 `Field 15`（`custom_title_meta`）。在选择性导入时，选中的会话分片会无损合流进本地的 `.pb` 文件中，使 Antigravity IDE 启动后能够直接读取并显示用户重命名后的中文标题。
+- **解答**：Antigravity Companion V0.6 内置了纯原生的 Protobuf AST 编解码器，能穿透解析 `agyhub_summaries_proto.pb` 中的 `Field 15`（`custom_title_meta`）。在选择性导入时，选中的会话分片会无损合流进本地的 `.pb` 文件中，使 Antigravity IDE 启动后能够直接读取并显示用户重命名后的中文标题。
 
 ### Q2: 为什么在右侧树中仅勾选 2 条会话，本地其他工程和对话完全不受影响？
 - **解答**：选择性导入器（`SelectiveCascadingImporter`）采用精确白名单机制，只抽取被勾选会话对应的 `conversations/<uuid>.db*`、`brain/<uuid>/**` 目录及对应的 `.pb` 索引项。本地现存的其它数据库文件和索引条目在合流过程中保持原样，做到真正的零污染增量合并。

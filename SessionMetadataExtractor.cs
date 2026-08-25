@@ -133,7 +133,7 @@ namespace AntigravityCompanion
             if (!string.IsNullOrEmpty(folderUri))
             {
                 string lower = folderUri.Trim().ToLowerInvariant();
-                if (lower.Contains("outside-of-project") || lower.Contains("subagent-") || lower.Contains(".system_generated"))
+                if (lower.Contains("subagent-") || lower.Contains(".system_generated"))
                     return true;
             }
             return false;
