@@ -17,7 +17,37 @@ namespace AntigravityCompanion
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm());
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+
+            Application.ThreadException += (s, e) => {
+                ShowCrashReport(e.Exception);
+            };
+
+            AppDomain.CurrentDomain.UnhandledException += (s, e) => {
+                ShowCrashReport(e.ExceptionObject as Exception);
+            };
+
+            try
+            {
+                Application.Run(new MainForm());
+            }
+            catch (Exception ex)
+            {
+                ShowCrashReport(ex);
+            }
+        }
+
+        private static void ShowCrashReport(Exception ex)
+        {
+            if (ex == null) return;
+            string msg = string.Format("应用程序启动或运行发生未捕获异常：\n\n{0}\n\n堆栈信息：\n{1}", ex.Message, ex.StackTrace);
+            try
+            {
+                string logFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log");
+                File.WriteAllText(logFile, msg, Encoding.UTF8);
+            }
+            catch {}
+            MessageBox.Show(msg, "启动异常捕获", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -35,7 +65,11 @@ namespace AntigravityCompanion
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            SendMessage(this.Handle, 0x1100 + 44, IntPtr.Zero, (IntPtr)0x0040); // TVS_EX_DOUBLEBUFFER
+            try
+            {
+                SendMessage(this.Handle, 0x1100 + 44, IntPtr.Zero, (IntPtr)0x0040); // TVS_EX_DOUBLEBUFFER
+            }
+            catch {}
         }
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -83,6 +117,7 @@ namespace AntigravityCompanion
 
         // 配置浏览器子控件
         private TabControl tabConfigs;
+        private SplitContainer splitConfig;
         private ListBox lbRules;
         private ListBox lbSkills;
         private ListBox lbMcp;
@@ -102,24 +137,39 @@ namespace AntigravityCompanion
             BuildUI();
             
             this.Shown += (s, e) => {
-                AdjustSplitterToHalf();
+                AdjustSplitterLayouts();
                 DetectPaths();
             };
             this.Resize += (s, e) => {
-                AdjustSplitterToHalf();
+                AdjustSplitterLayouts();
             };
         }
 
-        private void AdjustSplitterToHalf()
+        private void AdjustSplitterLayouts()
         {
-            if (splitMain != null && splitMain.Width > 200)
+            // 主分栏 50%/50% 对称调整
+            if (splitMain != null && splitMain.Width > 500)
             {
                 try
                 {
                     int target = (splitMain.ClientSize.Width - splitMain.SplitterWidth) / 2;
-                    if (target > splitMain.Panel1MinSize && target < splitMain.ClientSize.Width - splitMain.Panel2MinSize)
+                    if (target >= splitMain.Panel1MinSize && target <= splitMain.ClientSize.Width - splitMain.Panel2MinSize)
                     {
                         splitMain.SplitterDistance = target;
+                    }
+                }
+                catch {}
+            }
+
+            // 配置编辑器分栏自适应
+            if (splitConfig != null && splitConfig.Width > 600)
+            {
+                try
+                {
+                    int target = 360;
+                    if (target >= splitConfig.Panel1MinSize && target <= splitConfig.ClientSize.Width - splitConfig.Panel2MinSize)
+                    {
+                        splitConfig.SplitterDistance = target;
                     }
                 }
                 catch {}
@@ -233,8 +283,8 @@ namespace AntigravityCompanion
                 Orientation = Orientation.Vertical,
                 SplitterWidth = 6,
                 BackColor = Color.FromArgb(226, 232, 240),
-                Panel1MinSize = 250,
-                Panel2MinSize = 250
+                Panel1MinSize = 200,
+                Panel2MinSize = 200
             };
 
             // ── 左侧面板 (本地环境) ──
@@ -373,12 +423,13 @@ namespace AntigravityCompanion
 
             // Tab 2: 结构化配置浏览器与热编辑器
             TabPage tabConfig = new TabPage("规则、技能与 MCP 配置 (Config Browser)");
-            SplitContainer splitConfig = new SplitContainer
+            splitConfig = new SplitContainer
             {
                 Dock = DockStyle.Fill,
                 Orientation = Orientation.Vertical,
-                SplitterDistance = 380,
-                BackColor = Color.FromArgb(226, 232, 240)
+                BackColor = Color.FromArgb(226, 232, 240),
+                Panel1MinSize = 200,
+                Panel2MinSize = 200
             };
 
             // 左侧分类子选项卡
@@ -479,54 +530,61 @@ namespace AntigravityCompanion
         // ══════════════════════════════════════════════════════════
         private void DetectPaths()
         {
-            string gemini = Path.Combine(HomePath, ".gemini");
-            txtGeminiPath.Text = gemini;
-
-            _localProjects.Clear();
-            _localSummaries.Clear();
-
-            Log("正在探测本地 Antigravity 工作区环境...", Color.FromArgb(71, 85, 105));
-
-            // 1. 读取本地工程项目列表
-            string projDir = Path.Combine(gemini, "config", "projects");
-            if (Directory.Exists(projDir))
+            try
             {
-                string[] files = Directory.GetFiles(projDir, "*.json");
-                for (int i = 0; i < files.Length; i++)
+                string gemini = Path.Combine(HomePath, ".gemini");
+                txtGeminiPath.Text = gemini;
+
+                _localProjects.Clear();
+                _localSummaries.Clear();
+
+                Log("正在探测本地 Antigravity 工作区环境...", Color.FromArgb(71, 85, 105));
+
+                // 1. 读取本地工程项目列表
+                string projDir = Path.Combine(gemini, "config", "projects");
+                if (Directory.Exists(projDir))
+                {
+                    string[] files = Directory.GetFiles(projDir, "*.json");
+                    for (int i = 0; i < files.Length; i++)
+                    {
+                        try
+                        {
+                            string json = File.ReadAllText(files[i], Encoding.UTF8);
+                            string id = Path.GetFileNameWithoutExtension(files[i]);
+                            string name = DirectStreamArchiver.ExtractJsonValue(json, "name");
+                            string uri = DirectStreamArchiver.ExtractJsonValue(json, "folderUri");
+                            if (!string.IsNullOrEmpty(name))
+                            {
+                                _localProjects[id] = new ProjectMetadata { Id = id, Name = name, FolderUri = uri };
+                            }
+                        }
+                        catch {}
+                    }
+                }
+
+                // 2. 读取本地 agyhub_summaries_proto.pb
+                string pbPath = Path.Combine(gemini, "antigravity", "agyhub_summaries_proto.pb");
+                if (File.Exists(pbPath))
                 {
                     try
                     {
-                        string json = File.ReadAllText(files[i], Encoding.UTF8);
-                        string id = Path.GetFileNameWithoutExtension(files[i]);
-                        string name = DirectStreamArchiver.ExtractJsonValue(json, "name");
-                        string uri = DirectStreamArchiver.ExtractJsonValue(json, "folderUri");
-                        if (!string.IsNullOrEmpty(name))
-                        {
-                            _localProjects[id] = new ProjectMetadata { Id = id, Name = name, FolderUri = uri };
-                        }
+                        byte[] pbBytes = File.ReadAllBytes(pbPath);
+                        _localSummaries = SessionMetadataExtractor.ExtractSummaries(pbBytes, _localProjects);
                     }
-                    catch {}
+                    catch (Exception ex)
+                    {
+                        Log("读取本地 summaries proto 异常: " + ex.Message, Color.FromArgb(217, 119, 6));
+                    }
                 }
-            }
 
-            // 2. 读取本地 agyhub_summaries_proto.pb
-            string pbPath = Path.Combine(gemini, "antigravity", "agyhub_summaries_proto.pb");
-            if (File.Exists(pbPath))
+                RenderLocalTree();
+                RefreshConfigBrowser();
+                UpdateSelectionStatistics();
+            }
+            catch (Exception ex)
             {
-                try
-                {
-                    byte[] pbBytes = File.ReadAllBytes(pbPath);
-                    _localSummaries = SessionMetadataExtractor.ExtractSummaries(pbBytes, _localProjects);
-                }
-                catch (Exception ex)
-                {
-                    Log("读取本地 summaries proto 异常: " + ex.Message, Color.FromArgb(217, 119, 6));
-                }
+                Log("本地扫描异常: " + ex.Message, Color.FromArgb(220, 38, 38));
             }
-
-            RenderLocalTree();
-            RefreshConfigBrowser();
-            UpdateSelectionStatistics();
         }
 
         private void RenderLocalTree()
