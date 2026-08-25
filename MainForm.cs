@@ -133,7 +133,12 @@ namespace AntigravityCompanion
 
         public MainForm()
         {
-            HomePath = Environment.GetEnvironmentVariable("USERPROFILE") ?? "C:\\Users\\Administrator";
+            // 自动解析当前机器的用户主目录
+            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (string.IsNullOrEmpty(userProfile))
+                userProfile = Environment.GetEnvironmentVariable("USERPROFILE") ?? "C:\\Users\\Administrator";
+            HomePath = userProfile;
+
             BuildUI();
             
             this.Shown += (s, e) => {
@@ -147,37 +152,37 @@ namespace AntigravityCompanion
 
         private void AdjustSplitterLayouts()
         {
-            // 主分栏 50%/50% 对称调整
-            if (splitMain != null && splitMain.Width > 500)
+            // 主分栏 50%/50% 对称安全调整
+            try
             {
-                try
+                if (splitMain != null && splitMain.ClientSize.Width > 200)
                 {
                     int target = (splitMain.ClientSize.Width - splitMain.SplitterWidth) / 2;
-                    if (target >= splitMain.Panel1MinSize && target <= splitMain.ClientSize.Width - splitMain.Panel2MinSize)
+                    if (target > 50 && target < splitMain.ClientSize.Width - 50)
                     {
                         splitMain.SplitterDistance = target;
                     }
                 }
-                catch {}
             }
+            catch {}
 
             // 配置编辑器分栏自适应
-            if (splitConfig != null && splitConfig.Width > 600)
+            try
             {
-                try
+                if (splitConfig != null && splitConfig.ClientSize.Width > 300)
                 {
                     int target = 360;
-                    if (target >= splitConfig.Panel1MinSize && target <= splitConfig.ClientSize.Width - splitConfig.Panel2MinSize)
+                    if (target > 50 && target < splitConfig.ClientSize.Width - 50)
                     {
                         splitConfig.SplitterDistance = target;
                     }
                 }
-                catch {}
             }
+            catch {}
         }
 
         // ══════════════════════════════════════════════════════════
-        // 极简素雅现代化 UI 构建 (50%/50% 对称与自适应布局)
+        // 极简素雅现代化 UI 构建 (彻底移除初始化越界陷阱)
         // ══════════════════════════════════════════════════════════
         private void BuildUI()
         {
@@ -208,7 +213,7 @@ namespace AntigravityCompanion
                 pe.Graphics.DrawLine(new Pen(Color.FromArgb(226, 232, 240)), 0, pnlTop.Height - 1, pnlTop.Width, pnlTop.Height - 1);
             };
 
-            // 操作按钮栏 (中性灰色现代扁平化按钮)
+            // 操作按钮栏
             btnDetect = MakeNeutralBtn("重新检测本地", 115);
             btnDetect.Location = new Point(16, 10);
             btnDetect.Click += (s, e) => DetectPaths();
@@ -276,15 +281,13 @@ namespace AntigravityCompanion
                 lblSearchIcon, txtSearch, btnImportSelected, txtGeminiPath, lblStatsSummary
             });
 
-            // 2. 主体 SplitContainer (左右 50% 完美对称)
+            // 2. 主体 SplitContainer (纯净初始化，无内部越界陷阱)
             splitMain = new SplitContainer
             {
                 Dock = DockStyle.Fill,
                 Orientation = Orientation.Vertical,
                 SplitterWidth = 6,
-                BackColor = Color.FromArgb(226, 232, 240),
-                Panel1MinSize = 200,
-                Panel2MinSize = 200
+                BackColor = Color.FromArgb(226, 232, 240)
             };
 
             // ── 左侧面板 (本地环境) ──
@@ -421,15 +424,13 @@ namespace AntigravityCompanion
             };
             tabLog.Controls.Add(rtbLog);
 
-            // Tab 2: 结构化配置浏览器与热编辑器
+            // Tab 2: 结构化配置浏览器与热编辑器 (纯净初始化)
             TabPage tabConfig = new TabPage("规则、技能与 MCP 配置 (Config Browser)");
             splitConfig = new SplitContainer
             {
                 Dock = DockStyle.Fill,
                 Orientation = Orientation.Vertical,
-                BackColor = Color.FromArgb(226, 232, 240),
-                Panel1MinSize = 200,
-                Panel2MinSize = 200
+                BackColor = Color.FromArgb(226, 232, 240)
             };
 
             // 左侧分类子选项卡
@@ -538,7 +539,7 @@ namespace AntigravityCompanion
                 _localProjects.Clear();
                 _localSummaries.Clear();
 
-                Log("正在探测本地 Antigravity 工作区环境...", Color.FromArgb(71, 85, 105));
+                Log("正在探测本地 Antigravity 工作区环境: " + gemini, Color.FromArgb(71, 85, 105));
 
                 // 1. 读取本地工程项目列表
                 string projDir = Path.Combine(gemini, "config", "projects");
@@ -1212,7 +1213,7 @@ namespace AntigravityCompanion
         }
 
         // ══════════════════════════════════════════════════════════
-        // 细粒度选择性导入执行 (包含工程 JSON 自动补齐与冲突重命名)
+        // 细粒度选择性导入执行 (包含跨机器路径重映射与工程创建)
         // ══════════════════════════════════════════════════════════
         private void BtnPerformSelectiveImport_Click(object sender, EventArgs e)
         {
@@ -1295,6 +1296,14 @@ namespace AntigravityCompanion
 
                 try
                 {
+                    // 确保基础目录存在 (跨机器全新环境自动初始化)
+                    string convDir = Path.Combine(gemini, "antigravity", "conversations");
+                    string brainDir = Path.Combine(gemini, "antigravity", "brain");
+                    string projDir = Path.Combine(gemini, "config", "projects");
+                    if (!Directory.Exists(convDir)) Directory.CreateDirectory(convDir);
+                    if (!Directory.Exists(brainDir)) Directory.CreateDirectory(brainDir);
+                    if (!Directory.Exists(projDir)) Directory.CreateDirectory(projDir);
+
                     using (FileStream fs = new FileStream(_loadedBackupPath, FileMode.Open, FileAccess.Read, FileShare.Read))
                     using (ZipArchive archive = new ZipArchive(fs, ZipArchiveMode.Read))
                     {
@@ -1339,14 +1348,20 @@ namespace AntigravityCompanion
                                     }
                                 }
                             }
-                            // 工程配置 JSON 同步/提取 (补全缺失的项目定义)
+                            // 工程配置 JSON 同步/提取 (包含跨机器路径重映射)
                             else if (norm.Contains("config/projects/") && norm.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                             {
                                 string pId = Path.GetFileNameWithoutExtension(norm);
                                 string dest = Path.Combine(gemini, "config", "projects", pId + ".json");
                                 if (!File.Exists(dest))
                                 {
-                                    ExtractZipEntrySafe(entry, dest);
+                                    // 读取并执行跨机器路径重映射
+                                    using (StreamReader sr = new StreamReader(entry.Open(), Encoding.UTF8))
+                                    {
+                                        string rawJson = sr.ReadToEnd();
+                                        string remappedJson = DirectStreamArchiver.RemapAllPathFormats(rawJson, srcHome, curHome);
+                                        File.WriteAllText(dest, remappedJson, Encoding.UTF8);
+                                    }
                                     filesImported++;
                                 }
                             }
@@ -1380,15 +1395,12 @@ namespace AntigravityCompanion
                         }
 
                         // 2. 针对重命名工程生成合法的 project json 配置
-                        string localProjDir = Path.Combine(gemini, "config", "projects");
-                        if (!Directory.Exists(localProjDir)) Directory.CreateDirectory(localProjDir);
-
                         foreach (KeyValuePair<string, string> kvp in projectNewNames)
                         {
                             string oldName = kvp.Key;
                             string newName = kvp.Value;
                             string newProjId = Guid.NewGuid().ToString();
-                            string newProjFile = Path.Combine(localProjDir, newProjId + ".json");
+                            string newProjFile = Path.Combine(projDir, newProjId + ".json");
 
                             string folderUri = projectUriOverrides.ContainsKey(oldName) ? projectUriOverrides[oldName] : ("file:///" + HomePath.Replace('\\', '/') + "/" + newName);
                             string jsonContent = string.Format("{{\r\n  \"id\": \"{0}\",\r\n  \"name\": \"{1}\",\r\n  \"folderUri\": \"{2}\"\r\n}}", newProjId, newName, folderUri);
