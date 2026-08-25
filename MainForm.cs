@@ -53,6 +53,13 @@ namespace AntigravityCompanion
         private string _loadedBackupPath;
         private readonly ImportHighlightTracker _highlightTracker = new ImportHighlightTracker();
 
+        // ── 持久选择状态集（防止搜索/过滤刷新时勾选丢失） ──
+        private readonly HashSet<string> _checkedSessionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _checkedProjectNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private bool _checkedRules = false;
+        private bool _checkedSkills = false;
+        private bool _checkedMcp = false;
+
         // ── UI 控件成员 ──
         private DoubleBufferedTreeView tvLocal;
         private DoubleBufferedTreeView tvBackup;
@@ -90,16 +97,16 @@ namespace AntigravityCompanion
         }
 
         // ══════════════════════════════════════════════════════════
-        // 现代化 UI 构建 (Modern UI/UX Layout)
+        // 极简素雅现代化 UI 构建 (Clean & Professional Styling)
         // ══════════════════════════════════════════════════════════
         private void BuildUI()
         {
-            this.Text = "Antigravity Companion V0.6 - 双栏可视化差异对比与细粒度导入管理器";
+            this.Text = "Antigravity Companion V0.6 - 数据迁移与细粒度导入管理工具";
             this.Size = new Size(1360, 860);
             this.MinimumSize = new Size(1100, 700);
             this.StartPosition = FormStartPosition.CenterScreen;
-            this.Font = new Font("Microsoft YaHei UI", 9f, FontStyle.Regular);
-            this.BackColor = Color.FromArgb(245, 247, 250);
+            this.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
+            this.BackColor = Color.FromArgb(248, 250, 252);
 
             try
             {
@@ -108,40 +115,40 @@ namespace AntigravityCompanion
             }
             catch {}
 
-            // 1. 顶部现代化仪表盘与工具栏容器
+            // 1. 顶部操作栏与状态卡片 (素雅中性设计)
             Panel pnlTop = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 82,
+                Height = 78,
                 BackColor = Color.White,
-                Padding = new Padding(12, 8, 12, 8)
+                Padding = new Padding(16, 10, 16, 8)
             };
             pnlTop.Paint += (s, pe) =>
             {
-                pe.Graphics.DrawLine(new Pen(Color.FromArgb(220, 224, 230)), 0, pnlTop.Height - 1, pnlTop.Width, pnlTop.Height - 1);
+                pe.Graphics.DrawLine(new Pen(Color.FromArgb(226, 232, 240)), 0, pnlTop.Height - 1, pnlTop.Width, pnlTop.Height - 1);
             };
 
-            // 操作按钮栏
-            btnDetect = MakeBtn("🔄 重新检测本地", 130, Color.FromArgb(232, 240, 254), Color.FromArgb(26, 115, 232));
-            btnDetect.Location = new Point(12, 10);
+            // 操作按钮栏 (统一素雅灰色背景，消除五彩斑斓的底色)
+            btnDetect = MakeNeutralBtn("重新检测本地", 115);
+            btnDetect.Location = new Point(16, 10);
             btnDetect.Click += (s, e) => DetectPaths();
 
-            btnOpenBackup = MakeBtn("📂 打开备份 (.agy)", 140, Color.FromArgb(230, 244, 234), Color.FromArgb(19, 115, 51));
-            btnOpenBackup.Location = new Point(150, 10);
+            btnOpenBackup = MakeNeutralBtn("打开备份包...", 115);
+            btnOpenBackup.Location = new Point(139, 10);
             btnOpenBackup.Click += BtnOpenBackup_Click;
 
-            btnFullBackup = MakeBtn("⚡ 一键全量备份", 130, Color.FromArgb(254, 239, 239), Color.FromArgb(217, 48, 37));
-            btnFullBackup.Location = new Point(298, 10);
+            btnFullBackup = MakeNeutralBtn("全量备份导出...", 125);
+            btnFullBackup.Location = new Point(262, 10);
             btnFullBackup.Click += BtnFullBackup_Click;
 
             chkHideTemp = new CheckBox
             {
-                Text = "过滤临时工程与子代理会话 (推荐)",
+                Text = "过滤临时工程与子代理会话",
                 Checked = true,
                 AutoSize = true,
-                Location = new Point(440, 15),
-                Font = new Font("Microsoft YaHei UI", 9f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(60, 64, 67)
+                Location = new Point(405, 14),
+                Font = new Font("Segoe UI", 9f, FontStyle.Regular),
+                ForeColor = Color.FromArgb(51, 65, 85)
             };
             chkHideTemp.CheckedChanged += (s, e) =>
             {
@@ -151,23 +158,25 @@ namespace AntigravityCompanion
 
             Label lblSearchIcon = new Label
             {
-                Text = "🔍 搜索:",
+                Text = "搜索会话/工程:",
                 AutoSize = true,
-                Location = new Point(710, 15),
-                Font = new Font("Microsoft YaHei UI", 9f, FontStyle.Regular),
-                ForeColor = Color.FromArgb(95, 99, 104)
+                Location = new Point(640, 15),
+                Font = new Font("Segoe UI", 9f, FontStyle.Regular),
+                ForeColor = Color.FromArgb(100, 116, 139)
             };
 
             txtSearch = new TextBox
             {
-                Location = new Point(765, 12),
-                Width = 180,
-                Font = new Font("Microsoft YaHei UI", 9f)
+                Location = new Point(745, 11),
+                Width = 200,
+                Font = new Font("Segoe UI", 9f),
+                BorderStyle = BorderStyle.FixedSingle
             };
             txtSearch.TextChanged += TxtSearch_TextChanged;
 
-            btnImportSelected = MakeBtn("🚀 导入所选项目到本地", 170, Color.FromArgb(26, 115, 232), Color.White);
-            btnImportSelected.Location = new Point(960, 10);
+            // 主动作按钮 (稳重的主题蓝色)
+            btnImportSelected = MakePrimaryBtn("导入所选项到本地", 150);
+            btnImportSelected.Location = new Point(960, 9);
             btnImportSelected.Enabled = false;
             btnImportSelected.Click += BtnPerformSelectiveImport_Click;
 
@@ -177,10 +186,10 @@ namespace AntigravityCompanion
             lblStatsSummary = new Label
             {
                 Text = "本地: 正在扫描... | 备份包: 未加载 | 待合流选中: 0 个工程 (0 条会话)",
-                Location = new Point(14, 50),
-                Size = new Size(1300, 24),
-                Font = new Font("Microsoft YaHei UI", 9f, FontStyle.Regular),
-                ForeColor = Color.FromArgb(95, 99, 104)
+                Location = new Point(16, 48),
+                Size = new Size(1300, 22),
+                Font = new Font("Segoe UI", 9f, FontStyle.Regular),
+                ForeColor = Color.FromArgb(71, 85, 105)
             };
 
             pnlTop.Controls.AddRange(new Control[] {
@@ -188,28 +197,33 @@ namespace AntigravityCompanion
                 lblSearchIcon, txtSearch, btnImportSelected, txtGeminiPath, lblStatsSummary
             });
 
-            // 2. 主体 SplitContainer (左树 vs 右树)
+            // 2. 主体 SplitContainer (左侧本地 vs 右侧备份)
             splitMain = new SplitContainer
             {
                 Dock = DockStyle.Fill,
                 Orientation = Orientation.Vertical,
-                SplitterDistance = 560,
+                SplitterDistance = 580,
                 SplitterWidth = 6,
-                BackColor = Color.FromArgb(235, 238, 242)
+                BackColor = Color.FromArgb(226, 232, 240)
             };
 
             // 左侧面板 (本地环境)
-            Panel pnlLeft = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(8) };
-            Panel pnlLeftHeader = new Panel { Dock = DockStyle.Top, Height = 42, BackColor = Color.FromArgb(248, 249, 250) };
+            Panel pnlLeft = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(12, 10, 12, 10) };
+            Panel pnlLeftHeader = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = Color.FromArgb(248, 250, 252) };
+            pnlLeftHeader.Paint += (s, pe) =>
+            {
+                pe.Graphics.DrawLine(new Pen(Color.FromArgb(226, 232, 240)), 0, pnlLeftHeader.Height - 1, pnlLeftHeader.Width, pnlLeftHeader.Height - 1);
+            };
+
             lblLocalHeader = new Label
             {
-                Text = "💻 当前本地环境 (Local Workspace)",
+                Text = "本地环境 (Local Environment)",
                 Dock = DockStyle.Left,
                 AutoSize = false,
                 Width = 320,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Microsoft YaHei UI", 9.5f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(32, 33, 36),
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(15, 23, 42),
                 Padding = new Padding(8, 0, 0, 0)
             };
             lblConvCount = new Label
@@ -219,8 +233,8 @@ namespace AntigravityCompanion
                 AutoSize = false,
                 Width = 180,
                 TextAlign = ContentAlignment.MiddleRight,
-                Font = new Font("Microsoft YaHei UI", 8.5f),
-                ForeColor = Color.FromArgb(95, 99, 104),
+                Font = new Font("Segoe UI", 8.5f),
+                ForeColor = Color.FromArgb(100, 116, 139),
                 Padding = new Padding(0, 0, 8, 0)
             };
             pnlLeftHeader.Controls.AddRange(new Control[] { lblLocalHeader, lblConvCount });
@@ -229,7 +243,7 @@ namespace AntigravityCompanion
             {
                 Dock = DockStyle.Fill,
                 BorderStyle = BorderStyle.None,
-                Font = new Font("Microsoft YaHei UI", 9f),
+                Font = new Font("Segoe UI", 9f),
                 ShowLines = true,
                 ShowPlusMinus = true,
                 ShowRootLines = true,
@@ -241,17 +255,22 @@ namespace AntigravityCompanion
             splitMain.Panel1.Controls.Add(pnlLeft);
 
             // 右侧面板 (备份归档)
-            Panel pnlRight = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(8) };
-            Panel pnlRightHeader = new Panel { Dock = DockStyle.Top, Height = 42, BackColor = Color.FromArgb(248, 249, 250) };
+            Panel pnlRight = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(12, 10, 12, 10) };
+            Panel pnlRightHeader = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = Color.FromArgb(248, 250, 252) };
+            pnlRightHeader.Paint += (s, pe) =>
+            {
+                pe.Graphics.DrawLine(new Pen(Color.FromArgb(226, 232, 240)), 0, pnlRightHeader.Height - 1, pnlRightHeader.Width, pnlRightHeader.Height - 1);
+            };
+
             lblBackupHeader = new Label
             {
-                Text = "📦 备份数据包 (Backup Archive - 未加载)",
+                Text = "备份归档包 (Backup Archive - 未加载)",
                 Dock = DockStyle.Left,
                 AutoSize = false,
                 Width = 360,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Microsoft YaHei UI", 9.5f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(32, 33, 36),
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(15, 23, 42),
                 Padding = new Padding(8, 0, 0, 0)
             };
 
@@ -262,17 +281,17 @@ namespace AntigravityCompanion
                 AutoSize = true,
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = false,
-                Padding = new Padding(0, 6, 8, 0)
+                Padding = new Padding(0, 4, 8, 0)
             };
+
+            btnSelectNewOnly = MakeSmallBtn("仅选新增");
+            btnSelectNewOnly.Click += BtnSelectNewOnly_Click;
 
             btnSelectAll = MakeSmallBtn("全选");
             btnSelectAll.Click += (s, e) => SetAllBackupChecks(true);
 
             btnDeselectAll = MakeSmallBtn("全不选");
             btnDeselectAll.Click += (s, e) => SetAllBackupChecks(false);
-
-            btnSelectNewOnly = MakeSmallBtn("仅选新增 [★]");
-            btnSelectNewOnly.Click += BtnSelectNewOnly_Click;
 
             pnlQuickSelect.Controls.AddRange(new Control[] { btnSelectNewOnly, btnSelectAll, btnDeselectAll });
             pnlRightHeader.Controls.AddRange(new Control[] { lblBackupHeader, pnlQuickSelect });
@@ -281,7 +300,7 @@ namespace AntigravityCompanion
             {
                 Dock = DockStyle.Fill,
                 BorderStyle = BorderStyle.None,
-                Font = new Font("Microsoft YaHei UI", 9f),
+                Font = new Font("Segoe UI", 9f),
                 CheckBoxes = true,
                 ShowLines = true,
                 ShowPlusMinus = true,
@@ -293,7 +312,7 @@ namespace AntigravityCompanion
 
             // 右键菜单
             contextMenuBackup = new ContextMenuStrip();
-            contextMenuBackup.Items.Add("勾选当前工程下所有项", null, (s, e) => CheckSelectedNodeCascading(true));
+            contextMenuBackup.Items.Add("勾选当前工程下所有会话", null, (s, e) => CheckSelectedNodeCascading(true));
             contextMenuBackup.Items.Add("取消勾选当前工程", null, (s, e) => CheckSelectedNodeCascading(false));
             contextMenuBackup.Items.Add(new ToolStripSeparator());
             contextMenuBackup.Items.Add("复制会话 UUID", null, (s, e) => CopySelectedId());
@@ -303,52 +322,52 @@ namespace AntigravityCompanion
             pnlRight.Controls.Add(pnlRightHeader);
             splitMain.Panel2.Controls.Add(pnlRight);
 
-            // 3. 底部选项卡 (配置浏览器 & 实时日志)
+            // 3. 底部选项卡 (配置浏览器 & 运行日志)
             tabRightBottom = new TabControl
             {
                 Dock = DockStyle.Bottom,
                 Height = 220,
-                Font = new Font("Microsoft YaHei UI", 9f)
+                Font = new Font("Segoe UI", 9f)
             };
 
-            // Tab 1: 实时运行日志
-            TabPage tabLog = new TabPage("📋 运行日志与执行追踪 (Log)");
+            // Tab 1: 运行日志
+            TabPage tabLog = new TabPage("运行日志 (Log)");
             rtbLog = new RichTextBox
             {
                 Dock = DockStyle.Fill,
                 ReadOnly = true,
-                BackColor = Color.FromArgb(30, 30, 30),
-                ForeColor = Color.FromArgb(220, 220, 220),
+                BackColor = Color.FromArgb(248, 250, 252),
+                ForeColor = Color.FromArgb(30, 41, 59),
                 Font = new Font("Consolas", 9.5f),
                 BorderStyle = BorderStyle.None
             };
             tabLog.Controls.Add(rtbLog);
 
             // Tab 2: 配置浏览器与热编辑器
-            TabPage tabConfig = new TabPage("⚙️ 规则、技能与 MCP 配置浏览器 (Editor)");
+            TabPage tabConfig = new TabPage("规则、技能与 MCP 配置 (Config Browser)");
             SplitContainer splitConfig = new SplitContainer
             {
                 Dock = DockStyle.Fill,
                 Orientation = Orientation.Vertical,
-                SplitterDistance = 320
+                SplitterDistance = 340
             };
 
             lbConfigFiles = new ListBox
             {
                 Dock = DockStyle.Fill,
                 BorderStyle = BorderStyle.None,
-                Font = new Font("Microsoft YaHei UI", 9f),
-                BackColor = Color.FromArgb(250, 250, 250)
+                Font = new Font("Segoe UI", 9f),
+                BackColor = Color.FromArgb(248, 250, 252)
             };
             lbConfigFiles.SelectedIndexChanged += LbConfigFiles_SelectedIndexChanged;
             splitConfig.Panel1.Controls.Add(lbConfigFiles);
 
             Panel pnlEditor = new Panel { Dock = DockStyle.Fill };
-            Panel pnlEditorTop = new Panel { Dock = DockStyle.Top, Height = 32, BackColor = Color.FromArgb(240, 240, 240) };
-            lblEditingFile = new Label { Text = "请选择左侧配置文件进行浏览或编辑 (支持 Ctrl+S 极速热保存)", Dock = DockStyle.Left, AutoSize = false, Width = 500, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(6, 0, 0, 0) };
-            btnSaveConfig = MakeSmallBtn("💾 保存修改 (Ctrl+S)");
+            Panel pnlEditorTop = new Panel { Dock = DockStyle.Top, Height = 32, BackColor = Color.FromArgb(241, 245, 249) };
+            lblEditingFile = new Label { Text = "请选择左侧配置文件进行浏览或编辑 (支持 Ctrl+S 保存)", Dock = DockStyle.Left, AutoSize = false, Width = 520, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(8, 0, 0, 0) };
+            btnSaveConfig = MakeSmallBtn("保存修改 (Ctrl+S)");
             btnSaveConfig.Dock = DockStyle.Right;
-            btnSaveConfig.Width = 140;
+            btnSaveConfig.Width = 130;
             btnSaveConfig.Click += BtnSaveConfig_Click;
             pnlEditorTop.Controls.AddRange(new Control[] { lblEditingFile, btnSaveConfig });
 
@@ -384,7 +403,7 @@ namespace AntigravityCompanion
         }
 
         // ══════════════════════════════════════════════════════════
-        // 核心业务：本地环境探测与解析 (Local Detection)
+        // 本地环境探测与解析 (Local Detection)
         // ══════════════════════════════════════════════════════════
         private void DetectPaths()
         {
@@ -394,7 +413,7 @@ namespace AntigravityCompanion
             _localProjects.Clear();
             _localSummaries.Clear();
 
-            Log("========== 正在探测本地 Antigravity 工作环境 ==========", Color.DarkBlue);
+            Log("正在探测本地 Antigravity 工作区环境...", Color.FromArgb(71, 85, 105));
 
             // 1. 读取本地工程项目列表
             string projDir = Path.Combine(gemini, "config", "projects");
@@ -429,7 +448,7 @@ namespace AntigravityCompanion
                 }
                 catch (Exception ex)
                 {
-                    Log("读取本地 summaries proto 异常: " + ex.Message, Color.DarkOrange);
+                    Log("读取本地 summaries proto 异常: " + ex.Message, Color.FromArgb(217, 119, 6));
                 }
             }
 
@@ -440,8 +459,8 @@ namespace AntigravityCompanion
             }
 
             lblConvCount.Text = "活跃主会话: " + mainCount;
-            Log(string.Format("本地环境扫描完成：共发现 {0} 个工程，{1} 条活跃主会话（已智能过滤临时子任务与废弃孤儿数据库）", 
-                _localProjects.Count, mainCount), Color.DarkGreen);
+            Log(string.Format("本地环境扫描完成：共发现 {0} 个工程，{1} 条活跃主会话", 
+                _localProjects.Count, mainCount), Color.FromArgb(22, 101, 52));
 
             RenderLocalTree();
             RefreshConfigBrowser();
@@ -459,7 +478,7 @@ namespace AntigravityCompanion
                 string query = txtSearch.Text.Trim();
 
                 // ── 1. 全局配置 Root ──
-                TreeNode rootConfig = new TreeNode("⚙️ 全局配置 (Global Config)");
+                TreeNode rootConfig = new TreeNode("全局配置 (Global Config)");
                 rootConfig.Tag = new DiffItemNodeTag { Category = ItemCategory.GlobalConfigRoot, DisplayName = "全局配置" };
 
                 int rulesCount = 0;
@@ -468,7 +487,7 @@ namespace AntigravityCompanion
                 string rulesDir = Path.Combine(gemini, "config", "rules");
                 if (Directory.Exists(rulesDir)) rulesCount += Directory.GetFiles(rulesDir, "*.md", SearchOption.AllDirectories).Length;
 
-                TreeNode nodeRules = new TreeNode(string.Format("📜 规则与规范 ({0} 项)", rulesCount));
+                TreeNode nodeRules = new TreeNode(string.Format("规则与规范 ({0} 项)", rulesCount));
                 nodeRules.Tag = new DiffItemNodeTag { Category = ItemCategory.GlobalRules, DisplayName = "规则与规范", SourcePath = gemini };
                 rootConfig.Nodes.Add(nodeRules);
 
@@ -478,7 +497,7 @@ namespace AntigravityCompanion
                 string uSkills = Path.Combine(gemini, "config", "skills");
                 if (Directory.Exists(uSkills)) skillsCount += Directory.GetDirectories(uSkills).Length;
 
-                TreeNode nodeSkills = new TreeNode(string.Format("⚡ 内置与用户技能 ({0} 项)", skillsCount));
+                TreeNode nodeSkills = new TreeNode(string.Format("内置与用户技能 ({0} 项)", skillsCount));
                 nodeSkills.Tag = new DiffItemNodeTag { Category = ItemCategory.GlobalSkills, DisplayName = "内置与用户技能", SourcePath = uSkills };
                 rootConfig.Nodes.Add(nodeSkills);
 
@@ -488,14 +507,14 @@ namespace AntigravityCompanion
                 string mcpDir = Path.Combine(gemini, "antigravity", "mcp");
                 if (Directory.Exists(mcpDir)) mcpCount += Directory.GetDirectories(mcpDir).Length;
 
-                TreeNode nodeMcp = new TreeNode(string.Format("🔌 MCP 服务器与配置 ({0} 项)", mcpCount));
+                TreeNode nodeMcp = new TreeNode(string.Format("MCP 服务器与配置 ({0} 项)", mcpCount));
                 nodeMcp.Tag = new DiffItemNodeTag { Category = ItemCategory.GlobalMcp, DisplayName = "MCP 服务器与配置", SourcePath = mcpDir };
                 rootConfig.Nodes.Add(nodeMcp);
 
                 tvLocal.Nodes.Add(rootConfig);
 
                 // ── 2. 研发工程与会话 Root ──
-                TreeNode rootProj = new TreeNode("📁 研发工程与会话 (Projects & Conversations)");
+                TreeNode rootProj = new TreeNode("研发工程与会话 (Projects & Conversations)");
                 rootProj.Tag = new DiffItemNodeTag { Category = ItemCategory.ProjectsRoot, DisplayName = "研发工程与会话" };
 
                 Dictionary<string, List<ConversationSummaryInfo>> groups = new Dictionary<string, List<ConversationSummaryInfo>>(StringComparer.OrdinalIgnoreCase);
@@ -532,7 +551,7 @@ namespace AntigravityCompanion
                     if (hideTemp && isJunk && visibleList.Count == 0) continue;
                     if (hideTemp && visibleList.Count == 0) continue;
 
-                    string pNodeText = string.Format("📦 {0} ({1} 条会话)", pName, visibleList.Count);
+                    string pNodeText = string.Format("{0} ({1} 条)", pName, visibleList.Count);
                     if (isJunk) pNodeText = "[临时] " + pNodeText;
 
                     TreeNode pNode = new TreeNode(pNodeText);
@@ -540,12 +559,11 @@ namespace AntigravityCompanion
 
                     if (isJunk)
                     {
-                        pNode.ForeColor = Color.Gray;
-                        pNode.NodeFont = new Font(tvLocal.Font, FontStyle.Italic);
+                        pNode.ForeColor = Color.FromArgb(148, 163, 184);
                     }
                     else if (_highlightTracker.IsProjectHighlighted(pName))
                     {
-                        pNode.ForeColor = Color.DarkGreen;
+                        pNode.ForeColor = Color.FromArgb(22, 101, 52);
                         pNode.NodeFont = new Font(tvLocal.Font, FontStyle.Bold);
                     }
 
@@ -553,7 +571,7 @@ namespace AntigravityCompanion
                     {
                         ConversationSummaryInfo s = visibleList[j];
                         string timeStr = s.UpdatedTime > DateTime.MinValue ? s.UpdatedTime.ToString("MM-dd HH:mm") : "-";
-                        string sNodeText = string.Format("💬 {0} [{1}]", s.DisplayTitle, timeStr);
+                        string sNodeText = string.Format("{0} [{1}]", s.DisplayTitle, timeStr);
                         if (s.IsSubagent) sNodeText = "[子任务] " + sNodeText;
 
                         TreeNode sNode = new TreeNode(sNodeText);
@@ -569,12 +587,11 @@ namespace AntigravityCompanion
 
                         if (s.IsSubagent)
                         {
-                            sNode.ForeColor = Color.Gray;
-                            sNode.NodeFont = new Font(tvLocal.Font, FontStyle.Italic);
+                            sNode.ForeColor = Color.FromArgb(148, 163, 184);
                         }
                         else if (_highlightTracker.IsConversationHighlighted(s.ConversationId))
                         {
-                            sNode.ForeColor = Color.DarkGreen;
+                            sNode.ForeColor = Color.FromArgb(22, 101, 52);
                             sNode.NodeFont = new Font(tvLocal.Font, FontStyle.Bold);
                         }
 
@@ -595,14 +612,14 @@ namespace AntigravityCompanion
         }
 
         // ══════════════════════════════════════════════════════════
-        // 打开并流式解析备份包 (.agy)
+        // 打开并解析备份包 (.agy)
         // ══════════════════════════════════════════════════════════
         private void BtnOpenBackup_Click(object sender, EventArgs e)
         {
             OpenFileDialog dlg = new OpenFileDialog
             {
                 Filter = "Antigravity 备份包 (*.agy)|*.agy|ZIP 压缩包 (*.zip)|*.zip|所有文件 (*.*)|*.*",
-                Title = "请选择 Antigravity 备份包 (.agy / .zip)"
+                Title = "请选择 Antigravity 备份归档文件"
             };
 
             if (dlg.ShowDialog(this) == DialogResult.OK)
@@ -616,7 +633,7 @@ namespace AntigravityCompanion
             if (!File.Exists(archivePath)) { MessageBox.Show("备份包不存在: " + archivePath, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error); return; }
 
             _loadedBackupPath = archivePath;
-            Log("正在通过内存流式只读管道解析备份包元数据: " + Path.GetFileName(archivePath) + "...", Color.DarkBlue);
+            Log("正在流式探测备份包元数据: " + Path.GetFileName(archivePath) + "...", Color.FromArgb(71, 85, 105));
             this.Cursor = Cursors.WaitCursor;
 
             try
@@ -626,19 +643,31 @@ namespace AntigravityCompanion
                 sw.Stop();
 
                 _currentDiffNodes = VisualDiffEngine.ComputeDiff(_localSummaries, _backupIndex.Conversations);
+                
+                // 默认仅选中新增会话
+                _checkedSessionIds.Clear();
+                _checkedProjectNames.Clear();
+                for (int i = 0; i < _backupIndex.Conversations.Count; i++)
+                {
+                    var c = _backupIndex.Conversations[i];
+                    bool exists = _localSummaries.Exists(x => string.Equals(x.ConversationId, c.ConversationId, StringComparison.OrdinalIgnoreCase));
+                    if (!exists && !c.IsSubagent)
+                    {
+                        _checkedSessionIds.Add(c.ConversationId);
+                    }
+                }
+
                 RenderBackupTree();
 
-                lblBackupHeader.Text = "📦 备份数据包: " + Path.GetFileName(archivePath);
+                lblBackupHeader.Text = "备份归档包: " + Path.GetFileName(archivePath);
                 btnImportSelected.Enabled = true;
 
-                Log(string.Format("===== 备份包秒级解析完成！共发现 {0} 个工程，{1} 条会话，耗时 {2}ms =====",
-                    _backupIndex.Projects.Count, _backupIndex.Conversations.Count, sw.ElapsedMilliseconds), Color.DarkGreen);
-
-                BtnSelectNewOnly_Click(this, EventArgs.Empty);
+                Log(string.Format("备份包解析完成！共发现 {0} 个工程，{1} 条会话，耗时 {2}ms",
+                    _backupIndex.Projects.Count, _backupIndex.Conversations.Count, sw.ElapsedMilliseconds), Color.FromArgb(22, 101, 52));
             }
             catch (Exception ex)
             {
-                Log("解析备份包失败: " + ex.Message, Color.Red);
+                Log("解析备份包失败: " + ex.Message, Color.FromArgb(220, 38, 38));
                 MessageBox.Show("解析备份包失败:\n" + ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -660,25 +689,28 @@ namespace AntigravityCompanion
                 string query = txtSearch.Text.Trim();
 
                 // ── 1. 全局配置 Root ──
-                TreeNode rootConfig = new TreeNode("⚙️ 备份全局配置 (Global Config)");
+                TreeNode rootConfig = new TreeNode("备份全局配置 (Global Config)");
                 rootConfig.Tag = new DiffItemNodeTag { Category = ItemCategory.GlobalConfigRoot, DisplayName = "备份全局配置" };
 
-                TreeNode nodeRules = new TreeNode("📜 规则与规范 (.geminirules, GEMINI.md)");
+                TreeNode nodeRules = new TreeNode("规则与规范 (.geminirules, GEMINI.md)");
                 nodeRules.Tag = new DiffItemNodeTag { Category = ItemCategory.GlobalRules, DisplayName = "规则与规范", Status = DiffStatus.Aligned };
+                nodeRules.Checked = _checkedRules;
                 rootConfig.Nodes.Add(nodeRules);
 
-                TreeNode nodeSkills = new TreeNode("⚡ 内置与用户技能 (Skills)");
+                TreeNode nodeSkills = new TreeNode("内置与用户技能 (Skills)");
                 nodeSkills.Tag = new DiffItemNodeTag { Category = ItemCategory.GlobalSkills, DisplayName = "内置与用户技能", Status = DiffStatus.Aligned };
+                nodeSkills.Checked = _checkedSkills;
                 rootConfig.Nodes.Add(nodeSkills);
 
-                TreeNode nodeMcp = new TreeNode("🔌 MCP 服务器与配置 (mcp_config.json)");
+                TreeNode nodeMcp = new TreeNode("MCP 服务器与配置 (mcp_config.json)");
                 nodeMcp.Tag = new DiffItemNodeTag { Category = ItemCategory.GlobalMcp, DisplayName = "MCP 服务器与配置", Status = DiffStatus.Aligned };
+                nodeMcp.Checked = _checkedMcp;
                 rootConfig.Nodes.Add(nodeMcp);
 
                 tvBackup.Nodes.Add(rootConfig);
 
                 // ── 2. 研发工程与会话 Root ──
-                TreeNode rootProj = new TreeNode("📁 备份研发工程与会话 (Projects & Conversations)");
+                TreeNode rootProj = new TreeNode("备份研发工程与会话 (Projects & Conversations)");
                 rootProj.Tag = new DiffItemNodeTag { Category = ItemCategory.ProjectsRoot, DisplayName = "备份研发工程与会话" };
 
                 HashSet<string> localConvIdSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -715,7 +747,7 @@ namespace AntigravityCompanion
                     if (hideTemp && visibleConvs.Count == 0) continue;
 
                     string badge = pDiff.GetStatusBadge();
-                    string pText = string.Format("📦 {0} ({1} 条) {2}", pDiff.ProjectName, visibleConvs.Count, badge);
+                    string pText = string.Format("{0} ({1} 条) {2}", pDiff.ProjectName, visibleConvs.Count, badge);
                     if (isJunk) pText = "[临时] " + pText;
 
                     TreeNode pNode = new TreeNode(pText);
@@ -732,15 +764,18 @@ namespace AntigravityCompanion
 
                     ApplyDiffStyle(pNode, pDiff.Status, isJunk);
 
+                    bool allChildChecked = visibleConvs.Count > 0;
+                    bool anyChildChecked = false;
+
                     for (int j = 0; j < visibleConvs.Count; j++)
                     {
                         ConversationSummaryInfo s = visibleConvs[j];
                         bool existsLocal = !string.IsNullOrEmpty(s.ConversationId) && localConvIdSet.Contains(s.ConversationId);
                         DiffStatus sStatus = existsLocal ? DiffStatus.Aligned : DiffStatus.NewInBackup;
 
-                        string sBadge = (sStatus == DiffStatus.NewInBackup) ? "[★ 新增]" : "[已对齐]";
+                        string sBadge = (sStatus == DiffStatus.NewInBackup) ? "[新增]" : "[已对齐]";
                         string timeStr = s.UpdatedTime > DateTime.MinValue ? s.UpdatedTime.ToString("MM-dd HH:mm") : "-";
-                        string sText = string.Format("💬 {0} [{1}] {2}", s.DisplayTitle, timeStr, sBadge);
+                        string sText = string.Format("{0} [{1}] {2}", s.DisplayTitle, timeStr, sBadge);
                         if (s.IsSubagent) sText = "[子任务] " + sText;
 
                         TreeNode sNode = new TreeNode(sText);
@@ -755,10 +790,17 @@ namespace AntigravityCompanion
                             IsTemporaryOrJunk = s.IsSubagent
                         };
 
+                        // 依据持久状态恢复勾选
+                        bool isChecked = _checkedSessionIds.Contains(s.ConversationId);
+                        sNode.Checked = isChecked;
+                        if (isChecked) anyChildChecked = true;
+                        else allChildChecked = false;
+
                         ApplyDiffStyle(sNode, sStatus, s.IsSubagent);
                         pNode.Nodes.Add(sNode);
                     }
 
+                    pNode.Checked = (visibleConvs.Count > 0) ? anyChildChecked : _checkedProjectNames.Contains(pDiff.ProjectName);
                     rootProj.Nodes.Add(pNode);
                 }
 
@@ -778,34 +820,33 @@ namespace AntigravityCompanion
         {
             if (isJunk)
             {
-                node.ForeColor = Color.Gray;
-                node.NodeFont = new Font(tvBackup.Font, FontStyle.Italic);
+                node.ForeColor = Color.FromArgb(148, 163, 184);
                 return;
             }
 
             switch (status)
             {
                 case DiffStatus.NewInBackup:
-                    node.ForeColor = Color.FromArgb(19, 115, 51);
+                    node.ForeColor = Color.FromArgb(22, 101, 52); // 素雅墨绿
                     node.NodeFont = new Font(tvBackup.Font, FontStyle.Bold);
                     break;
                 case DiffStatus.Aligned:
-                    node.ForeColor = Color.FromArgb(95, 99, 104);
+                    node.ForeColor = Color.FromArgb(71, 85, 105);  // 中性石板灰
                     node.NodeFont = new Font(tvBackup.Font, FontStyle.Regular);
                     break;
                 case DiffStatus.Conflicted:
-                    node.ForeColor = Color.FromArgb(217, 119, 6);
+                    node.ForeColor = Color.FromArgb(194, 65, 12);  // 柔和暗橙
                     node.NodeFont = new Font(tvBackup.Font, FontStyle.Bold);
                     break;
                 case DiffStatus.LocalOnly:
-                    node.ForeColor = Color.FromArgb(26, 115, 232);
+                    node.ForeColor = Color.FromArgb(37, 99, 235);  // 经典蓝
                     node.NodeFont = new Font(tvBackup.Font, FontStyle.Regular);
                     break;
             }
         }
 
         // ══════════════════════════════════════════════════════════
-        // 复选框级联选中与快速选择
+        // 复选框级联选中与状态持久化
         // ══════════════════════════════════════════════════════════
         private void TvBackup_AfterCheck(object sender, TreeViewEventArgs e)
         {
@@ -815,6 +856,7 @@ namespace AntigravityCompanion
             {
                 SetChildNodesChecked(e.Node, e.Node.Checked);
                 UpdateParentNodeChecked(e.Node);
+                SyncCheckedStateToMemory();
             }
             finally
             {
@@ -852,6 +894,40 @@ namespace AntigravityCompanion
             UpdateParentNodeChecked(parent);
         }
 
+        private void SyncCheckedStateToMemory()
+        {
+            SyncCheckedRecursive(tvBackup.Nodes);
+        }
+
+        private void SyncCheckedRecursive(TreeNodeCollection nodes)
+        {
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                TreeNode n = nodes[i];
+                DiffItemNodeTag tag = n.Tag as DiffItemNodeTag;
+                if (tag != null)
+                {
+                    if (tag.Category == ItemCategory.Conversation && !string.IsNullOrEmpty(tag.Id))
+                    {
+                        if (n.Checked) _checkedSessionIds.Add(tag.Id);
+                        else _checkedSessionIds.Remove(tag.Id);
+                    }
+                    else if (tag.Category == ItemCategory.Project && !string.IsNullOrEmpty(tag.ProjectName))
+                    {
+                        if (n.Checked) _checkedProjectNames.Add(tag.ProjectName);
+                        else _checkedProjectNames.Remove(tag.ProjectName);
+                    }
+                    else if (tag.Category == ItemCategory.GlobalRules) _checkedRules = n.Checked;
+                    else if (tag.Category == ItemCategory.GlobalSkills) _checkedSkills = n.Checked;
+                    else if (tag.Category == ItemCategory.GlobalMcp) _checkedMcp = n.Checked;
+                }
+                if (n.Nodes.Count > 0)
+                {
+                    SyncCheckedRecursive(n.Nodes);
+                }
+            }
+        }
+
         private void SetAllBackupChecks(bool isChecked)
         {
             _isUpdatingChecks = true;
@@ -863,6 +939,7 @@ namespace AntigravityCompanion
                     root.Checked = isChecked;
                     SetChildNodesChecked(root, isChecked);
                 }
+                SyncCheckedStateToMemory();
             }
             finally
             {
@@ -878,6 +955,7 @@ namespace AntigravityCompanion
             {
                 SetAllBackupChecks(false);
                 SelectNewNodesRecursive(tvBackup.Nodes);
+                SyncCheckedStateToMemory();
             }
             finally
             {
@@ -923,6 +1001,7 @@ namespace AntigravityCompanion
                     tvBackup.SelectedNode.Checked = isChecked;
                     SetChildNodesChecked(tvBackup.SelectedNode, isChecked);
                     UpdateParentNodeChecked(tvBackup.SelectedNode);
+                    SyncCheckedStateToMemory();
                 }
                 finally
                 {
@@ -940,7 +1019,7 @@ namespace AntigravityCompanion
                 if (tag != null && !string.IsNullOrEmpty(tag.Id))
                 {
                     Clipboard.SetText(tag.Id);
-                    Log("已复制 ID 到剪贴板: " + tag.Id, Color.DarkSlateGray);
+                    Log("已复制 ID 到剪贴板: " + tag.Id, Color.FromArgb(71, 85, 105));
                 }
             }
         }
@@ -995,7 +1074,7 @@ namespace AntigravityCompanion
         }
 
         // ══════════════════════════════════════════════════════════
-        // 细粒度选择性导入执行 (Milestone 3 — F10, F11)
+        // 细粒度选择性导入执行 (包含工程 JSON 自动补齐与冲突重命名)
         // ══════════════════════════════════════════════════════════
         private void BtnPerformSelectiveImport_Click(object sender, EventArgs e)
         {
@@ -1019,6 +1098,7 @@ namespace AntigravityCompanion
 
             // 冲突检测与解决向导
             Dictionary<string, string> projectUriOverrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, string> projectNewNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             ConflictChoice? globalStrategy = null;
 
             foreach (string pName in selectedProjects)
@@ -1027,7 +1107,6 @@ namespace AntigravityCompanion
                 if (pDiff != null && pDiff.Status == DiffStatus.Conflicted)
                 {
                     ConflictChoice choice;
-                    string targetUri = pDiff.LocalFolderUri;
                     string targetName = pName;
 
                     if (globalStrategy.HasValue)
@@ -1040,7 +1119,7 @@ namespace AntigravityCompanion
                         {
                             if (dlg.ShowDialog(this) != DialogResult.OK)
                             {
-                                Log("用户取消了冲突处理向导，导入操作中止", Color.DarkOrange);
+                                Log("用户取消了冲突处理向导，导入操作中止", Color.FromArgb(217, 119, 6));
                                 return;
                             }
                             choice = dlg.Result.Choice;
@@ -1060,12 +1139,13 @@ namespace AntigravityCompanion
                     else if (choice == ConflictChoice.Rename)
                     {
                         projectUriOverrides[pName] = pDiff.BackupFolderUri;
+                        projectNewNames[pName] = targetName;
                     }
                 }
             }
 
             _highlightTracker.Clear();
-            ProgressForm progress = new ProgressForm("正在执行细粒度增量合流...", "正在从备份包中安全提取所选会话与脑区索引...");
+            ProgressForm progress = new ProgressForm("正在导入选中项目...", "正在从备份包中安全提取所选会话与脑区索引...");
 
             _worker = new BackgroundWorker();
             _worker.DoWork += (ws, we) =>
@@ -1075,100 +1155,135 @@ namespace AntigravityCompanion
                 string curHome = HomePath;
                 int filesImported = 0;
 
-                using (FileStream fs = new FileStream(_loadedBackupPath, FileMode.Open, FileAccess.Read, FileShare.Read))
-                using (ZipArchive archive = new ZipArchive(fs, ZipArchiveMode.Read))
+                try
                 {
-                    // 1. 提取选中的会话数据库与脑区
-                    HashSet<string> convIdsToExtract = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    for (int i = 0; i < selectedConvs.Count; i++)
+                    using (FileStream fs = new FileStream(_loadedBackupPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    using (ZipArchive archive = new ZipArchive(fs, ZipArchiveMode.Read))
                     {
-                        convIdsToExtract.Add(selectedConvs[i].ConversationId);
-                        _highlightTracker.AddImportedConversation(selectedConvs[i].ConversationId);
-                        _highlightTracker.AddImportedProject(selectedConvs[i].ProjectName);
-                    }
-
-                    for (int i = 0; i < archive.Entries.Count; i++)
-                    {
-                        ZipArchiveEntry entry = archive.Entries[i];
-                        string norm = entry.FullName.Replace('\\', '/');
-
-                        // 对话数据库
-                        if (norm.Contains("antigravity/conversations/") && norm.EndsWith(".db", StringComparison.OrdinalIgnoreCase))
+                        // 1. 提取选中的会话数据库与脑区
+                        HashSet<string> convIdsToExtract = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        for (int i = 0; i < selectedConvs.Count; i++)
                         {
-                            string cid = Path.GetFileNameWithoutExtension(norm);
-                            if (convIdsToExtract.Contains(cid))
+                            convIdsToExtract.Add(selectedConvs[i].ConversationId);
+                            _highlightTracker.AddImportedConversation(selectedConvs[i].ConversationId);
+                            _highlightTracker.AddImportedProject(selectedConvs[i].ProjectName);
+                        }
+
+                        for (int i = 0; i < archive.Entries.Count; i++)
+                        {
+                            ZipArchiveEntry entry = archive.Entries[i];
+                            string norm = entry.FullName.Replace('\\', '/');
+
+                            // 对话数据库
+                            if (norm.Contains("antigravity/conversations/") && norm.EndsWith(".db", StringComparison.OrdinalIgnoreCase))
                             {
-                                string dest = Path.Combine(gemini, "antigravity", "conversations", cid + ".db");
+                                string cid = Path.GetFileNameWithoutExtension(norm);
+                                if (convIdsToExtract.Contains(cid))
+                                {
+                                    string dest = Path.Combine(gemini, "antigravity", "conversations", cid + ".db");
+                                    ExtractZipEntrySafe(entry, dest);
+                                    filesImported++;
+                                }
+                            }
+                            // 脑区文件夹
+                            else if (norm.Contains("antigravity/brain/"))
+                            {
+                                foreach (string cid in convIdsToExtract)
+                                {
+                                    if (norm.Contains("antigravity/brain/" + cid + "/"))
+                                    {
+                                        int idx = norm.IndexOf("antigravity/brain/" + cid);
+                                        string rel = norm.Substring(idx);
+                                        string dest = Path.Combine(gemini, rel.Replace('/', '\\'));
+                                        ExtractZipEntrySafe(entry, dest);
+                                        filesImported++;
+                                        break;
+                                    }
+                                }
+                            }
+                            // 工程配置 JSON 同步/提取 (补全缺失的项目定义)
+                            else if (norm.Contains("config/projects/") && norm.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                            {
+                                string pId = Path.GetFileNameWithoutExtension(norm);
+                                string dest = Path.Combine(gemini, "config", "projects", pId + ".json");
+                                if (!File.Exists(dest))
+                                {
+                                    ExtractZipEntrySafe(entry, dest);
+                                    filesImported++;
+                                }
+                            }
+                            // 全局规则
+                            else if (importRules && (norm.Contains("rules/") || norm.EndsWith(".geminirules") || norm.EndsWith("GEMINI.md")))
+                            {
+                                int idx = norm.IndexOf("data/");
+                                string rel = idx >= 0 ? norm.Substring(idx + 5) : norm;
+                                string dest = Path.Combine(gemini, rel.Replace('/', '\\'));
+                                ExtractZipEntrySafe(entry, dest);
+                                filesImported++;
+                            }
+                            // 全局技能
+                            else if (importSkills && norm.Contains("skills/"))
+                            {
+                                int idx = norm.IndexOf("data/");
+                                string rel = idx >= 0 ? norm.Substring(idx + 5) : norm;
+                                string dest = Path.Combine(gemini, rel.Replace('/', '\\'));
+                                ExtractZipEntrySafe(entry, dest);
+                                filesImported++;
+                            }
+                            // 全局 MCP
+                            else if (importMcp && (norm.Contains("mcp/") || norm.EndsWith("mcp_config.json")))
+                            {
+                                int idx = norm.IndexOf("data/");
+                                string rel = idx >= 0 ? norm.Substring(idx + 5) : norm;
+                                string dest = Path.Combine(gemini, rel.Replace('/', '\\'));
                                 ExtractZipEntrySafe(entry, dest);
                                 filesImported++;
                             }
                         }
-                        // 脑区文件夹
-                        else if (norm.Contains("antigravity/brain/"))
+
+                        // 2. 针对重命名工程生成合法的 project json 配置
+                        string localProjDir = Path.Combine(gemini, "config", "projects");
+                        if (!Directory.Exists(localProjDir)) Directory.CreateDirectory(localProjDir);
+
+                        foreach (KeyValuePair<string, string> kvp in projectNewNames)
                         {
-                            foreach (string cid in convIdsToExtract)
-                            {
-                                if (norm.Contains("antigravity/brain/" + cid + "/"))
-                                {
-                                    int idx = norm.IndexOf("antigravity/brain/" + cid);
-                                    string rel = norm.Substring(idx);
-                                    string dest = Path.Combine(gemini, rel.Replace('/', '\\'));
-                                    ExtractZipEntrySafe(entry, dest);
-                                    filesImported++;
-                                    break;
-                                }
-                            }
-                        }
-                        // 全局规则
-                        else if (importRules && (norm.Contains("rules/") || norm.EndsWith(".geminirules") || norm.EndsWith("GEMINI.md")))
-                        {
-                            int idx = norm.IndexOf("data/");
-                            string rel = idx >= 0 ? norm.Substring(idx + 5) : norm;
-                            string dest = Path.Combine(gemini, rel.Replace('/', '\\'));
-                            ExtractZipEntrySafe(entry, dest);
+                            string oldName = kvp.Key;
+                            string newName = kvp.Value;
+                            string newProjId = Guid.NewGuid().ToString();
+                            string newProjFile = Path.Combine(localProjDir, newProjId + ".json");
+
+                            string folderUri = projectUriOverrides.ContainsKey(oldName) ? projectUriOverrides[oldName] : ("file:///" + HomePath.Replace('\\', '/') + "/" + newName);
+                            string jsonContent = string.Format("{{\r\n  \"id\": \"{0}\",\r\n  \"name\": \"{1}\",\r\n  \"folderUri\": \"{2}\"\r\n}}", newProjId, newName, folderUri);
+                            File.WriteAllText(newProjFile, jsonContent, Encoding.UTF8);
                             filesImported++;
                         }
-                        // 全局技能
-                        else if (importSkills && norm.Contains("skills/"))
+
+                        // 3. 合流 agyhub_summaries_proto.pb
+                        progress.UpdateMsg("正在增量合流会话摘要与自定义标题索引 (.pb)...");
+                        string localPb = Path.Combine(gemini, "antigravity", "agyhub_summaries_proto.pb");
+                        byte[] localPbBytes = File.Exists(localPb) ? File.ReadAllBytes(localPb) : new byte[0];
+
+                        byte[] mergedPb = IncrementalProtoShardMerger.MergeShards(
+                            localPbBytes, selectedConvs, srcHome, curHome, projectUriOverrides
+                        );
+
+                        if (File.Exists(localPb))
                         {
-                            int idx = norm.IndexOf("data/");
-                            string rel = idx >= 0 ? norm.Substring(idx + 5) : norm;
-                            string dest = Path.Combine(gemini, rel.Replace('/', '\\'));
-                            ExtractZipEntrySafe(entry, dest);
-                            filesImported++;
+                            string bak = localPb + ".bak";
+                            if (File.Exists(bak)) File.Delete(bak);
+                            File.Copy(localPb, bak);
                         }
-                        // 全局 MCP
-                        else if (importMcp && (norm.Contains("mcp/") || norm.EndsWith("mcp_config.json")))
-                        {
-                            int idx = norm.IndexOf("data/");
-                            string rel = idx >= 0 ? norm.Substring(idx + 5) : norm;
-                            string dest = Path.Combine(gemini, rel.Replace('/', '\\'));
-                            ExtractZipEntrySafe(entry, dest);
-                            filesImported++;
-                        }
+
+                        File.WriteAllBytes(localPb, mergedPb);
+                        filesImported++;
                     }
 
-                    // 2. 合流 agyhub_summaries_proto.pb
-                    progress.UpdateMsg("正在增量合流会话摘要与自定义标题索引 (.pb)...");
-                    string localPb = Path.Combine(gemini, "antigravity", "agyhub_summaries_proto.pb");
-                    byte[] localPbBytes = File.Exists(localPb) ? File.ReadAllBytes(localPb) : new byte[0];
-
-                    byte[] mergedPb = IncrementalProtoShardMerger.MergeShards(
-                        localPbBytes, selectedConvs, srcHome, curHome, projectUriOverrides
-                    );
-
-                    if (File.Exists(localPb))
-                    {
-                        string bak = localPb + ".bak";
-                        if (File.Exists(bak)) File.Delete(bak);
-                        File.Copy(localPb, bak);
-                    }
-
-                    File.WriteAllBytes(localPb, mergedPb);
-                    filesImported++;
+                    we.Result = filesImported;
                 }
-
-                we.Result = filesImported;
+                finally
+                {
+                    // 确保任何情况下不挂起
+                }
             };
 
             _worker.RunWorkerCompleted += (ws, we) =>
@@ -1176,13 +1291,13 @@ namespace AntigravityCompanion
                 progress.Close();
                 if (we.Error != null)
                 {
-                    Log("导入失败: " + we.Error.Message, Color.Red);
+                    Log("导入失败: " + we.Error.Message, Color.FromArgb(220, 38, 38));
                     MessageBox.Show("导入失败:\n" + we.Error.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
                 else
                 {
-                    Log(string.Format("===== 细粒度选择性导入成功！共写入 {0} 个文件与索引分片 =====", we.Result), Color.DarkGreen);
-                    MessageBox.Show(string.Format("选择性导入完成！\n共安全合流 {0} 个文件分片\n新导入的工程与会话已在左侧树中用粗体绿色标出。", we.Result), 
+                    Log(string.Format("选择性导入成功！共写入 {0} 个文件与索引分片", we.Result), Color.FromArgb(22, 101, 52));
+                    MessageBox.Show(string.Format("选择性导入完成！\n共安全合流 {0} 个文件分片\n新导入的项目已在左侧树中用粗体标出。", we.Result), 
                                     "完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     DetectPaths();
                 }
@@ -1194,7 +1309,7 @@ namespace AntigravityCompanion
 
         private static void ExtractZipEntrySafe(ZipArchiveEntry entry, string destPath)
         {
-            if (string.IsNullOrEmpty(entry.Name)) return; // 目录项
+            if (string.IsNullOrEmpty(entry.Name)) return;
             string dir = Path.GetDirectoryName(destPath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
 
@@ -1282,7 +1397,7 @@ namespace AntigravityCompanion
                     }
                     n++;
 
-                    // 2. 对话与脑区 (白名单定向归档有效会话，彻底排除已删除死数据库)
+                    // 2. 对话与脑区 (定向白名单打包有效会话，彻底排除已删除死数据库)
                     progressDlg.UpdateMsg("正在归档有效会话与脑区索引...");
                     HashSet<string> validCids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     for (int i = 0; i < _localSummaries.Count; i++)
@@ -1344,12 +1459,12 @@ namespace AntigravityCompanion
                 progressDlg.Close();
                 if (we.Error != null)
                 {
-                    Log("备份失败: " + we.Error.Message, Color.Red);
+                    Log("备份失败: " + we.Error.Message, Color.FromArgb(220, 38, 38));
                     MessageBox.Show("备份失败:\n" + we.Error.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
                 else
                 {
-                    Log("===== 全量备份完成！共打包 " + we.Result + " 个文件 → " + dest + " =====", Color.DarkGreen);
+                    Log("全量备份完成！共打包 " + we.Result + " 个文件 → " + dest, Color.FromArgb(22, 101, 52));
                     MessageBox.Show("备份导出成功！\n共打包 " + we.Result + " 个文件\n路径: " + dest, "完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             };
@@ -1394,7 +1509,7 @@ namespace AntigravityCompanion
         }
 
         // ══════════════════════════════════════════════════════════
-        // 配置浏览器与热编辑器 (Config Browser & Editor)
+        // 配置浏览器与热编辑器 (带 .bak 安全备份保护)
         // ══════════════════════════════════════════════════════════
         private void RefreshConfigBrowser()
         {
@@ -1437,20 +1552,27 @@ namespace AntigravityCompanion
             {
                 try
                 {
+                    if (File.Exists(item.FilePath))
+                    {
+                        string bak = item.FilePath + ".bak";
+                        if (File.Exists(bak)) File.Delete(bak);
+                        File.Copy(item.FilePath, bak);
+                    }
+
                     File.WriteAllText(item.FilePath, rtbConfigEditor.Text, Encoding.UTF8);
-                    Log("配置文件保存成功: " + item.FilePath, Color.DarkGreen);
+                    Log("配置文件保存成功 (已自动创建 .bak 备份): " + item.FilePath, Color.FromArgb(22, 101, 52));
                     MessageBox.Show("配置文件已保存！", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
-                    Log("保存配置文件失败: " + ex.Message, Color.Red);
+                    Log("保存配置文件失败: " + ex.Message, Color.FromArgb(220, 38, 38));
                     MessageBox.Show("保存失败:\n" + ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
 
         // ══════════════════════════════════════════════════════════
-        // 辅助方法与 UI 样式工具
+        // 辅助方法与素雅 UI 样式工具
         // ══════════════════════════════════════════════════════════
         private void Log(string msg, Color col)
         {
@@ -1466,17 +1588,35 @@ namespace AntigravityCompanion
             rtbLog.ScrollToCaret();
         }
 
-        private static Button MakeBtn(string text, int width, Color backColor, Color foreColor)
+        private static Button MakeNeutralBtn(string text, int width)
         {
             Button btn = new Button
             {
                 Text = text,
                 Width = width,
-                Height = 32,
-                BackColor = backColor,
-                ForeColor = foreColor,
+                Height = 30,
+                BackColor = Color.FromArgb(241, 245, 249),
+                ForeColor = Color.FromArgb(30, 41, 59),
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("Microsoft YaHei UI", 9f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 9f, FontStyle.Regular),
+                Cursor = Cursors.Hand
+            };
+            btn.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225);
+            btn.FlatAppearance.BorderSize = 1;
+            return btn;
+        }
+
+        private static Button MakePrimaryBtn(string text, int width)
+        {
+            Button btn = new Button
+            {
+                Text = text,
+                Width = width,
+                Height = 30,
+                BackColor = Color.FromArgb(37, 99, 235),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
                 Cursor = Cursors.Hand
             };
             btn.FlatAppearance.BorderSize = 0;
@@ -1489,14 +1629,14 @@ namespace AntigravityCompanion
             {
                 Text = text,
                 AutoSize = true,
-                Height = 26,
-                BackColor = Color.FromArgb(240, 240, 240),
-                ForeColor = Color.FromArgb(32, 33, 36),
+                Height = 24,
+                BackColor = Color.FromArgb(248, 250, 252),
+                ForeColor = Color.FromArgb(51, 65, 85),
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("Microsoft YaHei UI", 8.5f),
+                Font = new Font("Segoe UI", 8.5f),
                 Cursor = Cursors.Hand
             };
-            btn.FlatAppearance.BorderColor = Color.FromArgb(218, 220, 224);
+            btn.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
             return btn;
         }
 
@@ -1549,7 +1689,7 @@ namespace AntigravityCompanion
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.StartPosition = FormStartPosition.CenterParent;
-            this.Font = new Font("Microsoft YaHei UI", 9f);
+            this.Font = new Font("Segoe UI", 9f);
             this.BackColor = Color.White;
 
             lbl = new Label { Text = initialMsg, Location = new Point(20, 16), Size = new Size(410, 36) };
