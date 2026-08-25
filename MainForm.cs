@@ -80,12 +80,19 @@ namespace AntigravityCompanion
         private RichTextBox rtbLog;
         private SplitContainer splitMain;
         private TabControl tabRightBottom;
-        private ListBox lbConfigFiles;
+
+        // 配置浏览器子控件
+        private TabControl tabConfigs;
+        private ListBox lbRules;
+        private ListBox lbSkills;
+        private ListBox lbMcp;
         private RichTextBox rtbConfigEditor;
         private Button btnSaveConfig;
+        private Button btnOpenConfigFolder;
         private Label lblEditingFile;
-        private ContextMenuStrip contextMenuBackup;
+        private BrowserItem _currentEditingItem;
 
+        private ContextMenuStrip contextMenuBackup;
         private bool _isUpdatingChecks = false;
         private BackgroundWorker _worker;
 
@@ -93,11 +100,34 @@ namespace AntigravityCompanion
         {
             HomePath = Environment.GetEnvironmentVariable("USERPROFILE") ?? "C:\\Users\\Administrator";
             BuildUI();
-            this.Load += (s, e) => { DetectPaths(); };
+            
+            this.Shown += (s, e) => {
+                AdjustSplitterToHalf();
+                DetectPaths();
+            };
+            this.Resize += (s, e) => {
+                AdjustSplitterToHalf();
+            };
+        }
+
+        private void AdjustSplitterToHalf()
+        {
+            if (splitMain != null && splitMain.Width > 200)
+            {
+                try
+                {
+                    int target = (splitMain.ClientSize.Width - splitMain.SplitterWidth) / 2;
+                    if (target > splitMain.Panel1MinSize && target < splitMain.ClientSize.Width - splitMain.Panel2MinSize)
+                    {
+                        splitMain.SplitterDistance = target;
+                    }
+                }
+                catch {}
+            }
         }
 
         // ══════════════════════════════════════════════════════════
-        // 极简素雅现代化 UI 构建 (Clean & Professional Styling)
+        // 极简素雅现代化 UI 构建 (50%/50% 对称与自适应布局)
         // ══════════════════════════════════════════════════════════
         private void BuildUI()
         {
@@ -115,7 +145,7 @@ namespace AntigravityCompanion
             }
             catch {}
 
-            // 1. 顶部操作栏与状态卡片 (素雅中性设计)
+            // 1. 顶部操作栏与状态看板
             Panel pnlTop = new Panel
             {
                 Dock = DockStyle.Top,
@@ -128,7 +158,7 @@ namespace AntigravityCompanion
                 pe.Graphics.DrawLine(new Pen(Color.FromArgb(226, 232, 240)), 0, pnlTop.Height - 1, pnlTop.Width, pnlTop.Height - 1);
             };
 
-            // 操作按钮栏 (统一素雅灰色背景，消除五彩斑斓的底色)
+            // 操作按钮栏 (中性灰色现代扁平化按钮)
             btnDetect = MakeNeutralBtn("重新检测本地", 115);
             btnDetect.Location = new Point(16, 10);
             btnDetect.Click += (s, e) => DetectPaths();
@@ -160,23 +190,22 @@ namespace AntigravityCompanion
             {
                 Text = "搜索会话/工程:",
                 AutoSize = true,
-                Location = new Point(640, 15),
+                Location = new Point(630, 15),
                 Font = new Font("Segoe UI", 9f, FontStyle.Regular),
                 ForeColor = Color.FromArgb(100, 116, 139)
             };
 
             txtSearch = new TextBox
             {
-                Location = new Point(745, 11),
+                Location = new Point(735, 11),
                 Width = 200,
                 Font = new Font("Segoe UI", 9f),
                 BorderStyle = BorderStyle.FixedSingle
             };
             txtSearch.TextChanged += TxtSearch_TextChanged;
 
-            // 主动作按钮 (稳重的主题蓝色)
             btnImportSelected = MakePrimaryBtn("导入所选项到本地", 150);
-            btnImportSelected.Location = new Point(960, 9);
+            btnImportSelected.Location = new Point(948, 9);
             btnImportSelected.Enabled = false;
             btnImportSelected.Click += BtnPerformSelectiveImport_Click;
 
@@ -197,17 +226,18 @@ namespace AntigravityCompanion
                 lblSearchIcon, txtSearch, btnImportSelected, txtGeminiPath, lblStatsSummary
             });
 
-            // 2. 主体 SplitContainer (左侧本地 vs 右侧备份)
+            // 2. 主体 SplitContainer (左右 50% 完美对称)
             splitMain = new SplitContainer
             {
                 Dock = DockStyle.Fill,
                 Orientation = Orientation.Vertical,
-                SplitterDistance = 580,
                 SplitterWidth = 6,
-                BackColor = Color.FromArgb(226, 232, 240)
+                BackColor = Color.FromArgb(226, 232, 240),
+                Panel1MinSize = 250,
+                Panel2MinSize = 250
             };
 
-            // 左侧面板 (本地环境)
+            // ── 左侧面板 (本地环境) ──
             Panel pnlLeft = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(12, 10, 12, 10) };
             Panel pnlLeftHeader = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = Color.FromArgb(248, 250, 252) };
             pnlLeftHeader.Paint += (s, pe) =>
@@ -218,9 +248,7 @@ namespace AntigravityCompanion
             lblLocalHeader = new Label
             {
                 Text = "本地环境 (Local Environment)",
-                Dock = DockStyle.Left,
-                AutoSize = false,
-                Width = 320,
+                Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(15, 23, 42),
@@ -231,13 +259,14 @@ namespace AntigravityCompanion
                 Text = "活跃主会话: 0",
                 Dock = DockStyle.Right,
                 AutoSize = false,
-                Width = 180,
+                Width = 160,
                 TextAlign = ContentAlignment.MiddleRight,
                 Font = new Font("Segoe UI", 8.5f),
                 ForeColor = Color.FromArgb(100, 116, 139),
                 Padding = new Padding(0, 0, 8, 0)
             };
-            pnlLeftHeader.Controls.AddRange(new Control[] { lblLocalHeader, lblConvCount });
+            pnlLeftHeader.Controls.Add(lblLocalHeader);
+            pnlLeftHeader.Controls.Add(lblConvCount);
 
             tvLocal = new DoubleBufferedTreeView
             {
@@ -254,7 +283,7 @@ namespace AntigravityCompanion
             pnlLeft.Controls.Add(pnlLeftHeader);
             splitMain.Panel1.Controls.Add(pnlLeft);
 
-            // 右侧面板 (备份归档)
+            // ── 右侧面板 (备份归档) ──
             Panel pnlRight = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(12, 10, 12, 10) };
             Panel pnlRightHeader = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = Color.FromArgb(248, 250, 252) };
             pnlRightHeader.Paint += (s, pe) =>
@@ -265,9 +294,7 @@ namespace AntigravityCompanion
             lblBackupHeader = new Label
             {
                 Text = "备份归档包 (Backup Archive - 未加载)",
-                Dock = DockStyle.Left,
-                AutoSize = false,
-                Width = 360,
+                Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(15, 23, 42),
@@ -294,7 +321,8 @@ namespace AntigravityCompanion
             btnDeselectAll.Click += (s, e) => SetAllBackupChecks(false);
 
             pnlQuickSelect.Controls.AddRange(new Control[] { btnSelectNewOnly, btnSelectAll, btnDeselectAll });
-            pnlRightHeader.Controls.AddRange(new Control[] { lblBackupHeader, pnlQuickSelect });
+            pnlRightHeader.Controls.Add(lblBackupHeader);
+            pnlRightHeader.Controls.Add(pnlQuickSelect);
 
             tvBackup = new DoubleBufferedTreeView
             {
@@ -322,11 +350,11 @@ namespace AntigravityCompanion
             pnlRight.Controls.Add(pnlRightHeader);
             splitMain.Panel2.Controls.Add(pnlRight);
 
-            // 3. 底部选项卡 (配置浏览器 & 运行日志)
+            // 3. 底部选项卡 (结构化配置浏览器 & 运行日志)
             tabRightBottom = new TabControl
             {
                 Dock = DockStyle.Bottom,
-                Height = 220,
+                Height = 240,
                 Font = new Font("Segoe UI", 9f)
             };
 
@@ -343,40 +371,73 @@ namespace AntigravityCompanion
             };
             tabLog.Controls.Add(rtbLog);
 
-            // Tab 2: 配置浏览器与热编辑器
+            // Tab 2: 结构化配置浏览器与热编辑器
             TabPage tabConfig = new TabPage("规则、技能与 MCP 配置 (Config Browser)");
             SplitContainer splitConfig = new SplitContainer
             {
                 Dock = DockStyle.Fill,
                 Orientation = Orientation.Vertical,
-                SplitterDistance = 340
+                SplitterDistance = 380,
+                BackColor = Color.FromArgb(226, 232, 240)
             };
 
-            lbConfigFiles = new ListBox
-            {
-                Dock = DockStyle.Fill,
-                BorderStyle = BorderStyle.None,
-                Font = new Font("Segoe UI", 9f),
-                BackColor = Color.FromArgb(248, 250, 252)
-            };
-            lbConfigFiles.SelectedIndexChanged += LbConfigFiles_SelectedIndexChanged;
-            splitConfig.Panel1.Controls.Add(lbConfigFiles);
+            // 左侧分类子选项卡
+            tabConfigs = new TabControl { Dock = DockStyle.Fill, Font = new Font("Segoe UI", 8.5f) };
+            
+            TabPage tabRules = new TabPage("规则规范 (Rules)");
+            lbRules = CreateConfigListBox();
+            lbRules.SelectedIndexChanged += (s, e) => LoadSelectedItem(lbRules);
+            tabRules.Controls.Add(lbRules);
 
-            Panel pnlEditor = new Panel { Dock = DockStyle.Fill };
-            Panel pnlEditorTop = new Panel { Dock = DockStyle.Top, Height = 32, BackColor = Color.FromArgb(241, 245, 249) };
-            lblEditingFile = new Label { Text = "请选择左侧配置文件进行浏览或编辑 (支持 Ctrl+S 保存)", Dock = DockStyle.Left, AutoSize = false, Width = 520, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(8, 0, 0, 0) };
+            TabPage tabSkills = new TabPage("技能插件 (Skills)");
+            lbSkills = CreateConfigListBox();
+            lbSkills.SelectedIndexChanged += (s, e) => LoadSelectedItem(lbSkills);
+            tabSkills.Controls.Add(lbSkills);
+
+            TabPage tabMcp = new TabPage("MCP 配置 (MCP)");
+            lbMcp = CreateConfigListBox();
+            lbMcp.SelectedIndexChanged += (s, e) => LoadSelectedItem(lbMcp);
+            tabMcp.Controls.Add(lbMcp);
+
+            tabConfigs.TabPages.AddRange(new TabPage[] { tabRules, tabSkills, tabMcp });
+            splitConfig.Panel1.Controls.Add(tabConfigs);
+
+            // 右侧编辑器
+            Panel pnlEditor = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
+            Panel pnlEditorTop = new Panel { Dock = DockStyle.Top, Height = 34, BackColor = Color.FromArgb(241, 245, 249), Padding = new Padding(4) };
+            
+            lblEditingFile = new Label { 
+                Text = "请从左侧选择配置文件查看或编辑 (支持 Ctrl+S 热保存)", 
+                Dock = DockStyle.Fill, 
+                TextAlign = ContentAlignment.MiddleLeft, 
+                Padding = new Padding(6, 0, 0, 0),
+                ForeColor = Color.FromArgb(51, 65, 85)
+            };
+
+            FlowLayoutPanel pnlEditorBtns = new FlowLayoutPanel {
+                Dock = DockStyle.Right,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false
+            };
+
+            btnOpenConfigFolder = MakeSmallBtn("打开目录");
+            btnOpenConfigFolder.Click += BtnOpenConfigFolder_Click;
+
             btnSaveConfig = MakeSmallBtn("保存修改 (Ctrl+S)");
-            btnSaveConfig.Dock = DockStyle.Right;
-            btnSaveConfig.Width = 130;
             btnSaveConfig.Click += BtnSaveConfig_Click;
-            pnlEditorTop.Controls.AddRange(new Control[] { lblEditingFile, btnSaveConfig });
+
+            pnlEditorBtns.Controls.AddRange(new Control[] { btnOpenConfigFolder, btnSaveConfig });
+            pnlEditorTop.Controls.Add(lblEditingFile);
+            pnlEditorTop.Controls.Add(pnlEditorBtns);
 
             rtbConfigEditor = new RichTextBox
             {
                 Dock = DockStyle.Fill,
                 Font = new Font("Consolas", 10f),
                 BorderStyle = BorderStyle.None,
-                AcceptsTab = true
+                AcceptsTab = true,
+                BackColor = Color.White
             };
             rtbConfigEditor.KeyDown += (s, e) =>
             {
@@ -400,6 +461,17 @@ namespace AntigravityCompanion
             this.Controls.Add(splitMain);
             this.Controls.Add(tabRightBottom);
             this.Controls.Add(pnlTop);
+        }
+
+        private static ListBox CreateConfigListBox()
+        {
+            return new ListBox
+            {
+                Dock = DockStyle.Fill,
+                BorderStyle = BorderStyle.None,
+                Font = new Font("Segoe UI", 9f),
+                BackColor = Color.FromArgb(248, 250, 252)
+            };
         }
 
         // ══════════════════════════════════════════════════════════
@@ -452,16 +524,6 @@ namespace AntigravityCompanion
                 }
             }
 
-            int mainCount = 0;
-            for (int i = 0; i < _localSummaries.Count; i++)
-            {
-                if (!_localSummaries[i].IsSubagent) mainCount++;
-            }
-
-            lblConvCount.Text = "活跃主会话: " + mainCount;
-            Log(string.Format("本地环境扫描完成：共发现 {0} 个工程，{1} 条活跃主会话", 
-                _localProjects.Count, mainCount), Color.FromArgb(22, 101, 52));
-
             RenderLocalTree();
             RefreshConfigBrowser();
             UpdateSelectionStatistics();
@@ -470,6 +532,9 @@ namespace AntigravityCompanion
         private void RenderLocalTree()
         {
             tvLocal.BeginUpdate();
+            int visibleProjects = 0;
+            int visibleConvsCount = 0;
+
             try
             {
                 tvLocal.Nodes.Clear();
@@ -551,6 +616,9 @@ namespace AntigravityCompanion
                     if (hideTemp && isJunk && visibleList.Count == 0) continue;
                     if (hideTemp && visibleList.Count == 0) continue;
 
+                    visibleProjects++;
+                    visibleConvsCount += visibleList.Count;
+
                     string pNodeText = string.Format("{0} ({1} 条)", pName, visibleList.Count);
                     if (isJunk) pNodeText = "[临时] " + pNodeText;
 
@@ -609,6 +677,9 @@ namespace AntigravityCompanion
             {
                 tvLocal.EndUpdate();
             }
+
+            lblConvCount.Text = "活跃主会话: " + visibleConvsCount;
+            Log(string.Format("本地环境扫描完成：共呈现 {0} 个工程，{1} 条活跃主会话", visibleProjects, visibleConvsCount), Color.FromArgb(22, 101, 52));
         }
 
         // ══════════════════════════════════════════════════════════
@@ -764,7 +835,6 @@ namespace AntigravityCompanion
 
                     ApplyDiffStyle(pNode, pDiff.Status, isJunk);
 
-                    bool allChildChecked = visibleConvs.Count > 0;
                     bool anyChildChecked = false;
 
                     for (int j = 0; j < visibleConvs.Count; j++)
@@ -794,7 +864,6 @@ namespace AntigravityCompanion
                         bool isChecked = _checkedSessionIds.Contains(s.ConversationId);
                         sNode.Checked = isChecked;
                         if (isChecked) anyChildChecked = true;
-                        else allChildChecked = false;
 
                         ApplyDiffStyle(sNode, sStatus, s.IsSubagent);
                         pNode.Nodes.Add(sNode);
@@ -1035,12 +1104,23 @@ namespace AntigravityCompanion
             CountCheckedItemsRecursive(tvBackup.Nodes, ref selProjects, ref selConvs, ref selRules, ref selSkills, ref selMcp);
 
             string backupState = (_backupIndex != null) ? Path.GetFileName(_loadedBackupPath) : "未加载";
-            int localMain = 0;
-            for (int i = 0; i < _localSummaries.Count; i++) if (!_localSummaries[i].IsSubagent) localMain++;
+            
+            // 计算本地树中当前可见的工程数和会话数
+            int visibleProjects = 0;
+            int visibleConvs = 0;
+            if (tvLocal.Nodes.Count > 1)
+            {
+                TreeNode projRoot = tvLocal.Nodes[1];
+                visibleProjects = projRoot.Nodes.Count;
+                for (int i = 0; i < projRoot.Nodes.Count; i++)
+                {
+                    visibleConvs += projRoot.Nodes[i].Nodes.Count;
+                }
+            }
 
             lblStatsSummary.Text = string.Format(
                 "本地: {0} 个工程 ({1} 条活跃主会话) | 备份包: {2} | 待合流选中: {3} 个工程 ({4} 条会话) {5}",
-                _localProjects.Count, localMain, backupState, selProjects, selConvs,
+                visibleProjects, visibleConvs, backupState, selProjects, selConvs,
                 (selRules || selSkills || selMcp) ? "[含全局配置]" : ""
             );
         }
@@ -1430,7 +1510,7 @@ namespace AntigravityCompanion
                     n += AddDirToArchive(archive, Path.Combine(gemini, "antigravity", "annotations"), "data/antigravity/annotations");
                     n += AddFileToArchive(archive, Path.Combine(gemini, "antigravity", "agyhub_summaries_proto.pb"), "data/antigravity/agyhub_summaries_proto.pb");
                     n += AddFileToArchive(archive, Path.Combine(gemini, "antigravity", "antigravity_state.pbtxt"), "data/antigravity/antigravity_state.pbtxt");
-                    n += AddFileToArchive(archive, Path.Combine(gemini, "antigravity", "installation_id"), "data/antigravity/installation_id");
+                    n += AddFileToArchive(archive, Path.Combine(gemini, "installation_id"), "data/antigravity/installation_id");
                     n += AddDirToArchive(archive, Path.Combine(gemini, "antigravity", "knowledge"), "data/antigravity/knowledge");
 
                     // 3. 规则与内置技能
@@ -1509,11 +1589,14 @@ namespace AntigravityCompanion
         }
 
         // ══════════════════════════════════════════════════════════
-        // 配置浏览器与热编辑器 (带 .bak 安全备份保护)
+        // 结构化配置浏览器与热编辑器 (带 .bak 安全备份保护)
         // ══════════════════════════════════════════════════════════
         private void RefreshConfigBrowser()
         {
-            lbConfigFiles.Items.Clear();
+            lbRules.Items.Clear();
+            lbSkills.Items.Clear();
+            lbMcp.Items.Clear();
+
             string gemini = txtGeminiPath.Text.Trim();
             List<ScanRoot> roots = ConfigBrowserScanner.DetectScanRoots(gemini, _localProjects);
 
@@ -1521,18 +1604,19 @@ namespace AntigravityCompanion
             List<BrowserItem> skills = ConfigBrowserScanner.ScanSkills(roots);
             List<BrowserItem> mcps = ConfigBrowserScanner.ScanMcp(roots);
 
-            for (int i = 0; i < rules.Count; i++) lbConfigFiles.Items.Add(rules[i]);
-            for (int i = 0; i < skills.Count; i++) lbConfigFiles.Items.Add(skills[i]);
-            for (int i = 0; i < mcps.Count; i++) lbConfigFiles.Items.Add(mcps[i]);
+            for (int i = 0; i < rules.Count; i++) lbRules.Items.Add(rules[i]);
+            for (int i = 0; i < skills.Count; i++) lbSkills.Items.Add(skills[i]);
+            for (int i = 0; i < mcps.Count; i++) lbMcp.Items.Add(mcps[i]);
 
-            if (lbConfigFiles.Items.Count > 0) lbConfigFiles.SelectedIndex = 0;
+            if (lbRules.Items.Count > 0) lbRules.SelectedIndex = 0;
         }
 
-        private void LbConfigFiles_SelectedIndexChanged(object sender, EventArgs e)
+        private void LoadSelectedItem(ListBox lb)
         {
-            BrowserItem item = lbConfigFiles.SelectedItem as BrowserItem;
+            BrowserItem item = lb.SelectedItem as BrowserItem;
             if (item != null && File.Exists(item.FilePath))
             {
+                _currentEditingItem = item;
                 try
                 {
                     rtbConfigEditor.Text = File.ReadAllText(item.FilePath, Encoding.UTF8);
@@ -1547,26 +1631,40 @@ namespace AntigravityCompanion
 
         private void BtnSaveConfig_Click(object sender, EventArgs e)
         {
-            BrowserItem item = lbConfigFiles.SelectedItem as BrowserItem;
-            if (item != null && !string.IsNullOrEmpty(item.FilePath))
+            if (_currentEditingItem != null && !string.IsNullOrEmpty(_currentEditingItem.FilePath))
             {
                 try
                 {
-                    if (File.Exists(item.FilePath))
+                    if (File.Exists(_currentEditingItem.FilePath))
                     {
-                        string bak = item.FilePath + ".bak";
+                        string bak = _currentEditingItem.FilePath + ".bak";
                         if (File.Exists(bak)) File.Delete(bak);
-                        File.Copy(item.FilePath, bak);
+                        File.Copy(_currentEditingItem.FilePath, bak);
                     }
 
-                    File.WriteAllText(item.FilePath, rtbConfigEditor.Text, Encoding.UTF8);
-                    Log("配置文件保存成功 (已自动创建 .bak 备份): " + item.FilePath, Color.FromArgb(22, 101, 52));
-                    MessageBox.Show("配置文件已保存！", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    File.WriteAllText(_currentEditingItem.FilePath, rtbConfigEditor.Text, Encoding.UTF8);
+                    Log("配置文件保存成功 (已自动备份 .bak): " + _currentEditingItem.FilePath, Color.FromArgb(22, 101, 52));
+                    MessageBox.Show("配置文件已安全保存！", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
                     Log("保存配置文件失败: " + ex.Message, Color.FromArgb(220, 38, 38));
                     MessageBox.Show("保存失败:\n" + ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void BtnOpenConfigFolder_Click(object sender, EventArgs e)
+        {
+            if (_currentEditingItem != null && !string.IsNullOrEmpty(_currentEditingItem.FilePath) && File.Exists(_currentEditingItem.FilePath))
+            {
+                try
+                {
+                    Process.Start("explorer.exe", "/select,\"" + _currentEditingItem.FilePath + "\"");
+                }
+                catch (Exception ex)
+                {
+                    Log("打开文件夹失败: " + ex.Message, Color.FromArgb(220, 38, 38));
                 }
             }
         }
