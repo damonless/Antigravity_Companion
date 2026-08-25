@@ -305,6 +305,7 @@ namespace AntigravityCompanion.Tests
         public DateTime UpdatedTime;
         public DateTime CreatedTime;
         public int StepCount;
+        public int UserInteractions;
         public ProtoNode RawProtoEntry;    // Preserved for lossless merge
 
         public override string ToString()
@@ -748,10 +749,11 @@ namespace AntigravityCompanion.Tests
     // =========================================================================
     public enum DiffStatus
     {
-        NewInBackup,    // [★ 新增]
+        NewInBackup,    // [新增工程 / 含新增会话]
         Aligned,        // [已对齐]
         Conflicted,     // [重名/路径差异]
-        LocalOnly       // [本地独有]
+        LocalOnly,      // [本地独有]
+        Modified        // [已修改 / 内容有更新 / 已改名]
     }
 
     public static class SmartProjectFilter
@@ -784,6 +786,9 @@ namespace AntigravityCompanion.Tests
         public string LocalFolderUri;
         public string BackupFolderUri;
         public DiffStatus Status;
+        public int NewSessionCount;
+        public int ModifiedSessionCount;
+        public string RenamedFromOrTo;
         public bool IsTemporaryOrJunk;
         public List<ConversationSummaryInfo> LocalConversations;
         public List<ConversationSummaryInfo> BackupConversations;
@@ -794,6 +799,8 @@ namespace AntigravityCompanion.Tests
             LocalConversations = new List<ConversationSummaryInfo>();
             BackupConversations = new List<ConversationSummaryInfo>();
             IsTemporaryOrJunk = SmartProjectFilter.IsJunkOrEphemeral(name);
+            NewSessionCount = 0;
+            ModifiedSessionCount = 0;
         }
 
         public string GetStatusBadge()
@@ -801,6 +808,10 @@ namespace AntigravityCompanion.Tests
             switch (Status)
             {
                 case DiffStatus.NewInBackup: return "[★ 新增]";
+                case DiffStatus.Modified:
+                    if (!string.IsNullOrEmpty(RenamedFromOrTo))
+                        return string.Format("[工程已改名: 本地为 '{0}']", RenamedFromOrTo);
+                    return string.Format("[含 {0} 条已修改/更新]", ModifiedSessionCount);
                 case DiffStatus.Aligned: return "[已对齐]";
                 case DiffStatus.Conflicted: return "[重名/路径差异]";
                 case DiffStatus.LocalOnly: return "[本地独有]";
@@ -816,6 +827,8 @@ namespace AntigravityCompanion.Tests
             List<ConversationSummaryInfo> backupSummaries)
         {
             Dictionary<string, ProjectDiffNode> map = new Dictionary<string, ProjectDiffNode>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, ConversationSummaryInfo> localConvMap = new Dictionary<string, ConversationSummaryInfo>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, string> localUriToProjectNameMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             // Populate Local
             if (localSummaries != null)
@@ -833,6 +846,18 @@ namespace AntigravityCompanion.Tests
                     node.LocalConversations.Add(info);
                     if (string.IsNullOrEmpty(node.LocalFolderUri) && !string.IsNullOrEmpty(info.FolderUri))
                         node.LocalFolderUri = info.FolderUri;
+
+                    if (!string.IsNullOrEmpty(info.ConversationId))
+                        localConvMap[info.ConversationId] = info;
+
+                    if (!string.IsNullOrEmpty(info.FolderUri))
+                    {
+                        string norm = NormalizeUri(info.FolderUri);
+                        if (!string.IsNullOrEmpty(norm) && !localUriToProjectNameMap.ContainsKey(norm) && !string.Equals(pName, "Outside of Project", StringComparison.OrdinalIgnoreCase))
+                        {
+                            localUriToProjectNameMap[norm] = pName;
+                        }
+                    }
                 }
             }
 
@@ -863,9 +888,54 @@ namespace AntigravityCompanion.Tests
                 bool hasLocal = node.LocalConversations.Count > 0;
                 bool hasBackup = node.BackupConversations.Count > 0;
 
+                int newConvs = 0;
+                int modifiedConvs = 0;
+                int alignedConvs = 0;
+
+                for (int b = 0; b < node.BackupConversations.Count; b++)
+                {
+                    ConversationSummaryInfo bConv = node.BackupConversations[b];
+                    string bCid = bConv.ConversationId;
+                    if (string.IsNullOrEmpty(bCid)) continue;
+
+                    ConversationSummaryInfo lConv;
+                    if (!localConvMap.TryGetValue(bCid, out lConv))
+                    {
+                        newConvs++;
+                    }
+                    else
+                    {
+                        bool titleDiff = !string.Equals(bConv.DisplayTitle, lConv.DisplayTitle, StringComparison.Ordinal);
+                        bool stepDiff = bConv.StepCount != lConv.StepCount || bConv.UserInteractions != lConv.UserInteractions;
+                        bool timeDiff = Math.Abs((bConv.UpdatedTime - lConv.UpdatedTime).TotalSeconds) > 2 && bConv.UpdatedTime > DateTime.MinValue && lConv.UpdatedTime > DateTime.MinValue;
+                        bool projDiff = !string.Equals(bConv.ProjectName, lConv.ProjectName, StringComparison.OrdinalIgnoreCase);
+
+                        if (titleDiff || stepDiff || timeDiff || projDiff)
+                        {
+                            modifiedConvs++;
+                        }
+                        else
+                        {
+                            alignedConvs++;
+                        }
+                    }
+                }
+                node.NewSessionCount = newConvs;
+                node.ModifiedSessionCount = modifiedConvs;
+
                 if (!hasLocal && hasBackup)
                 {
-                    node.Status = DiffStatus.NewInBackup;
+                    string normBackupUri = NormalizeUri(node.BackupFolderUri);
+                    string localProjName;
+                    if (!string.IsNullOrEmpty(normBackupUri) && localUriToProjectNameMap.TryGetValue(normBackupUri, out localProjName) && !string.Equals(localProjName, node.ProjectName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        node.Status = DiffStatus.Modified;
+                        node.RenamedFromOrTo = localProjName;
+                    }
+                    else
+                    {
+                        node.Status = DiffStatus.NewInBackup;
+                    }
                 }
                 else if (hasLocal && !hasBackup)
                 {
@@ -874,13 +944,21 @@ namespace AntigravityCompanion.Tests
                 else
                 {
                     // Exists on both sides: Check path/URI match
-                    if (NormalizeUri(node.LocalFolderUri) == NormalizeUri(node.BackupFolderUri))
+                    if (NormalizeUri(node.LocalFolderUri) != NormalizeUri(node.BackupFolderUri))
                     {
-                        node.Status = DiffStatus.Aligned;
+                        node.Status = DiffStatus.Conflicted;
+                    }
+                    else if (newConvs > 0)
+                    {
+                        node.Status = DiffStatus.NewInBackup;
+                    }
+                    else if (modifiedConvs > 0)
+                    {
+                        node.Status = DiffStatus.Modified;
                     }
                     else
                     {
-                        node.Status = DiffStatus.Conflicted;
+                        node.Status = DiffStatus.Aligned;
                     }
                 }
                 result.Add(node);
@@ -898,7 +976,6 @@ namespace AntigravityCompanion.Tests
 
     // =========================================================================
     // 5. CONFLICT RESOLUTION WIZARD (F7)
-    // =========================================================================
     public enum ConflictResolutionStrategy
     {
         Merge,
@@ -967,21 +1044,26 @@ namespace AntigravityCompanion.Tests
         {
             selectedIds.Clear();
             if (diffNodes == null) return;
-            HashSet<string> localIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, ConversationSummaryInfo> localMap = new Dictionary<string, ConversationSummaryInfo>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < diffNodes.Count; i++)
             {
                 if (diffNodes[i].LocalConversations != null)
                 {
                     for (int j = 0; j < diffNodes[i].LocalConversations.Count; j++)
                     {
-                        string id = diffNodes[i].LocalConversations[j].ConversationId;
-                        if (!string.IsNullOrEmpty(id)) localIds.Add(id);
+                        var c = diffNodes[i].LocalConversations[j];
+                        if (c != null && !string.IsNullOrEmpty(c.ConversationId)) localMap[c.ConversationId] = c;
                     }
                 }
             }
 
             for (int i = 0; i < diffNodes.Count; i++)
             {
+                if (diffNodes[i].Status == DiffStatus.Aligned && diffNodes[i].ModifiedSessionCount == 0 && diffNodes[i].NewSessionCount == 0 && localMap.Count == 0)
+                {
+                    continue;
+                }
+
                 if (diffNodes[i].BackupConversations != null)
                 {
                     for (int j = 0; j < diffNodes[i].BackupConversations.Count; j++)
@@ -989,10 +1071,26 @@ namespace AntigravityCompanion.Tests
                         var c = diffNodes[i].BackupConversations[j];
                         if (c != null && !string.IsNullOrEmpty(c.ConversationId))
                         {
-                            bool isNew = (localIds.Count > 0) ? !localIds.Contains(c.ConversationId) : (diffNodes[i].Status == DiffStatus.NewInBackup);
-                            if (isNew)
+                            ConversationSummaryInfo loc;
+                            bool exists = localMap.TryGetValue(c.ConversationId, out loc);
+                            if (!exists)
                             {
-                                selectedIds.Add(c.ConversationId);
+                                if (diffNodes[i].Status != DiffStatus.Aligned)
+                                {
+                                    selectedIds.Add(c.ConversationId);
+                                }
+                            }
+                            else if (loc != null)
+                            {
+                                bool titleDiff = !string.Equals(c.DisplayTitle, loc.DisplayTitle, StringComparison.Ordinal);
+                                bool stepDiff = c.StepCount != loc.StepCount || c.UserInteractions != loc.UserInteractions;
+                                bool timeDiff = Math.Abs((c.UpdatedTime - loc.UpdatedTime).TotalSeconds) > 2 && c.UpdatedTime > DateTime.MinValue && loc.UpdatedTime > DateTime.MinValue;
+                                bool projDiff = !string.Equals(c.ProjectName, loc.ProjectName, StringComparison.OrdinalIgnoreCase);
+
+                                if (titleDiff || stepDiff || timeDiff || projDiff)
+                                {
+                                    selectedIds.Add(c.ConversationId);
+                                }
                             }
                         }
                     }

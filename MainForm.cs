@@ -396,7 +396,7 @@ namespace AntigravityCompanion
                 Padding = new Padding(0, 4, 8, 0)
             };
 
-            btnSelectNewOnly = MakeSmallBtn("仅选新增");
+            btnSelectNewOnly = MakeSmallBtn("仅选新增/更新");
             btnSelectNewOnly.Click += BtnSelectNewOnly_Click;
 
             btnSelectAll = MakeSmallBtn("全选");
@@ -806,16 +806,38 @@ namespace AntigravityCompanion
 
                 _currentDiffNodes = VisualDiffEngine.ComputeDiff(_localSummaries, _backupIndex.Conversations);
                 
-                // 默认仅选中新增会话
+                // 默认仅选中新增与有更新/修改的会话
                 _checkedSessionIds.Clear();
                 _checkedProjectNames.Clear();
+                Dictionary<string, ConversationSummaryInfo> localConvMap = new Dictionary<string, ConversationSummaryInfo>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < _localSummaries.Count; i++)
+                {
+                    if (!string.IsNullOrEmpty(_localSummaries[i].ConversationId))
+                        localConvMap[_localSummaries[i].ConversationId] = _localSummaries[i];
+                }
+
                 for (int i = 0; i < _backupIndex.Conversations.Count; i++)
                 {
                     var c = _backupIndex.Conversations[i];
-                    bool exists = _localSummaries.Exists(x => string.Equals(x.ConversationId, c.ConversationId, StringComparison.OrdinalIgnoreCase));
-                    if (!exists && !c.IsSubagent)
+                    if (c.IsSubagent) continue;
+
+                    ConversationSummaryInfo loc;
+                    bool exists = localConvMap.TryGetValue(c.ConversationId, out loc);
+                    if (!exists)
                     {
                         _checkedSessionIds.Add(c.ConversationId);
+                    }
+                    else if (loc != null)
+                    {
+                        bool titleDiff = !string.Equals(c.DisplayTitle, loc.DisplayTitle, StringComparison.Ordinal);
+                        bool stepDiff = c.StepCount != loc.StepCount || c.UserInteractions != loc.UserInteractions;
+                        bool timeDiff = Math.Abs((c.UpdatedTime - loc.UpdatedTime).TotalSeconds) > 2 && c.UpdatedTime > DateTime.MinValue && loc.UpdatedTime > DateTime.MinValue;
+                        bool projDiff = !string.Equals(c.ProjectName, loc.ProjectName, StringComparison.OrdinalIgnoreCase);
+
+                        if (titleDiff || stepDiff || timeDiff || projDiff)
+                        {
+                            _checkedSessionIds.Add(c.ConversationId);
+                        }
                     }
                 }
 
@@ -875,11 +897,11 @@ namespace AntigravityCompanion
                 TreeNode rootProj = new TreeNode("备份研发工程与会话 (Projects & Conversations)");
                 rootProj.Tag = new DiffItemNodeTag { Category = ItemCategory.ProjectsRoot, DisplayName = "备份研发工程与会话" };
 
-                HashSet<string> localConvIdSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                Dictionary<string, ConversationSummaryInfo> localConvMap = new Dictionary<string, ConversationSummaryInfo>(StringComparer.OrdinalIgnoreCase);
                 for (int i = 0; i < _localSummaries.Count; i++)
                 {
                     if (!string.IsNullOrEmpty(_localSummaries[i].ConversationId))
-                        localConvIdSet.Add(_localSummaries[i].ConversationId);
+                        localConvMap[_localSummaries[i].ConversationId] = _localSummaries[i];
                 }
 
                 for (int i = 0; i < _currentDiffNodes.Count; i++)
@@ -931,12 +953,60 @@ namespace AntigravityCompanion
                     for (int j = 0; j < visibleConvs.Count; j++)
                     {
                         ConversationSummaryInfo s = visibleConvs[j];
-                        bool existsLocal = !string.IsNullOrEmpty(s.ConversationId) && localConvIdSet.Contains(s.ConversationId);
-                        DiffStatus sStatus = existsLocal ? DiffStatus.Aligned : DiffStatus.NewInBackup;
+                        ConversationSummaryInfo loc = null;
+                        bool existsLocal = !string.IsNullOrEmpty(s.ConversationId) && localConvMap.TryGetValue(s.ConversationId, out loc);
 
-                        string sBadge = (sStatus == DiffStatus.NewInBackup) ? "[新增]" : "[已对齐]";
+                        DiffStatus sStatus = DiffStatus.Aligned;
+                        string diffBadge = "[已对齐]";
+
+                        if (!existsLocal)
+                        {
+                            sStatus = DiffStatus.NewInBackup;
+                            diffBadge = "[新增]";
+                        }
+                        else if (loc != null)
+                        {
+                            bool titleDiff = !string.Equals(s.DisplayTitle, loc.DisplayTitle, StringComparison.Ordinal);
+                            bool stepDiff = s.StepCount != loc.StepCount || s.UserInteractions != loc.UserInteractions;
+                            bool timeDiff = Math.Abs((s.UpdatedTime - loc.UpdatedTime).TotalSeconds) > 2 && s.UpdatedTime > DateTime.MinValue && loc.UpdatedTime > DateTime.MinValue;
+                            bool projDiff = !string.Equals(s.ProjectName, loc.ProjectName, StringComparison.OrdinalIgnoreCase);
+
+                            if (titleDiff || stepDiff || timeDiff || projDiff)
+                            {
+                                sStatus = DiffStatus.Modified;
+                                List<string> tags = new List<string>();
+                                if (titleDiff)
+                                {
+                                    string oldT = string.IsNullOrEmpty(loc.DisplayTitle) ? "(空)" : loc.DisplayTitle;
+                                    tags.Add("已改名: 本地为 '" + oldT + "'");
+                                }
+                                if (stepDiff)
+                                {
+                                    int diff = s.StepCount - loc.StepCount;
+                                    if (diff > 0) tags.Add(string.Format("备份多 {0} 步", diff));
+                                    else if (diff < 0) tags.Add(string.Format("本地多 {0} 步", -diff));
+                                    else tags.Add("对话轮次有差异");
+                                }
+                                else if (timeDiff)
+                                {
+                                    if (s.UpdatedTime > loc.UpdatedTime) tags.Add("备份较新");
+                                    else tags.Add("本地较新");
+                                }
+                                if (projDiff)
+                                {
+                                    tags.Add("所属工程变更");
+                                }
+                                diffBadge = string.Format("[{0}]", string.Join(", ", tags.ToArray()));
+                            }
+                            else
+                            {
+                                sStatus = DiffStatus.Aligned;
+                                diffBadge = "[已对齐]";
+                            }
+                        }
+
                         string timeStr = s.UpdatedTime > DateTime.MinValue ? s.UpdatedTime.ToString("MM-dd HH:mm") : "-";
-                        string sText = string.Format("{0} [{1}] {2}", s.DisplayTitle, timeStr, sBadge);
+                        string sText = string.Format("{0} [{1}] {2}", s.DisplayTitle, timeStr, diffBadge);
                         if (s.IsSubagent) sText = "[子任务] " + sText;
 
                         TreeNode sNode = new TreeNode(sText);
@@ -988,6 +1058,10 @@ namespace AntigravityCompanion
             {
                 case DiffStatus.NewInBackup:
                     node.ForeColor = Color.FromArgb(22, 101, 52); // 素雅墨绿
+                    node.NodeFont = new Font(tvBackup.Font, FontStyle.Bold);
+                    break;
+                case DiffStatus.Modified:
+                    node.ForeColor = Color.FromArgb(124, 58, 237); // 典雅紫 (突出显示已修改/更新)
                     node.NodeFont = new Font(tvBackup.Font, FontStyle.Bold);
                     break;
                 case DiffStatus.Aligned:
@@ -1134,7 +1208,7 @@ namespace AntigravityCompanion
                 {
                     if (tag.Category == ItemCategory.Conversation)
                     {
-                        if (tag.Status == DiffStatus.NewInBackup && !tag.IsTemporaryOrJunk)
+                        if ((tag.Status == DiffStatus.NewInBackup || tag.Status == DiffStatus.Modified) && !tag.IsTemporaryOrJunk)
                         {
                             node.Checked = true;
                             UpdateParentNodeChecked(node);
@@ -1144,7 +1218,7 @@ namespace AntigravityCompanion
                     {
                         // 仅当工程下无任何子会话节点时，才直接依据工程状态勾选自身；
                         // 若工程下存在子会话，绝不无脑勾选所有子节点，而是交由子节点各自的独立状态去判定勾选！
-                        if (node.Nodes.Count == 0 && tag.Status == DiffStatus.NewInBackup && !tag.IsTemporaryOrJunk)
+                        if (node.Nodes.Count == 0 && (tag.Status == DiffStatus.NewInBackup || tag.Status == DiffStatus.Modified) && !tag.IsTemporaryOrJunk)
                         {
                             node.Checked = true;
                             UpdateParentNodeChecked(node);

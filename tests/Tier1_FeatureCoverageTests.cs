@@ -422,13 +422,14 @@ namespace AntigravityCompanion.Tests
 
         public static void Test_F6_02_ClassifiesAligned(TestContext ctx)
         {
+            string cid = Guid.NewGuid().ToString();
             List<ConversationSummaryInfo> local = new List<ConversationSummaryInfo>
             {
-                new ConversationSummaryInfo { ProjectName = "CommonProj", FolderUri = "file:///c:/CommonProj", ConversationId = Guid.NewGuid().ToString() }
+                new ConversationSummaryInfo { ProjectName = "CommonProj", FolderUri = "file:///c:/CommonProj", ConversationId = cid }
             };
             List<ConversationSummaryInfo> backup = new List<ConversationSummaryInfo>
             {
-                new ConversationSummaryInfo { ProjectName = "CommonProj", FolderUri = "file:///c:/CommonProj", ConversationId = Guid.NewGuid().ToString() }
+                new ConversationSummaryInfo { ProjectName = "CommonProj", FolderUri = "file:///c:/CommonProj", ConversationId = cid }
             };
 
             List<ProjectDiffNode> diff = VisualDiffEngine.ComputeDiff(local, backup);
@@ -439,13 +440,14 @@ namespace AntigravityCompanion.Tests
 
         public static void Test_F6_03_ClassifiesConflicted(TestContext ctx)
         {
+            string cid = Guid.NewGuid().ToString();
             List<ConversationSummaryInfo> local = new List<ConversationSummaryInfo>
             {
-                new ConversationSummaryInfo { ProjectName = "ConflictProj", FolderUri = "file:///c:/Local/ConflictProj", ConversationId = Guid.NewGuid().ToString() }
+                new ConversationSummaryInfo { ProjectName = "ConflictProj", FolderUri = "file:///c:/Local/ConflictProj", ConversationId = cid }
             };
             List<ConversationSummaryInfo> backup = new List<ConversationSummaryInfo>
             {
-                new ConversationSummaryInfo { ProjectName = "ConflictProj", FolderUri = "file:///d:/Backup/ConflictProj", ConversationId = Guid.NewGuid().ToString() }
+                new ConversationSummaryInfo { ProjectName = "ConflictProj", FolderUri = "file:///d:/Backup/ConflictProj", ConversationId = cid }
             };
 
             List<ProjectDiffNode> diff = VisualDiffEngine.ComputeDiff(local, backup);

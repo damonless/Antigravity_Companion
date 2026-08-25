@@ -15,7 +15,8 @@ namespace AntigravityCompanion
         NewInBackup,    // [新增工程 / 含新增会话]
         Aligned,        // [已对齐]
         Conflicted,     // [路径冲突]
-        LocalOnly       // [本地独有]
+        LocalOnly,      // [本地独有]
+        Modified        // [已修改 / 内容有更新 / 已改名]
     }
 
     public enum ItemCategory
@@ -52,6 +53,8 @@ namespace AntigravityCompanion
         public string BackupFolderUri;
         public DiffStatus Status;
         public int NewSessionCount;
+        public int ModifiedSessionCount;
+        public string RenamedFromOrTo;
         public bool IsTemporaryOrJunk;
         public List<ConversationSummaryInfo> LocalConversations;
         public List<ConversationSummaryInfo> BackupConversations;
@@ -63,6 +66,7 @@ namespace AntigravityCompanion
             BackupConversations = new List<ConversationSummaryInfo>();
             IsTemporaryOrJunk = SmartProjectFilter.IsJunkOrEphemeral(name);
             NewSessionCount = 0;
+            ModifiedSessionCount = 0;
         }
 
         public string GetStatusBadge()
@@ -71,7 +75,13 @@ namespace AntigravityCompanion
             {
                 case DiffStatus.NewInBackup:
                     if (LocalConversations.Count == 0) return "[新增工程]";
+                    if (ModifiedSessionCount > 0)
+                        return string.Format("[含 {0} 新增, {1} 更新]", NewSessionCount, ModifiedSessionCount);
                     return string.Format("[含 {0} 条新增]", NewSessionCount);
+                case DiffStatus.Modified:
+                    if (!string.IsNullOrEmpty(RenamedFromOrTo))
+                        return string.Format("[工程已改名: 本地为 '{0}']", RenamedFromOrTo);
+                    return string.Format("[含 {0} 条已修改/更新]", ModifiedSessionCount);
                 case DiffStatus.Aligned:
                     return "[已对齐]";
                 case DiffStatus.Conflicted:
@@ -90,7 +100,8 @@ namespace AntigravityCompanion
                                                         List<ConversationSummaryInfo> backupSummaries)
         {
             Dictionary<string, ProjectDiffNode> nodeMap = new Dictionary<string, ProjectDiffNode>(StringComparer.OrdinalIgnoreCase);
-            HashSet<string> localSessionIdSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, ConversationSummaryInfo> localConvMap = new Dictionary<string, ConversationSummaryInfo>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, string> localUriToProjectNameMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             if (localSummaries != null)
             {
@@ -104,7 +115,16 @@ namespace AntigravityCompanion
                         nodeMap[p].LocalFolderUri = s.FolderUri;
 
                     if (!string.IsNullOrEmpty(s.ConversationId))
-                        localSessionIdSet.Add(s.ConversationId);
+                        localConvMap[s.ConversationId] = s;
+
+                    if (!string.IsNullOrEmpty(s.FolderUri))
+                    {
+                        string normUri = DirectStreamArchiver.NormalizeUri(s.FolderUri);
+                        if (!string.IsNullOrEmpty(normUri) && !localUriToProjectNameMap.ContainsKey(normUri) && !string.Equals(p, "Outside of Project", StringComparison.OrdinalIgnoreCase))
+                        {
+                            localUriToProjectNameMap[normUri] = p;
+                        }
+                    }
                 }
             }
 
@@ -128,21 +148,56 @@ namespace AntigravityCompanion
                 bool hasLocal = node.LocalConversations.Count > 0;
                 bool hasBackup = node.BackupConversations.Count > 0;
 
-                // 计算备份工程中有多少条是本地缺失的新会话
+                // 计算备份工程中有多少条是新增会话，多少条是有变更会话
                 int newConvs = 0;
+                int modifiedConvs = 0;
+                int alignedConvs = 0;
+
                 for (int b = 0; b < node.BackupConversations.Count; b++)
                 {
-                    string bCid = node.BackupConversations[b].ConversationId;
-                    if (!string.IsNullOrEmpty(bCid) && !localSessionIdSet.Contains(bCid))
+                    ConversationSummaryInfo bConv = node.BackupConversations[b];
+                    string bCid = bConv.ConversationId;
+                    if (string.IsNullOrEmpty(bCid)) continue;
+
+                    ConversationSummaryInfo lConv;
+                    if (!localConvMap.TryGetValue(bCid, out lConv))
                     {
                         newConvs++;
                     }
+                    else
+                    {
+                        bool titleDiff = !string.Equals(bConv.DisplayTitle, lConv.DisplayTitle, StringComparison.Ordinal);
+                        bool stepDiff = bConv.StepCount != lConv.StepCount || bConv.UserInteractions != lConv.UserInteractions;
+                        bool timeDiff = Math.Abs((bConv.UpdatedTime - lConv.UpdatedTime).TotalSeconds) > 2 && bConv.UpdatedTime > DateTime.MinValue && lConv.UpdatedTime > DateTime.MinValue;
+                        bool projDiff = !string.Equals(bConv.ProjectName, lConv.ProjectName, StringComparison.OrdinalIgnoreCase);
+
+                        if (titleDiff || stepDiff || timeDiff || projDiff)
+                        {
+                            modifiedConvs++;
+                        }
+                        else
+                        {
+                            alignedConvs++;
+                        }
+                    }
                 }
                 node.NewSessionCount = newConvs;
+                node.ModifiedSessionCount = modifiedConvs;
 
                 if (!hasLocal && hasBackup)
                 {
-                    node.Status = DiffStatus.NewInBackup;
+                    // 检查本地是否存在相同工作区路径但不同工程名的项目（工程改名识别）
+                    string normBackupUri = DirectStreamArchiver.NormalizeUri(node.BackupFolderUri);
+                    string localProjName;
+                    if (!string.IsNullOrEmpty(normBackupUri) && localUriToProjectNameMap.TryGetValue(normBackupUri, out localProjName) && !string.Equals(localProjName, node.ProjectName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        node.Status = DiffStatus.Modified;
+                        node.RenamedFromOrTo = localProjName;
+                    }
+                    else
+                    {
+                        node.Status = DiffStatus.NewInBackup;
+                    }
                 }
                 else if (hasLocal && !hasBackup)
                 {
@@ -163,8 +218,13 @@ namespace AntigravityCompanion
                     }
                     else if (newConvs > 0)
                     {
-                        // 路径一致但包含新会话，精确定位为新增状态
+                        // 路径一致且包含新会话
                         node.Status = DiffStatus.NewInBackup;
+                    }
+                    else if (modifiedConvs > 0)
+                    {
+                        // 路径一致且无全新会话，但存在改名或对话内容更新的会话
+                        node.Status = DiffStatus.Modified;
                     }
                     else
                     {

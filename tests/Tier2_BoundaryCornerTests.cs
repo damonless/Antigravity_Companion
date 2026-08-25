@@ -469,20 +469,23 @@ namespace AntigravityCompanion.Tests
         public static void Test_F6_T2_05_MixedSessionDiffInsideSingleProject(TestContext ctx)
         {
             string sharedId = "shared-uuid";
+            string modifiedId = "modified-uuid";
             List<ConversationSummaryInfo> local = new List<ConversationSummaryInfo>
             {
-                new ConversationSummaryInfo { ProjectName = "CommonProj", FolderUri = "file:///c:/CommonProj", ConversationId = sharedId }
+                new ConversationSummaryInfo { ProjectName = "CommonProj", FolderUri = "file:///c:/CommonProj", ConversationId = sharedId, DisplayTitle = "Title A", StepCount = 5 },
+                new ConversationSummaryInfo { ProjectName = "CommonProj", FolderUri = "file:///c:/CommonProj", ConversationId = modifiedId, DisplayTitle = "Old Local Title", StepCount = 3 }
             };
             List<ConversationSummaryInfo> backup = new List<ConversationSummaryInfo>
             {
-                new ConversationSummaryInfo { ProjectName = "CommonProj", FolderUri = "file:///c:/CommonProj", ConversationId = sharedId },
-                new ConversationSummaryInfo { ProjectName = "CommonProj", FolderUri = "file:///c:/CommonProj", ConversationId = "new-uuid-in-backup" }
+                new ConversationSummaryInfo { ProjectName = "CommonProj", FolderUri = "file:///c:/CommonProj", ConversationId = sharedId, DisplayTitle = "Title A", StepCount = 5 },
+                new ConversationSummaryInfo { ProjectName = "CommonProj", FolderUri = "file:///c:/CommonProj", ConversationId = modifiedId, DisplayTitle = "New Renamed Backup Title", StepCount = 8 },
+                new ConversationSummaryInfo { ProjectName = "CommonProj", FolderUri = "file:///c:/CommonProj", ConversationId = "new-uuid-in-backup", DisplayTitle = "Brand New", StepCount = 1 }
             };
 
             List<ProjectDiffNode> diff = VisualDiffEngine.ComputeDiff(local, backup);
             ctx.AssertEqual(1, diff.Count, "1 project diff node");
-            ctx.AssertEqual(1, diff[0].LocalConversations.Count, "1 local conversation");
-            ctx.AssertEqual(2, diff[0].BackupConversations.Count, "2 backup conversations");
+            ctx.AssertEqual(1, diff[0].NewSessionCount, "1 brand new session");
+            ctx.AssertEqual(1, diff[0].ModifiedSessionCount, "1 modified/renamed session");
         }
 
         // =====================================================================
