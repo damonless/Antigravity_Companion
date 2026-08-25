@@ -173,7 +173,7 @@ namespace AntigravityCompanion.Tests
             };
             List<ConversationSummaryInfo> backup = new List<ConversationSummaryInfo>
             {
-                new ConversationSummaryInfo { ProjectName = "AlignedProj", FolderUri = "file:///c:/AlignedProj", ConversationId = "bak1" },
+                new ConversationSummaryInfo { ProjectName = "AlignedProj", FolderUri = "file:///c:/AlignedProj", ConversationId = "loc1" },
                 new ConversationSummaryInfo { ProjectName = "BrandNewProj", FolderUri = "file:///c:/BrandNewProj", ConversationId = "new1" }
             };
 

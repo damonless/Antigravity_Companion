@@ -1132,16 +1132,23 @@ namespace AntigravityCompanion
                 DiffItemNodeTag tag = node.Tag as DiffItemNodeTag;
                 if (tag != null)
                 {
-                    if (tag.Category == ItemCategory.Conversation && tag.Status == DiffStatus.NewInBackup && !tag.IsTemporaryOrJunk)
+                    if (tag.Category == ItemCategory.Conversation)
                     {
-                        node.Checked = true;
-                        UpdateParentNodeChecked(node);
+                        if (tag.Status == DiffStatus.NewInBackup && !tag.IsTemporaryOrJunk)
+                        {
+                            node.Checked = true;
+                            UpdateParentNodeChecked(node);
+                        }
                     }
-                    else if (tag.Category == ItemCategory.Project && tag.Status == DiffStatus.NewInBackup && !tag.IsTemporaryOrJunk)
+                    else if (tag.Category == ItemCategory.Project)
                     {
-                        node.Checked = true;
-                        SetChildNodesChecked(node, true);
-                        UpdateParentNodeChecked(node);
+                        // 仅当工程下无任何子会话节点时，才直接依据工程状态勾选自身；
+                        // 若工程下存在子会话，绝不无脑勾选所有子节点，而是交由子节点各自的独立状态去判定勾选！
+                        if (node.Nodes.Count == 0 && tag.Status == DiffStatus.NewInBackup && !tag.IsTemporaryOrJunk)
+                        {
+                            node.Checked = true;
+                            UpdateParentNodeChecked(node);
+                        }
                     }
                 }
                 if (node.Nodes.Count > 0)

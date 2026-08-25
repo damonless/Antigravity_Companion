@@ -967,15 +967,34 @@ namespace AntigravityCompanion.Tests
         {
             selectedIds.Clear();
             if (diffNodes == null) return;
+            HashSet<string> localIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < diffNodes.Count; i++)
             {
-                if (diffNodes[i].Status == DiffStatus.NewInBackup)
+                if (diffNodes[i].LocalConversations != null)
+                {
+                    for (int j = 0; j < diffNodes[i].LocalConversations.Count; j++)
+                    {
+                        string id = diffNodes[i].LocalConversations[j].ConversationId;
+                        if (!string.IsNullOrEmpty(id)) localIds.Add(id);
+                    }
+                }
+            }
+
+            for (int i = 0; i < diffNodes.Count; i++)
+            {
+                if (diffNodes[i].BackupConversations != null)
                 {
                     for (int j = 0; j < diffNodes[i].BackupConversations.Count; j++)
                     {
-                        string id = diffNodes[i].BackupConversations[j].ConversationId;
-                        if (!string.IsNullOrEmpty(id))
-                            selectedIds.Add(id);
+                        var c = diffNodes[i].BackupConversations[j];
+                        if (c != null && !string.IsNullOrEmpty(c.ConversationId))
+                        {
+                            bool isNew = (localIds.Count > 0) ? !localIds.Contains(c.ConversationId) : (diffNodes[i].Status == DiffStatus.NewInBackup);
+                            if (isNew)
+                            {
+                                selectedIds.Add(c.ConversationId);
+                            }
+                        }
                     }
                 }
             }

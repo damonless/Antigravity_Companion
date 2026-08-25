@@ -643,9 +643,18 @@ namespace AntigravityCompanion.Tests
 
         public static void Test_F9_T2_04_PartialProjectSelection(TestContext ctx)
         {
-            HashSet<string> selected = new HashSet<string> { "c1", "c2", "c3" };
-            selected.Remove("c1"); // Uncheck one child
-            ctx.AssertEqual(2, selected.Count, "2 child sessions remain selected");
+            CascadingSelectionModel model = new CascadingSelectionModel();
+            HashSet<string> selected = new HashSet<string>();
+
+            ProjectDiffNode mixedNode = new ProjectDiffNode("MixedProj") { Status = DiffStatus.NewInBackup };
+            mixedNode.LocalConversations.Add(new ConversationSummaryInfo { ConversationId = "loc_existing_1" });
+            mixedNode.BackupConversations.Add(new ConversationSummaryInfo { ConversationId = "loc_existing_1" });
+            mixedNode.BackupConversations.Add(new ConversationSummaryInfo { ConversationId = "bak_new_1" });
+
+            model.SelectNewOnly(new List<ProjectDiffNode> { mixedNode }, selected);
+            ctx.AssertEqual(1, selected.Count, "Only the single new session selected");
+            ctx.AssertTrue(selected.Contains("bak_new_1"), "New session is selected");
+            ctx.AssertFalse(selected.Contains("loc_existing_1"), "Existing aligned session is NOT selected");
         }
 
         public static void Test_F9_T2_05_SelectionPreservedOnEmptyCollection(TestContext ctx)
