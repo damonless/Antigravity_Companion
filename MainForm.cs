@@ -1430,15 +1430,80 @@ namespace AntigravityCompanion
                     using (FileStream fs = new FileStream(_loadedBackupPath, FileMode.Open, FileAccess.Read, FileShare.Read))
                     using (ZipArchive archive = new ZipArchive(fs, ZipArchiveMode.Read))
                     {
-                        // 1. 提取选中的会话数据库与脑区
+                        // 1. 建立选中的会话 ID 集合与所属工程映射
                         HashSet<string> convIdsToExtract = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        Dictionary<string, ConversationSummaryInfo> convMap = new Dictionary<string, ConversationSummaryInfo>(StringComparer.OrdinalIgnoreCase);
+                        Dictionary<string, string> projectNewIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
                         for (int i = 0; i < selectedConvs.Count; i++)
                         {
-                            convIdsToExtract.Add(selectedConvs[i].ConversationId);
-                            _highlightTracker.AddImportedConversation(selectedConvs[i].ConversationId);
-                            _highlightTracker.AddImportedProject(selectedConvs[i].ProjectName);
+                            var sc = selectedConvs[i];
+                            convIdsToExtract.Add(sc.ConversationId);
+                            convMap[sc.ConversationId] = sc;
+                            _highlightTracker.AddImportedConversation(sc.ConversationId);
+                            _highlightTracker.AddImportedProject(sc.ProjectName);
                         }
 
+                        // 确保每个导入工程在本地 .gemini/config/projects/ 都有合法的标准 Project JSON (包含 projectResources 与 settings)
+                        foreach (string pName in selectedProjects)
+                        {
+                            if (string.IsNullOrEmpty(pName) || (SmartProjectFilter.IsJunkOrEphemeral(pName) && pName != "Outside of Project"))
+                                continue;
+
+                            string targetProjName = projectNewNames.ContainsKey(pName) ? projectNewNames[pName] : pName;
+                            
+                            // 查找本地是否已有同名工程
+                            string existingProjId = null;
+                            foreach (KeyValuePair<string, ProjectMetadata> kvp in _localProjects)
+                            {
+                                if (string.Equals(kvp.Value.Name, targetProjName, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    existingProjId = kvp.Key;
+                                    break;
+                                }
+                            }
+
+                            string pId = existingProjId;
+                            if (string.IsNullOrEmpty(pId))
+                            {
+                                // 从备份包中查找原有 ID
+                                if (_backupIndex != null && _backupIndex.Projects != null)
+                                {
+                                    foreach (KeyValuePair<string, ProjectMetadata> bKvp in _backupIndex.Projects)
+                                    {
+                                        if (string.Equals(bKvp.Value.Name, pName, StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            pId = bKvp.Key;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (string.IsNullOrEmpty(pId)) pId = Guid.NewGuid().ToString();
+                            }
+
+                            projectNewIds[pName] = pId;
+                            if (!string.Equals(pName, targetProjName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                projectNewIds[targetProjName] = pId;
+                            }
+
+                            // 写入标准 Project JSON (若不存在或指定覆盖)
+                            string projFile = Path.Combine(projDir, pId + ".json");
+                            bool shouldOverwrite = projectOverwriteNames.Contains(pName) || projectNewNames.ContainsKey(pName);
+
+                            if (!File.Exists(projFile) || shouldOverwrite)
+                            {
+                                string folderUri = projectUriOverrides.ContainsKey(pName) 
+                                    ? projectUriOverrides[pName] 
+                                    : ("file:///" + DirectStreamArchiver.UrlEncodePath(Path.Combine(HomePath, targetProjName).Replace('\\', '/'), false));
+
+                                string jsonContent = GenerateStandardProjectJson(pId, targetProjName, folderUri);
+                                File.WriteAllText(projFile, jsonContent, Encoding.UTF8);
+                                filesImported++;
+                            }
+                        }
+
+                        // 2. 解压与处理文件
                         for (int i = 0; i < archive.Entries.Count; i++)
                         {
                             ZipArchiveEntry entry = archive.Entries[i];
@@ -1458,6 +1523,19 @@ namespace AntigravityCompanion
                                     string dest = Path.Combine(gemini, "antigravity", "conversations", fn);
                                     ExtractZipEntrySafe(entry, dest);
                                     filesImported++;
+
+                                    // 若是主数据库 .db 文件，深度重映射 SQLite 内部 trajectory_metadata_blob
+                                    if (fn.EndsWith(".db", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        ConversationSummaryInfo sc = convMap.ContainsKey(cid) ? convMap[cid] : null;
+                                        string pName = sc != null ? sc.ProjectName : null;
+                                        string pId = (pName != null && projectNewIds.ContainsKey(pName)) ? projectNewIds[pName] : null;
+                                        string dTitle = sc != null ? sc.DisplayTitle : null;
+
+                                        SqliteMetadataUpdater.RemapSqliteDbMetadata(
+                                            dest, srcHome, curHome, projectUriOverrides, pName, pId, dTitle
+                                        );
+                                    }
                                 }
                             }
                             // 脑区文件夹
@@ -1525,27 +1603,13 @@ namespace AntigravityCompanion
                             }
                         }
 
-                        // 2. 针对重命名工程生成合法的 project json 配置
-                        foreach (KeyValuePair<string, string> kvp in projectNewNames)
-                        {
-                            string oldName = kvp.Key;
-                            string newName = kvp.Value;
-                            string newProjId = Guid.NewGuid().ToString();
-                            string newProjFile = Path.Combine(projDir, newProjId + ".json");
-
-                            string folderUri = projectUriOverrides.ContainsKey(oldName) ? projectUriOverrides[oldName] : ("file:///" + HomePath.Replace('\\', '/') + "/" + newName);
-                            string jsonContent = string.Format("{{\r\n  \"id\": \"{0}\",\r\n  \"name\": \"{1}\",\r\n  \"folderUri\": \"{2}\"\r\n}}", newProjId, newName, folderUri);
-                            File.WriteAllText(newProjFile, jsonContent, Encoding.UTF8);
-                            filesImported++;
-                        }
-
-                        // 3. 合流 agyhub_summaries_proto.pb
+                        // 3. 合流 agyhub_summaries_proto.pb (带标题双向固化与 ProjectId 自动绑定)
                         progress.UpdateMsg("正在增量合流会话摘要与自定义标题索引 (.pb)...");
                         string localPb = Path.Combine(gemini, "antigravity", "agyhub_summaries_proto.pb");
                         byte[] localPbBytes = File.Exists(localPb) ? File.ReadAllBytes(localPb) : new byte[0];
 
                         byte[] mergedPb = IncrementalProtoShardMerger.MergeShards(
-                            localPbBytes, selectedConvs, srcHome, curHome, projectUriOverrides
+                            localPbBytes, selectedConvs, srcHome, curHome, projectUriOverrides, projectNewIds
                         );
 
                         if (File.Exists(localPb))
@@ -1589,6 +1653,44 @@ namespace AntigravityCompanion
             {
                 progress.ShowDialog(this);
             }
+        }
+
+        public static string GenerateStandardProjectJson(string projId, string projName, string folderUri)
+        {
+            string escUri = folderUri ?? "";
+            if (!escUri.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
+            {
+                string fwd = escUri.Replace('\\', '/');
+                escUri = "file:///" + DirectStreamArchiver.UrlEncodePath(fwd, false);
+            }
+
+            string nowIso = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.ffffff000Z");
+
+            return string.Format(
+                "{{\r\n" +
+                "  \"id\": \"{0}\",\r\n" +
+                "  \"name\": \"{1}\",\r\n" +
+                "  \"projectResources\": {{\r\n" +
+                "    \"resources\": [\r\n" +
+                "      {{\r\n" +
+                "        \"gitFolder\": {{\r\n" +
+                "          \"folderUri\": \"{2}\",\r\n" +
+                "          \"defaultBranch\": \"main\"\r\n" +
+                "        }}\r\n" +
+                "      }}\r\n" +
+                "    ]\r\n" +
+                "  }},\r\n" +
+                "  \"settings\": {{\r\n" +
+                "    \"fileAccessPolicy\": \"AGENT_SETTING_POLICY_ALLOW\",\r\n" +
+                "    \"sandboxMode\": false,\r\n" +
+                "    \"autoExecutionPolicy\": \"CASCADE_COMMANDS_AUTO_EXECUTION_EAGER\",\r\n" +
+                "    \"artifactReviewMode\": \"ARTIFACT_REVIEW_MODE_TURBO\"\r\n" +
+                "  }},\r\n" +
+                "  \"updatedAt\": \"{3}\",\r\n" +
+                "  \"isWorkspaceOnly\": false\r\n" +
+                "}}",
+                projId, projName, escUri, nowIso
+            );
         }
 
         private static void ExtractZipEntrySafe(ZipArchiveEntry entry, string destPath)

@@ -449,7 +449,14 @@ namespace AntigravityCompanion
                 ProtoNode nameNode = node.GetChild(1);
                 if (nameNode != null && string.IsNullOrEmpty(info.ProjectName))
                 {
-                    info.ProjectName = nameNode.GetString();
+                    if (!nameNode.HasChildren && nameNode.WireType == 2)
+                    {
+                        string s = nameNode.GetString();
+                        if (!string.IsNullOrEmpty(s) && !s.StartsWith("file:///"))
+                        {
+                            info.ProjectName = s;
+                        }
+                    }
                 }
                 ProtoNode roleNode = node.GetChild(4);
                 if (roleNode != null)
@@ -457,10 +464,20 @@ namespace AntigravityCompanion
                     info.SubagentRole = roleNode.GetString();
                     if (!string.IsNullOrEmpty(info.SubagentRole)) info.IsSubagent = true;
                 }
+                ProtoNode f7Node = node.GetChild(7);
+                if (f7Node != null && string.IsNullOrEmpty(info.FolderUri))
+                {
+                    info.FolderUri = f7Node.GetString();
+                }
                 ProtoNode parentNode = node.GetChild(11);
                 if (parentNode != null)
                 {
                     info.ParentConversationId = parentNode.GetString();
+                }
+                ProtoNode pIdNode = node.GetChild(18);
+                if (pIdNode != null && string.IsNullOrEmpty(info.ProjectId))
+                {
+                    info.ProjectId = pIdNode.GetString();
                 }
             }
         }
@@ -514,6 +531,13 @@ namespace AntigravityCompanion
         {
             if (projectsMap != null && projectsMap.Count > 0)
             {
+                if (!string.IsNullOrEmpty(info.ProjectId) && projectsMap.ContainsKey(info.ProjectId))
+                {
+                    info.ProjectName = projectsMap[info.ProjectId].Name;
+                    if (string.IsNullOrEmpty(info.FolderUri)) info.FolderUri = projectsMap[info.ProjectId].FolderUri;
+                    return;
+                }
+
                 if (!string.IsNullOrEmpty(info.FolderUri))
                 {
                     string normUri = DirectStreamArchiver.NormalizeUri(info.FolderUri);

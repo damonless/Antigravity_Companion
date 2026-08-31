@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace AntigravityCompanion
@@ -345,7 +346,8 @@ namespace AntigravityCompanion
     {
         public static byte[] MergeShards(byte[] localPbBytes, List<ConversationSummaryInfo> selectedBackups, 
                                         string sourceHome, string currentHome, 
-                                        Dictionary<string, string> projectUriOverrides = null)
+                                        Dictionary<string, string> projectUriOverrides = null,
+                                        Dictionary<string, string> projectNewIds = null)
         {
             List<ProtoNode> localRootNodes = (localPbBytes != null && localPbBytes.Length > 0) 
                 ? ProtoCodec.Decode(localPbBytes) 
@@ -372,7 +374,16 @@ namespace AntigravityCompanion
                     ConversationSummaryInfo s = selectedBackups[i];
                     if (s.RawProtoEntry == null) continue;
 
-                    ProtoNode clonedNode = CloneAndRemapNode(s.RawProtoEntry, sourceHome, currentHome, projectUriOverrides, s.ProjectName);
+                    string targetProjId = null;
+                    if (projectNewIds != null && !string.IsNullOrEmpty(s.ProjectName) && projectNewIds.ContainsKey(s.ProjectName))
+                    {
+                        targetProjId = projectNewIds[s.ProjectName];
+                    }
+
+                    ProtoNode clonedNode = CloneAndRemapNode(
+                        s.RawProtoEntry, sourceHome, currentHome, projectUriOverrides, 
+                        s.ProjectName, s.DisplayTitle, s.HasCustomTitle, targetProjId
+                    );
                     string targetCid = s.ConversationId;
 
                     if (existingIndexMap.ContainsKey(targetCid))
@@ -399,7 +410,9 @@ namespace AntigravityCompanion
         }
 
         private static ProtoNode CloneAndRemapNode(ProtoNode sourceNode, string srcHome, string curHome, 
-                                                   Dictionary<string, string> uriOverrides, string projName)
+                                                   Dictionary<string, string> uriOverrides, string projName,
+                                                   string displayTitle = null, bool hasCustomTitle = false,
+                                                   string targetProjId = null)
         {
             byte[] encoded = ProtoCodec.Encode(new List<ProtoNode> { sourceNode });
             List<ProtoNode> decodedList = ProtoCodec.Decode(encoded);
@@ -407,11 +420,110 @@ namespace AntigravityCompanion
 
             ProtoNode node = decodedList[0];
             RemapPathsInAst(node, srcHome, curHome, uriOverrides, projName);
+
+            // 同步标题与自定义重命名元数据 (防止 IDE 点击会话后自动重置回自动识别名)
+            SyncTitlesInAst(node, displayTitle, hasCustomTitle);
+
+            // 同步 ProjectId (确保关联新机器上的 Project JSON)
+            if (!string.IsNullOrEmpty(targetProjId))
+            {
+                SyncProjectIdInAst(node, targetProjId);
+            }
+
             return node;
         }
 
+        private static void SyncTitlesInAst(ProtoNode entryNode, string displayTitle, bool hasCustomTitle)
+        {
+            if (entryNode == null || string.IsNullOrEmpty(displayTitle)) return;
+            ProtoNode meta = entryNode.GetChild(2);
+            if (meta == null || !meta.HasChildren) return;
+
+            // 1. 同步 Primary Title (Field 1)
+            ProtoNode f1 = meta.GetChild(1);
+            if (f1 != null)
+            {
+                f1.RawBytes = Encoding.UTF8.GetBytes(displayTitle);
+                f1.IsModified = true;
+            }
+            else
+            {
+                f1 = new ProtoNode { FieldNumber = 1, WireType = 2, RawBytes = Encoding.UTF8.GetBytes(displayTitle), IsModified = true };
+                meta.Children.Insert(0, f1);
+            }
+
+            // 2. 如果包含自定义标题，同步 Custom Title Node (Field 15)
+            if (hasCustomTitle)
+            {
+                ProtoNode f15 = meta.GetChild(15);
+                if (f15 != null)
+                {
+                    if (f15.HasChildren)
+                    {
+                        ProtoNode ctF1 = f15.GetChild(1);
+                        if (ctF1 != null)
+                        {
+                            ctF1.RawBytes = Encoding.UTF8.GetBytes(displayTitle);
+                            ctF1.IsModified = true;
+                        }
+                        else
+                        {
+                            f15.Children.Insert(0, new ProtoNode { FieldNumber = 1, WireType = 2, RawBytes = Encoding.UTF8.GetBytes(displayTitle), IsModified = true });
+                        }
+                    }
+                    else
+                    {
+                        f15.RawBytes = Encoding.UTF8.GetBytes(displayTitle);
+                    }
+                    f15.IsModified = true;
+                }
+                else
+                {
+                    // 创建标准 Field 15 自定义标题节点
+                    ProtoNode newF15 = new ProtoNode { FieldNumber = 15, WireType = 2, Children = new List<ProtoNode>(), IsModified = true };
+                    newF15.Children.Add(new ProtoNode { FieldNumber = 1, WireType = 2, RawBytes = Encoding.UTF8.GetBytes(displayTitle), IsModified = true });
+                    
+                    // 添加时间戳 (Field 7)
+                    long epoch = (long)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
+                    ProtoNode ts = new ProtoNode { FieldNumber = 7, WireType = 2, Children = new List<ProtoNode>(), IsModified = true };
+                    ts.Children.Add(new ProtoNode { FieldNumber = 1, WireType = 0, VarintValue = (ulong)epoch, IsModified = true });
+                    newF15.Children.Add(ts);
+
+                    meta.Children.Add(newF15);
+                }
+            }
+
+            meta.IsModified = true;
+            entryNode.IsModified = true;
+        }
+
+        private static void SyncProjectIdInAst(ProtoNode entryNode, string targetProjId)
+        {
+            if (entryNode == null || string.IsNullOrEmpty(targetProjId)) return;
+            ProtoNode meta = entryNode.GetChild(2);
+            if (meta == null || !meta.HasChildren) return;
+
+            ProtoNode cascade = meta.GetChild(17);
+            if (cascade != null && cascade.HasChildren)
+            {
+                ProtoNode pIdNode = cascade.GetChild(18);
+                if (pIdNode != null)
+                {
+                    pIdNode.RawBytes = Encoding.UTF8.GetBytes(targetProjId);
+                    pIdNode.IsModified = true;
+                }
+                else
+                {
+                    cascade.Children.Add(new ProtoNode { FieldNumber = 18, WireType = 2, RawBytes = Encoding.UTF8.GetBytes(targetProjId), IsModified = true });
+                }
+                cascade.IsModified = true;
+                meta.IsModified = true;
+                entryNode.IsModified = true;
+            }
+        }
+
         private static void RemapPathsInAst(ProtoNode node, string srcHome, string curHome, 
-                                           Dictionary<string, string> uriOverrides, string projName)
+                                            Dictionary<string, string> uriOverrides, string projName)
         {
             if (node == null) return;
 
@@ -450,6 +562,149 @@ namespace AntigravityCompanion
                 for (int i = 0; i < node.Children.Count; i++)
                 {
                     RemapPathsInAst(node.Children[i], srcHome, curHome, uriOverrides, projName);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// SQLite 数据库 trajectory_metadata_blob 跨机路径重映射与 ProjectId 修正工具
+    /// </summary>
+    public static class SqliteMetadataUpdater
+    {
+        [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_open", CallingConvention = CallingConvention.Cdecl)]
+        private static extern int sqlite3_open(string filename, out IntPtr db);
+
+        [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_close", CallingConvention = CallingConvention.Cdecl)]
+        private static extern int sqlite3_close(IntPtr db);
+
+        [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_prepare_v2", CallingConvention = CallingConvention.Cdecl)]
+        private static extern int sqlite3_prepare_v2(IntPtr db, string zSql, int nByte, out IntPtr ppStmt, IntPtr pzTail);
+
+        [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_step", CallingConvention = CallingConvention.Cdecl)]
+        private static extern int sqlite3_step(IntPtr pStmt);
+
+        [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_column_blob", CallingConvention = CallingConvention.Cdecl)]
+        private static extern IntPtr sqlite3_column_blob(IntPtr pStmt, int iCol);
+
+        [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_column_bytes", CallingConvention = CallingConvention.Cdecl)]
+        private static extern int sqlite3_column_bytes(IntPtr pStmt, int iCol);
+
+        [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_bind_blob", CallingConvention = CallingConvention.Cdecl)]
+        private static extern int sqlite3_bind_blob(IntPtr pStmt, int iCol, byte[] zData, int nData, IntPtr xDel);
+
+        [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_finalize", CallingConvention = CallingConvention.Cdecl)]
+        private static extern int sqlite3_finalize(IntPtr pStmt);
+
+        public static bool RemapSqliteDbMetadata(string dbPath, string srcHome, string curHome, 
+                                                 Dictionary<string, string> uriOverrides, string projName,
+                                                 string targetProjId = null, string displayTitle = null)
+        {
+            if (!File.Exists(dbPath)) return false;
+            try
+            {
+                IntPtr db;
+                if (sqlite3_open(dbPath, out db) != 0) return false;
+
+                try
+                {
+                    byte[] blob = null;
+                    IntPtr stmt;
+                    string sql = "SELECT data FROM trajectory_metadata_blob WHERE id='main';";
+                    if (sqlite3_prepare_v2(db, sql, -1, out stmt, IntPtr.Zero) == 0)
+                    {
+                        if (sqlite3_step(stmt) == 100) // SQLITE_ROW
+                        {
+                            int len = sqlite3_column_bytes(stmt, 0);
+                            if (len > 0)
+                            {
+                                blob = new byte[len];
+                                Marshal.Copy(sqlite3_column_blob(stmt, 0), blob, 0, len);
+                            }
+                        }
+                        sqlite3_finalize(stmt);
+                    }
+
+                    if (blob == null || blob.Length == 0) return false;
+
+                    List<ProtoNode> nodes = ProtoCodec.Decode(blob);
+                    if (nodes == null || nodes.Count == 0) return false;
+
+                    // 重映射 AST 内部所有工作区路径与 ProjectId
+                    for (int i = 0; i < nodes.Count; i++)
+                    {
+                        ProtoNode n = nodes[i];
+                        RemapAstNodePaths(n, srcHome, curHome, uriOverrides, projName);
+                        if (!string.IsNullOrEmpty(targetProjId) && n.FieldNumber == 18 && n.WireType == 2)
+                        {
+                            n.RawBytes = Encoding.UTF8.GetBytes(targetProjId);
+                            n.IsModified = true;
+                        }
+                    }
+
+                    byte[] updatedBlob = ProtoCodec.Encode(nodes);
+
+                    // 写回 SQLite
+                    string updateSql = "INSERT OR REPLACE INTO trajectory_metadata_blob (id, data) VALUES ('main', ?);";
+                    if (sqlite3_prepare_v2(db, updateSql, -1, out stmt, IntPtr.Zero) == 0)
+                    {
+                        sqlite3_bind_blob(stmt, 1, updatedBlob, updatedBlob.Length, IntPtr.Zero);
+                        int res = sqlite3_step(stmt);
+                        sqlite3_finalize(stmt);
+                        return res == 101; // SQLITE_DONE
+                    }
+                    return false;
+                }
+                finally
+                {
+                    sqlite3_close(db);
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void RemapAstNodePaths(ProtoNode node, string srcHome, string curHome, 
+                                             Dictionary<string, string> uriOverrides, string projName)
+        {
+            if (node == null) return;
+            if (node.WireType == 2 && (node.Children == null || node.Children.Count == 0))
+            {
+                if (node.RawBytes != null && node.RawBytes.Length > 0)
+                {
+                    string str = node.GetString();
+                    if (!string.IsNullOrEmpty(str) && (str.Contains("file:///") || str.Contains(":\\") || str.Contains(":/")))
+                    {
+                        if (uriOverrides != null && !string.IsNullOrEmpty(projName) && uriOverrides.ContainsKey(projName))
+                        {
+                            string newUri = uriOverrides[projName];
+                            int fileIdx = str.IndexOf("file:///");
+                            if (fileIdx >= 0)
+                            {
+                                int end = str.IndexOfAny(new char[] { ' ', '\t', '\r', '\n', '\0', '\"', '\'' }, fileIdx);
+                                string oldUriPart = end > fileIdx ? str.Substring(fileIdx, end - fileIdx) : str.Substring(fileIdx);
+                                str = str.Replace(oldUriPart, newUri);
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(srcHome) && !string.IsNullOrEmpty(curHome))
+                        {
+                            str = DirectStreamArchiver.RemapAllPathFormats(str, srcHome, curHome);
+                        }
+
+                        node.RawBytes = Encoding.UTF8.GetBytes(str);
+                        node.IsModified = true;
+                    }
+                }
+            }
+
+            if (node.Children != null)
+            {
+                for (int i = 0; i < node.Children.Count; i++)
+                {
+                    RemapAstNodePaths(node.Children[i], srcHome, curHome, uriOverrides, projName);
                 }
             }
         }
