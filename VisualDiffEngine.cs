@@ -14,18 +14,12 @@ namespace AntigravityCompanion
     {
         NewInBackup,    // [新增工程 / 含新增会话]
         Aligned,        // [已对齐]
-        Conflicted,     // [路径冲突]
         LocalOnly,      // [本地独有]
         Modified        // [已修改 / 内容有更新 / 已改名]
     }
 
     public enum ItemCategory
     {
-        GlobalConfigRoot,
-        GlobalRules,
-        GlobalSkills,
-        GlobalMcp,
-        ProjectsRoot,
         Project,
         Conversation
     }
@@ -84,8 +78,6 @@ namespace AntigravityCompanion
                     return string.Format("[含 {0} 条已修改/更新]", ModifiedSessionCount);
                 case DiffStatus.Aligned:
                     return "[已对齐]";
-                case DiffStatus.Conflicted:
-                    return "[路径冲突]";
                 case DiffStatus.LocalOnly:
                     return "[本地独有]";
                 default:
@@ -205,30 +197,16 @@ namespace AntigravityCompanion
                 }
                 else
                 {
-                    // 两端均存在：首先检查工作区路径是否冲突
-                    string normLocal = DirectStreamArchiver.NormalizeUri(node.LocalFolderUri);
-                    string normBackup = DirectStreamArchiver.NormalizeUri(node.BackupFolderUri);
-
-                    bool pathMatches = string.IsNullOrEmpty(normLocal) || string.IsNullOrEmpty(normBackup) || 
-                                       string.Equals(normLocal, normBackup, StringComparison.OrdinalIgnoreCase);
-
-                    if (!pathMatches)
+                    if (newConvs > 0)
                     {
-                        node.Status = DiffStatus.Conflicted;
-                    }
-                    else if (newConvs > 0)
-                    {
-                        // 路径一致且包含新会话
                         node.Status = DiffStatus.NewInBackup;
                     }
                     else if (modifiedConvs > 0)
                     {
-                        // 路径一致且无全新会话，但存在改名或对话内容更新的会话
                         node.Status = DiffStatus.Modified;
                     }
                     else
                     {
-                        // 路径一致且所有会话两端均已对齐
                         node.Status = DiffStatus.Aligned;
                     }
                 }
@@ -238,161 +216,6 @@ namespace AntigravityCompanion
 
             results.Sort((a, b) => string.Compare(a.ProjectName, b.ProjectName, StringComparison.OrdinalIgnoreCase));
             return results;
-        }
-    }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // CONFLICT RESOLUTION WIZARD (Milestone 2 — F7)
-    // ══════════════════════════════════════════════════════════════════════
-
-    public enum ConflictChoice
-    {
-        Merge,
-        Rename,
-        Overwrite,
-        Skip
-    }
-
-    public class ConflictResolutionResult
-    {
-        public ConflictChoice Choice;
-        public string NewProjectName;
-        public bool ApplyToAll;
-    }
-
-    public class ConflictResolutionDialog : Form
-    {
-        public ConflictResolutionResult Result { get; private set; }
-
-        private RadioButton rbMerge;
-        private RadioButton rbRename;
-        private RadioButton rbOverwrite;
-        private RadioButton rbSkip;
-        private TextBox txtNewName;
-        private CheckBox chkApplyAll;
-        private Button btnOk;
-        private Button btnCancel;
-
-        public ConflictResolutionDialog(string projectName, string localUri, string backupUri)
-        {
-            Result = new ConflictResolutionResult { Choice = ConflictChoice.Merge, NewProjectName = projectName + "_Imported", ApplyToAll = false };
-            InitializeComponent(projectName, localUri, backupUri);
-        }
-
-        private void InitializeComponent(string projectName, string localUri, string backupUri)
-        {
-            this.Text = "工程路径冲突解决向导 - " + projectName;
-            this.Size = new Size(580, 420);
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
-            this.StartPosition = FormStartPosition.CenterParent;
-            this.Font = new Font("Segoe UI", 9f);
-            this.BackColor = Color.White;
-
-            Label lblInfo = new Label
-            {
-                Text = string.Format("检测到工程 [{0}] 在本地已存在，但工作区路径不同：\n\n• 本地路径: {1}\n• 备份路径: {2}\n\n请选择数据合流处理策略：",
-                    projectName, string.IsNullOrEmpty(localUri) ? "(未绑定路径)" : localUri, string.IsNullOrEmpty(backupUri) ? "(未绑定路径)" : backupUri),
-                Location = new Point(20, 16),
-                Size = new Size(520, 95),
-                ForeColor = Color.FromArgb(30, 41, 59)
-            };
-
-            rbMerge = new RadioButton
-            {
-                Text = "合并 (Merge): 保持本地工作区路径不变，将备份会话增量合流到本地工程中 (推荐)",
-                Location = new Point(24, 118),
-                Size = new Size(520, 24),
-                Checked = true,
-                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(22, 101, 52)
-            };
-
-            rbRename = new RadioButton
-            {
-                Text = "重命名 (Rename): 作为独立新工程导入本地，指定新工程名称：",
-                Location = new Point(24, 150),
-                Size = new Size(520, 24),
-                ForeColor = Color.FromArgb(30, 41, 59)
-            };
-
-            txtNewName = new TextBox
-            {
-                Text = projectName + "_Imported",
-                Location = new Point(48, 178),
-                Width = 260,
-                Enabled = false
-            };
-
-            rbRename.CheckedChanged += (s, e) => { txtNewName.Enabled = rbRename.Checked; };
-
-            rbOverwrite = new RadioButton
-            {
-                Text = "覆盖 (Overwrite): 强制使用备份中的工程路径与会话覆盖本地工程",
-                Location = new Point(24, 212),
-                Size = new Size(520, 24),
-                ForeColor = Color.FromArgb(194, 65, 12)
-            };
-
-            rbSkip = new RadioButton
-            {
-                Text = "跳过 (Skip): 忽略此工程下的所有备份会话，不进行任何合流",
-                Location = new Point(24, 242),
-                Size = new Size(520, 24),
-                ForeColor = Color.FromArgb(100, 116, 139)
-            };
-
-            chkApplyAll = new CheckBox
-            {
-                Text = "对此备份包中后续所有发生冲突的工程应用相同策略",
-                Location = new Point(24, 285),
-                Size = new Size(500, 24),
-                ForeColor = Color.FromArgb(71, 85, 105)
-            };
-
-            btnOk = new Button
-            {
-                Text = "确定",
-                DialogResult = DialogResult.OK,
-                Location = new Point(360, 330),
-                Width = 85,
-                Height = 28,
-                BackColor = Color.FromArgb(37, 99, 235),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat
-            };
-            btnOk.Click += (s, e) =>
-            {
-                if (rbMerge.Checked) Result.Choice = ConflictChoice.Merge;
-                else if (rbRename.Checked)
-                {
-                    Result.Choice = ConflictChoice.Rename;
-                    Result.NewProjectName = txtNewName.Text.Trim();
-                }
-                else if (rbOverwrite.Checked) Result.Choice = ConflictChoice.Overwrite;
-                else if (rbSkip.Checked) Result.Choice = ConflictChoice.Skip;
-
-                Result.ApplyToAll = chkApplyAll.Checked;
-            };
-
-            btnCancel = new Button
-            {
-                Text = "取消",
-                DialogResult = DialogResult.Cancel,
-                Location = new Point(455, 330),
-                Width = 85,
-                Height = 28,
-                BackColor = Color.FromArgb(241, 245, 249),
-                ForeColor = Color.FromArgb(30, 41, 59),
-                FlatStyle = FlatStyle.Flat
-            };
-
-            this.Controls.AddRange(new Control[] {
-                lblInfo, rbMerge, rbRename, txtNewName, rbOverwrite, rbSkip, chkApplyAll, btnOk, btnCancel
-            });
-            this.AcceptButton = btnOk;
-            this.CancelButton = btnCancel;
         }
     }
 

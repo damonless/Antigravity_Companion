@@ -36,4 +36,5 @@ sandbox/
 .vscode/
 .idea/
 /.codegraph/
+/.evo/
 .agents/

@@ -80,28 +80,6 @@ namespace AntigravityCompanion
     }
 
     /// <summary>
-    /// 流式 Zip 内存解析包
-    /// </summary>
-    public class ZipMetadataPackage
-    {
-        public byte[] SummaryProtoBytes;
-        public Dictionary<string, string> ProjectConfigs;
-        public string MetadataJson;
-        public List<string> ConversationDbNames;
-        public List<string> BrainDirectoryNames;
-        public bool HasGlobalRules;
-        public bool HasGlobalSkills;
-        public bool HasGlobalMcp;
-
-        public ZipMetadataPackage()
-        {
-            ProjectConfigs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            ConversationDbNames = new List<string>();
-            BrainDirectoryNames = new List<string>();
-        }
-    }
-
-    /// <summary>
     /// 智能垃圾工程与 Subagent 会话过滤器 (Milestone 2 — F5)
     /// </summary>
     public static class SmartProjectFilter
@@ -145,6 +123,17 @@ namespace AntigravityCompanion
     /// </summary>
     public static class SessionMetadataExtractor
     {
+        public static bool IsLikelyConversationId(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return false;
+            s = s.Trim();
+            if (s.Length > 64) return false;
+            Guid g;
+            if (Guid.TryParse(s, out g)) return true;
+            if (s.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return false;
+            if (s.IndexOfAny(Path.GetInvalidPathChars()) >= 0) return false;
+            return true;
+        }
         public static List<ConversationSummaryInfo> ExtractSummaries(byte[] pbData, Dictionary<string, ProjectMetadata> projectsMap)
         {
             List<ConversationSummaryInfo> list = new List<ConversationSummaryInfo>();
@@ -200,12 +189,32 @@ namespace AntigravityCompanion
             }
 
             ProtoNode metaSubmessage = entryNode.GetChild(2);
+            if (metaSubmessage != null && !metaSubmessage.HasChildren && metaSubmessage.RawBytes != null && metaSubmessage.RawBytes.Length > 0)
+            {
+                try
+                {
+                    List<ProtoNode> sub = ProtoCodec.Decode(metaSubmessage.RawBytes);
+                    if (sub != null && sub.Count > 0)
+                    {
+                        metaSubmessage.Children = sub;
+                    }
+                }
+                catch {}
+            }
+
             bool isRealProtoLayout = metaSubmessage != null && metaSubmessage.HasChildren;
 
             if (isRealProtoLayout)
             {
                 ProtoNode f1 = entryNode.GetChild(1);
-                if (f1 != null) info.ConversationId = f1.GetString();
+                if (f1 != null)
+                {
+                    string idCandidate = f1.GetString();
+                    if (IsLikelyConversationId(idCandidate))
+                    {
+                        info.ConversationId = idCandidate;
+                    }
+                }
 
                 for (int i = 0; i < metaSubmessage.Children.Count; i++)
                 {
@@ -257,86 +266,7 @@ namespace AntigravityCompanion
             }
             else
             {
-                // Flat / Mock layout
-                for (int i = 0; i < entryNode.Children.Count; i++)
-                {
-                    ProtoNode child = entryNode.Children[i];
-                    if (child.FieldNumber == 1)
-                    {
-                        string s = child.GetString();
-                        if (entryNode.GetChild(2) != null)
-                        {
-                            info.AutoSummaryTitle = s;
-                        }
-                        else
-                        {
-                            if (string.IsNullOrEmpty(info.ConversationId)) info.ConversationId = s;
-                            else info.AutoSummaryTitle = s;
-                        }
-                    }
-                    else if (child.FieldNumber == 2)
-                    {
-                        if (child.HasChildren)
-                        {
-                            for (int c = 0; c < child.Children.Count; c++)
-                            {
-                                ProtoNode sc = child.Children[c];
-                                if (sc.FieldNumber == 15) ParseCustomTitleNode(sc, info);
-                                else if (sc.FieldNumber == 1) info.AutoSummaryTitle = sc.GetString();
-                                else if (sc.FieldNumber == 16) info.UserInteractions = sc.GetInt32();
-                                else if (sc.FieldNumber == 23) { info.Field23 = sc.GetInt32(); if (info.Field23 == 0) info.IsSubagent = true; }
-                            }
-                        }
-                        else
-                        {
-                            info.ConversationId = child.GetString();
-                        }
-                    }
-                    else if (child.FieldNumber == 3)
-                    {
-                        if (child.WireType == 0) info.CreatedTime = ConvertEpochToDateTime(child.VarintValue);
-                        else info.CreatedTime = ParseTimestampNode(child);
-                    }
-                    else if (child.FieldNumber == 4)
-                    {
-                        if (child.WireType == 0) info.UpdatedTime = ConvertEpochToDateTime(child.VarintValue);
-                        else info.UpdatedTime = ParseTimestampNode(child);
-                    }
-                    else if (child.FieldNumber == 5)
-                    {
-                        if (child.WireType == 0) info.StepCount = (int)child.VarintValue;
-                    }
-                    else if (child.FieldNumber == 7)
-                    {
-                        info.CreatedTime = ParseTimestampNode(child);
-                    }
-                    else if (child.FieldNumber == 9)
-                    {
-                        ParseWorkspaceNode(child, info);
-                    }
-                    else if (child.FieldNumber == 10)
-                    {
-                        DateTime t = ParseTimestampNode(child);
-                        if (t > info.UpdatedTime) info.UpdatedTime = t;
-                    }
-                    else if (child.FieldNumber == 15)
-                    {
-                        ParseCustomTitleNode(child, info);
-                    }
-                    else if (child.FieldNumber == 16)
-                    {
-                        info.UserInteractions = child.GetInt32();
-                    }
-                    else if (child.FieldNumber == 17)
-                    {
-                        ParseCascadeNode(child, info);
-                    }
-                    else if (child.FieldNumber == 23)
-                    {
-                        info.Field23 = child.GetInt32();
-                        if (info.Field23 == 0) info.IsSubagent = true;
-                    }
-                }
+                return null;
             }
 
             // 智能识别 Subagent / 临时子会话
@@ -372,7 +302,7 @@ namespace AntigravityCompanion
                 info.DisplayTitle = "未命名会话 (" + (id.Length >= 8 ? id.Substring(0, 8) : id) + ")";
             }
 
-            if (string.IsNullOrEmpty(info.ConversationId))
+            if (!IsLikelyConversationId(info.ConversationId))
             {
                 info.ConversationId = Guid.NewGuid().ToString();
             }

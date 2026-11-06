@@ -88,6 +88,7 @@ namespace AntigravityCompanion
     {
         // ── 核心数据状态 ──
         private string HomePath;
+        private string _geminiPath = string.Empty;
         private List<ConversationSummaryInfo> _localSummaries = new List<ConversationSummaryInfo>();
         private Dictionary<string, ProjectMetadata> _localProjects = new Dictionary<string, ProjectMetadata>(StringComparer.OrdinalIgnoreCase);
         private BackupArchiveIndex _backupIndex;
@@ -98,19 +99,21 @@ namespace AntigravityCompanion
         // ── 持久选择状态集（防止搜索/过滤刷新时勾选丢失） ──
         private readonly HashSet<string> _checkedSessionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _checkedProjectNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private bool _checkedRules = false;
-        private bool _checkedSkills = false;
-        private bool _checkedMcp = false;
+        private readonly HashSet<string> _checkedLocalSessionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _checkedLocalProjectNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // ── UI 控件成员 ──
         private DoubleBufferedTreeView tvLocal;
         private DoubleBufferedTreeView tvBackup;
+        private ContextMenuStrip ctxLocal;
+        private ContextMenuStrip ctxBackup;
         private Label lblLocalHeader;
         private Label lblBackupHeader;
         private Label lblStatsSummary;
         private Label lblConvCount;
         private TextBox txtSearch;
         private CheckBox chkHideTemp;
+        private CheckBox chkImportGlobal;
         private Button btnDetect;
         private Button btnOpenBackup;
         private Button btnFullBackup;
@@ -118,27 +121,14 @@ namespace AntigravityCompanion
         private Button btnSelectAll;
         private Button btnDeselectAll;
         private Button btnSelectNewOnly;
-        private TextBox txtGeminiPath;
+        private Button btnLocalExportSelected;
+        private Button btnLocalDeleteSelected;
+        private Button btnLocalOrphanGc;
         private RichTextBox rtbLog;
         private SplitContainer splitMain;
-        private TabControl tabRightBottom;
 
-        // 配置浏览器子控件
-        private TabControl tabConfigs;
-        private SplitContainer splitConfig;
-        private ListBox lbRules;
-        private ListBox lbSkills;
-        private ListBox lbMcp;
-        private RichTextBox rtbConfigEditor;
-        private Button btnSaveConfig;
-        private Button btnOpenConfigFolder;
-        private Label lblEditingFile;
-        private BrowserItem _currentEditingItem;
-
-        private ContextMenuStrip contextMenuBackup;
         private bool _isUpdatingChecks = false;
         private BackgroundWorker _worker;
-
         private bool _splitterInitialized = false;
 
         public MainForm()
@@ -175,20 +165,6 @@ namespace AntigravityCompanion
                         if (target > 50 && target < splitMain.ClientSize.Width - 50)
                         {
                             splitMain.SplitterDistance = target;
-                        }
-                    }
-                }
-                catch {}
-
-                // 配置编辑器分栏自适应
-                try
-                {
-                    if (splitConfig != null && splitConfig.ClientSize.Width > 300)
-                    {
-                        int target = 360;
-                        if (target > 50 && target < splitConfig.ClientSize.Width - 50)
-                        {
-                            splitConfig.SplitterDistance = target;
                         }
                     }
                 }
@@ -258,7 +234,7 @@ namespace AntigravityCompanion
                 Text = "过滤临时工程与子代理会话",
                 Checked = true,
                 AutoSize = true,
-                Margin = new Padding(0, 9, 16, 4),
+                Margin = new Padding(0, 9, 12, 4),
                 Font = new Font("Segoe UI", 9f, FontStyle.Regular),
                 ForeColor = Color.FromArgb(51, 65, 85)
             };
@@ -267,6 +243,18 @@ namespace AntigravityCompanion
                 RenderLocalTree();
                 if (_backupIndex != null) RenderBackupTree();
             };
+
+            chkImportGlobal = new CheckBox
+            {
+                Text = "同步导入全局配置",
+                Checked = false,
+                Enabled = false,
+                AutoSize = true,
+                Margin = new Padding(0, 9, 16, 4),
+                Font = new Font("Segoe UI", 9f, FontStyle.Regular),
+                ForeColor = Color.FromArgb(51, 65, 85)
+            };
+            chkImportGlobal.CheckedChanged += (s, e) => UpdateSelectionStatistics();
 
             Label lblSearchIcon = new Label
             {
@@ -291,11 +279,9 @@ namespace AntigravityCompanion
             btnImportSelected.Enabled = false;
             btnImportSelected.Click += BtnPerformSelectiveImport_Click;
 
-            txtGeminiPath = new TextBox { Visible = false };
-
             flowTopControls.Controls.AddRange(new Control[] {
-                btnDetect, btnOpenBackup, btnFullBackup, chkHideTemp, 
-                lblSearchIcon, txtSearch, btnImportSelected, txtGeminiPath
+                btnDetect, btnOpenBackup, btnFullBackup, chkHideTemp, chkImportGlobal,
+                lblSearchIcon, txtSearch, btnImportSelected
             });
 
             // 状态指示条
@@ -339,31 +325,68 @@ namespace AntigravityCompanion
                 ForeColor = Color.FromArgb(15, 23, 42),
                 Padding = new Padding(8, 0, 0, 0)
             };
+
+            FlowLayoutPanel pnlLocalActions = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Right,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Padding = new Padding(0, 4, 6, 0)
+            };
+
+            btnLocalExportSelected = MakeSmallBtn("导出所选(.agy)");
+            btnLocalExportSelected.Click += (s, e) => ActionExportSelectedLocalToAgy();
+
+            btnLocalDeleteSelected = MakeSmallBtn("删除所选");
+            btnLocalDeleteSelected.ForeColor = Color.FromArgb(185, 28, 28);
+            btnLocalDeleteSelected.Click += (s, e) => ActionDeleteSelectedLocal();
+
+            btnLocalOrphanGc = MakeSmallBtn("清理孤儿垃圾");
+            btnLocalOrphanGc.Click += (s, e) => ActionRunOrphanGarbageCollector();
+
+            pnlLocalActions.Controls.AddRange(new Control[] { btnLocalExportSelected, btnLocalDeleteSelected, btnLocalOrphanGc });
+
             lblConvCount = new Label
             {
                 Text = "活跃主会话: 0",
                 Dock = DockStyle.Right,
                 AutoSize = false,
-                Width = 160,
+                Width = 115,
                 TextAlign = ContentAlignment.MiddleRight,
                 Font = new Font("Segoe UI", 8.5f),
                 ForeColor = Color.FromArgb(100, 116, 139),
-                Padding = new Padding(0, 0, 8, 0)
+                Padding = new Padding(0, 0, 6, 0)
             };
             pnlLeftHeader.Controls.Add(lblLocalHeader);
             pnlLeftHeader.Controls.Add(lblConvCount);
+            pnlLeftHeader.Controls.Add(pnlLocalActions);
+
+            BuildContextMenus();
 
             tvLocal = new DoubleBufferedTreeView
             {
                 Dock = DockStyle.Fill,
                 BorderStyle = BorderStyle.None,
                 Font = new Font("Segoe UI", 9f),
+                CheckBoxes = true,
                 ShowLines = true,
                 ShowPlusMinus = true,
                 ShowRootLines = true,
                 FullRowSelect = true,
-                HideSelection = false
+                HideSelection = false,
+                ContextMenuStrip = ctxLocal
             };
+            tvLocal.AfterCheck += TvLocal_AfterCheck;
+            tvLocal.NodeMouseClick += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Right && e.Node != null)
+                {
+                    tvLocal.SelectedNode = e.Node;
+                }
+            };
+            tvLocal.KeyDown += TvLocal_KeyDown;
+
             pnlLeft.Controls.Add(tvLocal);
             pnlLeft.Controls.Add(pnlLeftHeader);
             splitMain.Panel1.Controls.Add(pnlLeft);
@@ -419,143 +442,50 @@ namespace AntigravityCompanion
                 ShowPlusMinus = true,
                 ShowRootLines = true,
                 FullRowSelect = true,
-                HideSelection = false
+                HideSelection = false,
+                ContextMenuStrip = ctxBackup
             };
             tvBackup.AfterCheck += TvBackup_AfterCheck;
-
-            // 右键菜单
-            contextMenuBackup = new ContextMenuStrip();
-            contextMenuBackup.Items.Add("勾选当前工程下所有会话", null, (s, e) => CheckSelectedNodeCascading(true));
-            contextMenuBackup.Items.Add("取消勾选当前工程", null, (s, e) => CheckSelectedNodeCascading(false));
-            contextMenuBackup.Items.Add(new ToolStripSeparator());
-            contextMenuBackup.Items.Add("复制会话 UUID", null, (s, e) => CopySelectedId());
-            tvBackup.ContextMenuStrip = contextMenuBackup;
+            tvBackup.NodeMouseClick += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Right && e.Node != null)
+                {
+                    tvBackup.SelectedNode = e.Node;
+                }
+            };
 
             pnlRight.Controls.Add(tvBackup);
             pnlRight.Controls.Add(pnlRightHeader);
             splitMain.Panel2.Controls.Add(pnlRight);
 
-            // 3. 底部选项卡 (结构化配置浏览器 & 运行日志)
-            tabRightBottom = new TabControl
+            // 3. 底部紧凑运行日志区
+            Panel pnlBottomLog = new Panel
             {
                 Dock = DockStyle.Bottom,
-                Height = 240,
-                Font = new Font("Segoe UI", 9f)
+                Height = 120,
+                BackColor = Color.FromArgb(248, 250, 252),
+                Padding = new Padding(12, 6, 12, 6)
+            };
+            pnlBottomLog.Paint += (s, pe) =>
+            {
+                pe.Graphics.DrawLine(new Pen(Color.FromArgb(226, 232, 240)), 0, 0, pnlBottomLog.Width, 0);
             };
 
-            // Tab 1: 运行日志
-            TabPage tabLog = new TabPage("运行日志 (Log)");
             rtbLog = new RichTextBox
             {
                 Dock = DockStyle.Fill,
                 ReadOnly = true,
                 BackColor = Color.FromArgb(248, 250, 252),
                 ForeColor = Color.FromArgb(30, 41, 59),
-                Font = new Font("Consolas", 9.5f),
+                Font = new Font("Consolas", 9f),
                 BorderStyle = BorderStyle.None
             };
-            tabLog.Controls.Add(rtbLog);
-
-            // Tab 2: 结构化配置浏览器与热编辑器 (纯净初始化)
-            TabPage tabConfig = new TabPage("规则、技能与 MCP 配置 (Config Browser)");
-            splitConfig = new SplitContainer
-            {
-                Dock = DockStyle.Fill,
-                Orientation = Orientation.Vertical,
-                BackColor = Color.FromArgb(226, 232, 240)
-            };
-
-            // 左侧分类子选项卡
-            tabConfigs = new TabControl { Dock = DockStyle.Fill, Font = new Font("Segoe UI", 8.5f) };
-            
-            TabPage tabRules = new TabPage("规则规范 (Rules)");
-            lbRules = CreateConfigListBox();
-            lbRules.SelectedIndexChanged += (s, e) => LoadSelectedItem(lbRules);
-            tabRules.Controls.Add(lbRules);
-
-            TabPage tabSkills = new TabPage("技能插件 (Skills)");
-            lbSkills = CreateConfigListBox();
-            lbSkills.SelectedIndexChanged += (s, e) => LoadSelectedItem(lbSkills);
-            tabSkills.Controls.Add(lbSkills);
-
-            TabPage tabMcp = new TabPage("MCP 配置 (MCP)");
-            lbMcp = CreateConfigListBox();
-            lbMcp.SelectedIndexChanged += (s, e) => LoadSelectedItem(lbMcp);
-            tabMcp.Controls.Add(lbMcp);
-
-            tabConfigs.TabPages.AddRange(new TabPage[] { tabRules, tabSkills, tabMcp });
-            splitConfig.Panel1.Controls.Add(tabConfigs);
-
-            // 右侧编辑器
-            Panel pnlEditor = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
-            Panel pnlEditorTop = new Panel { Dock = DockStyle.Top, Height = 34, BackColor = Color.FromArgb(241, 245, 249), Padding = new Padding(4) };
-            
-            lblEditingFile = new Label { 
-                Text = "请从左侧选择配置文件查看或编辑 (支持 Ctrl+S 热保存)", 
-                Dock = DockStyle.Fill, 
-                TextAlign = ContentAlignment.MiddleLeft, 
-                Padding = new Padding(6, 0, 0, 0),
-                ForeColor = Color.FromArgb(51, 65, 85)
-            };
-
-            FlowLayoutPanel pnlEditorBtns = new FlowLayoutPanel {
-                Dock = DockStyle.Right,
-                AutoSize = true,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false
-            };
-
-            btnOpenConfigFolder = MakeSmallBtn("打开目录");
-            btnOpenConfigFolder.Click += BtnOpenConfigFolder_Click;
-
-            btnSaveConfig = MakeSmallBtn("保存修改 (Ctrl+S)");
-            btnSaveConfig.Click += BtnSaveConfig_Click;
-
-            pnlEditorBtns.Controls.AddRange(new Control[] { btnOpenConfigFolder, btnSaveConfig });
-            pnlEditorTop.Controls.Add(lblEditingFile);
-            pnlEditorTop.Controls.Add(pnlEditorBtns);
-
-            rtbConfigEditor = new RichTextBox
-            {
-                Dock = DockStyle.Fill,
-                Font = new Font("Consolas", 10f),
-                BorderStyle = BorderStyle.None,
-                AcceptsTab = true,
-                BackColor = Color.White
-            };
-            rtbConfigEditor.KeyDown += (s, e) =>
-            {
-                if (e.Control && e.KeyCode == Keys.S)
-                {
-                    BtnSaveConfig_Click(s, EventArgs.Empty);
-                    e.SuppressKeyPress = true;
-                }
-            };
-
-            pnlEditor.Controls.Add(rtbConfigEditor);
-            pnlEditor.Controls.Add(pnlEditorTop);
-            splitConfig.Panel2.Controls.Add(pnlEditor);
-
-            tabConfig.Controls.Add(splitConfig);
-
-            tabRightBottom.TabPages.Add(tabLog);
-            tabRightBottom.TabPages.Add(tabConfig);
+            pnlBottomLog.Controls.Add(rtbLog);
 
             // 组装到主窗体
             this.Controls.Add(splitMain);
-            this.Controls.Add(tabRightBottom);
+            this.Controls.Add(pnlBottomLog);
             this.Controls.Add(pnlTop);
-        }
-
-        private static ListBox CreateConfigListBox()
-        {
-            return new ListBox
-            {
-                Dock = DockStyle.Fill,
-                BorderStyle = BorderStyle.None,
-                Font = new Font("Segoe UI", 9f),
-                BackColor = Color.FromArgb(248, 250, 252)
-            };
         }
 
         // ══════════════════════════════════════════════════════════
@@ -565,16 +495,15 @@ namespace AntigravityCompanion
         {
             try
             {
-                string gemini = Path.Combine(HomePath, ".gemini");
-                txtGeminiPath.Text = gemini;
+                _geminiPath = Path.Combine(HomePath, ".gemini");
 
                 _localProjects.Clear();
                 _localSummaries.Clear();
 
-                Log("正在探测本地 Antigravity 工作区环境: " + gemini, Color.FromArgb(71, 85, 105));
+                Log("正在探测本地 Antigravity 工作区环境: " + _geminiPath, Color.FromArgb(71, 85, 105));
 
                 // 1. 读取本地工程项目列表
-                string projDir = Path.Combine(gemini, "config", "projects");
+                string projDir = Path.Combine(_geminiPath, "config", "projects");
                 if (Directory.Exists(projDir))
                 {
                     string[] files = Directory.GetFiles(projDir, "*.json");
@@ -596,7 +525,7 @@ namespace AntigravityCompanion
                 }
 
                 // 2. 读取本地 agyhub_summaries_proto.pb
-                string pbPath = Path.Combine(gemini, "antigravity", "agyhub_summaries_proto.pb");
+                string pbPath = Path.Combine(_geminiPath, "antigravity", "agyhub_summaries_proto.pb");
                 if (File.Exists(pbPath))
                 {
                     try
@@ -611,7 +540,6 @@ namespace AntigravityCompanion
                 }
 
                 RenderLocalTree();
-                RefreshConfigBrowser();
                 UpdateSelectionStatistics();
             }
             catch (Exception ex)
@@ -623,55 +551,15 @@ namespace AntigravityCompanion
         private void RenderLocalTree()
         {
             tvLocal.BeginUpdate();
+            _isUpdatingChecks = true;
             int visibleProjects = 0;
             int visibleConvsCount = 0;
 
             try
             {
                 tvLocal.Nodes.Clear();
-                string gemini = txtGeminiPath.Text.Trim();
                 bool hideTemp = chkHideTemp.Checked;
                 string query = txtSearch.Text.Trim();
-
-                // ── 1. 全局配置 Root ──
-                TreeNode rootConfig = new TreeNode("全局配置 (Global Config)");
-                rootConfig.Tag = new DiffItemNodeTag { Category = ItemCategory.GlobalConfigRoot, DisplayName = "全局配置" };
-
-                int rulesCount = 0;
-                if (File.Exists(Path.Combine(gemini, ".geminirules"))) rulesCount++;
-                if (File.Exists(Path.Combine(gemini, "GEMINI.md"))) rulesCount++;
-                string rulesDir = Path.Combine(gemini, "config", "rules");
-                if (Directory.Exists(rulesDir)) rulesCount += Directory.GetFiles(rulesDir, "*.md", SearchOption.AllDirectories).Length;
-
-                TreeNode nodeRules = new TreeNode(string.Format("规则与规范 ({0} 项)", rulesCount));
-                nodeRules.Tag = new DiffItemNodeTag { Category = ItemCategory.GlobalRules, DisplayName = "规则与规范", SourcePath = gemini };
-                rootConfig.Nodes.Add(nodeRules);
-
-                int skillsCount = 0;
-                string bSkills = Path.Combine(gemini, "antigravity", "builtin", "skills");
-                if (Directory.Exists(bSkills)) skillsCount += Directory.GetDirectories(bSkills).Length;
-                string uSkills = Path.Combine(gemini, "config", "skills");
-                if (Directory.Exists(uSkills)) skillsCount += Directory.GetDirectories(uSkills).Length;
-
-                TreeNode nodeSkills = new TreeNode(string.Format("内置与用户技能 ({0} 项)", skillsCount));
-                nodeSkills.Tag = new DiffItemNodeTag { Category = ItemCategory.GlobalSkills, DisplayName = "内置与用户技能", SourcePath = uSkills };
-                rootConfig.Nodes.Add(nodeSkills);
-
-                int mcpCount = 0;
-                string mcpCfg = Path.Combine(gemini, "config", "mcp_config.json");
-                if (File.Exists(mcpCfg)) mcpCount++;
-                string mcpDir = Path.Combine(gemini, "antigravity", "mcp");
-                if (Directory.Exists(mcpDir)) mcpCount += Directory.GetDirectories(mcpDir).Length;
-
-                TreeNode nodeMcp = new TreeNode(string.Format("MCP 服务器与配置 ({0} 项)", mcpCount));
-                nodeMcp.Tag = new DiffItemNodeTag { Category = ItemCategory.GlobalMcp, DisplayName = "MCP 服务器与配置", SourcePath = mcpDir };
-                rootConfig.Nodes.Add(nodeMcp);
-
-                tvLocal.Nodes.Add(rootConfig);
-
-                // ── 2. 研发工程与会话 Root ──
-                TreeNode rootProj = new TreeNode("研发工程与会话 (Projects & Conversations)");
-                rootProj.Tag = new DiffItemNodeTag { Category = ItemCategory.ProjectsRoot, DisplayName = "研发工程与会话" };
 
                 Dictionary<string, List<ConversationSummaryInfo>> groups = new Dictionary<string, List<ConversationSummaryInfo>>(StringComparer.OrdinalIgnoreCase);
                 for (int i = 0; i < _localSummaries.Count; i++)
@@ -726,6 +614,7 @@ namespace AntigravityCompanion
                         pNode.NodeFont = new Font(tvLocal.Font, FontStyle.Bold);
                     }
 
+                    bool anyChildChecked = false;
                     for (int j = 0; j < visibleList.Count; j++)
                     {
                         ConversationSummaryInfo s = visibleList[j];
@@ -744,6 +633,10 @@ namespace AntigravityCompanion
                             IsTemporaryOrJunk = s.IsSubagent
                         };
 
+                        bool isChecked = _checkedLocalSessionIds.Contains(s.ConversationId);
+                        sNode.Checked = isChecked;
+                        if (isChecked) anyChildChecked = true;
+
                         if (s.IsSubagent)
                         {
                             sNode.ForeColor = Color.FromArgb(148, 163, 184);
@@ -757,15 +650,13 @@ namespace AntigravityCompanion
                         pNode.Nodes.Add(sNode);
                     }
 
-                    rootProj.Nodes.Add(pNode);
+                    pNode.Checked = (visibleList.Count > 0) ? anyChildChecked : _checkedLocalProjectNames.Contains(pName);
+                    tvLocal.Nodes.Add(pNode);
                 }
-
-                tvLocal.Nodes.Add(rootProj);
-                rootConfig.Expand();
-                rootProj.Expand();
             }
             finally
             {
+                _isUpdatingChecks = false;
                 tvLocal.EndUpdate();
             }
 
@@ -841,6 +732,10 @@ namespace AntigravityCompanion
                     }
                 }
 
+                bool hasGlobalInBackup = _backupIndex.HasRules || _backupIndex.HasSkills || _backupIndex.HasMcp;
+                chkImportGlobal.Enabled = hasGlobalInBackup;
+                if (!hasGlobalInBackup) chkImportGlobal.Checked = false;
+
                 RenderBackupTree();
 
                 lblBackupHeader.Text = "备份归档包: " + Path.GetFileName(archivePath);
@@ -871,31 +766,6 @@ namespace AntigravityCompanion
                 tvBackup.Nodes.Clear();
                 bool hideTemp = chkHideTemp.Checked;
                 string query = txtSearch.Text.Trim();
-
-                // ── 1. 全局配置 Root ──
-                TreeNode rootConfig = new TreeNode("备份全局配置 (Global Config)");
-                rootConfig.Tag = new DiffItemNodeTag { Category = ItemCategory.GlobalConfigRoot, DisplayName = "备份全局配置" };
-
-                TreeNode nodeRules = new TreeNode("规则与规范 (.geminirules, GEMINI.md)");
-                nodeRules.Tag = new DiffItemNodeTag { Category = ItemCategory.GlobalRules, DisplayName = "规则与规范", Status = DiffStatus.Aligned };
-                nodeRules.Checked = _checkedRules;
-                rootConfig.Nodes.Add(nodeRules);
-
-                TreeNode nodeSkills = new TreeNode("内置与用户技能 (Skills)");
-                nodeSkills.Tag = new DiffItemNodeTag { Category = ItemCategory.GlobalSkills, DisplayName = "内置与用户技能", Status = DiffStatus.Aligned };
-                nodeSkills.Checked = _checkedSkills;
-                rootConfig.Nodes.Add(nodeSkills);
-
-                TreeNode nodeMcp = new TreeNode("MCP 服务器与配置 (mcp_config.json)");
-                nodeMcp.Tag = new DiffItemNodeTag { Category = ItemCategory.GlobalMcp, DisplayName = "MCP 服务器与配置", Status = DiffStatus.Aligned };
-                nodeMcp.Checked = _checkedMcp;
-                rootConfig.Nodes.Add(nodeMcp);
-
-                tvBackup.Nodes.Add(rootConfig);
-
-                // ── 2. 研发工程与会话 Root ──
-                TreeNode rootProj = new TreeNode("备份研发工程与会话 (Projects & Conversations)");
-                rootProj.Tag = new DiffItemNodeTag { Category = ItemCategory.ProjectsRoot, DisplayName = "备份研发工程与会话" };
 
                 Dictionary<string, ConversationSummaryInfo> localConvMap = new Dictionary<string, ConversationSummaryInfo>(StringComparer.OrdinalIgnoreCase);
                 for (int i = 0; i < _localSummaries.Count; i++)
@@ -1031,12 +901,8 @@ namespace AntigravityCompanion
                     }
 
                     pNode.Checked = (visibleConvs.Count > 0) ? anyChildChecked : _checkedProjectNames.Contains(pDiff.ProjectName);
-                    rootProj.Nodes.Add(pNode);
+                    tvBackup.Nodes.Add(pNode);
                 }
-
-                tvBackup.Nodes.Add(rootProj);
-                rootConfig.Expand();
-                rootProj.Expand();
             }
             finally
             {
@@ -1067,10 +933,6 @@ namespace AntigravityCompanion
                 case DiffStatus.Aligned:
                     node.ForeColor = Color.FromArgb(71, 85, 105);  // 中性石板灰
                     node.NodeFont = new Font(tvBackup.Font, FontStyle.Regular);
-                    break;
-                case DiffStatus.Conflicted:
-                    node.ForeColor = Color.FromArgb(194, 65, 12);  // 柔和暗橙
-                    node.NodeFont = new Font(tvBackup.Font, FontStyle.Bold);
                     break;
                 case DiffStatus.LocalOnly:
                     node.ForeColor = Color.FromArgb(37, 99, 235);  // 经典蓝
@@ -1151,9 +1013,6 @@ namespace AntigravityCompanion
                         if (n.Checked) _checkedProjectNames.Add(tag.ProjectName);
                         else _checkedProjectNames.Remove(tag.ProjectName);
                     }
-                    else if (tag.Category == ItemCategory.GlobalRules) _checkedRules = n.Checked;
-                    else if (tag.Category == ItemCategory.GlobalSkills) _checkedSkills = n.Checked;
-                    else if (tag.Category == ItemCategory.GlobalMcp) _checkedMcp = n.Checked;
                 }
                 if (n.Nodes.Count > 0)
                 {
@@ -1216,8 +1075,6 @@ namespace AntigravityCompanion
                     }
                     else if (tag.Category == ItemCategory.Project)
                     {
-                        // 仅当工程下无任何子会话节点时，才直接依据工程状态勾选自身；
-                        // 若工程下存在子会话，绝不无脑勾选所有子节点，而是交由子节点各自的独立状态去判定勾选！
                         if (node.Nodes.Count == 0 && (tag.Status == DiffStatus.NewInBackup || tag.Status == DiffStatus.Modified) && !tag.IsTemporaryOrJunk)
                         {
                             node.Checked = true;
@@ -1232,73 +1089,31 @@ namespace AntigravityCompanion
             }
         }
 
-        private void CheckSelectedNodeCascading(bool isChecked)
-        {
-            if (tvBackup.SelectedNode != null)
-            {
-                _isUpdatingChecks = true;
-                try
-                {
-                    tvBackup.SelectedNode.Checked = isChecked;
-                    SetChildNodesChecked(tvBackup.SelectedNode, isChecked);
-                    UpdateParentNodeChecked(tvBackup.SelectedNode);
-                    SyncCheckedStateToMemory();
-                }
-                finally
-                {
-                    _isUpdatingChecks = false;
-                }
-                UpdateSelectionStatistics();
-            }
-        }
-
-        private void CopySelectedId()
-        {
-            if (tvBackup.SelectedNode != null)
-            {
-                DiffItemNodeTag tag = tvBackup.SelectedNode.Tag as DiffItemNodeTag;
-                if (tag != null && !string.IsNullOrEmpty(tag.Id))
-                {
-                    Clipboard.SetText(tag.Id);
-                    Log("已复制 ID 到剪贴板: " + tag.Id, Color.FromArgb(71, 85, 105));
-                }
-            }
-        }
-
         private void UpdateSelectionStatistics()
         {
             int selProjects = 0;
             int selConvs = 0;
-            bool selRules = false;
-            bool selSkills = false;
-            bool selMcp = false;
 
-            CountCheckedItemsRecursive(tvBackup.Nodes, ref selProjects, ref selConvs, ref selRules, ref selSkills, ref selMcp);
+            CountCheckedItemsRecursive(tvBackup.Nodes, ref selProjects, ref selConvs);
 
             string backupState = (_backupIndex != null) ? Path.GetFileName(_loadedBackupPath) : "未加载";
             
-            // 计算本地树中当前可见的工程数和会话数
-            int visibleProjects = 0;
+            int visibleProjects = tvLocal.Nodes.Count;
             int visibleConvs = 0;
-            if (tvLocal.Nodes.Count > 1)
+            for (int i = 0; i < tvLocal.Nodes.Count; i++)
             {
-                TreeNode projRoot = tvLocal.Nodes[1];
-                visibleProjects = projRoot.Nodes.Count;
-                for (int i = 0; i < projRoot.Nodes.Count; i++)
-                {
-                    visibleConvs += projRoot.Nodes[i].Nodes.Count;
-                }
+                visibleConvs += tvLocal.Nodes[i].Nodes.Count;
             }
 
+            bool importGlobal = chkImportGlobal != null && chkImportGlobal.Enabled && chkImportGlobal.Checked;
             lblStatsSummary.Text = string.Format(
                 "本地: {0} 个工程 ({1} 条活跃主会话) | 备份包: {2} | 待合流选中: {3} 个工程 ({4} 条会话) {5}",
                 visibleProjects, visibleConvs, backupState, selProjects, selConvs,
-                (selRules || selSkills || selMcp) ? "[含全局配置]" : ""
+                importGlobal ? "[含全局配置]" : ""
             );
         }
 
-        private void CountCheckedItemsRecursive(TreeNodeCollection nodes, ref int projCount, ref int convCount, 
-                                                ref bool hasRules, ref bool hasSkills, ref bool hasMcp)
+        private void CountCheckedItemsRecursive(TreeNodeCollection nodes, ref int projCount, ref int convCount)
         {
             for (int i = 0; i < nodes.Count; i++)
             {
@@ -1308,13 +1123,10 @@ namespace AntigravityCompanion
                 {
                     if (tag.Category == ItemCategory.Project) projCount++;
                     else if (tag.Category == ItemCategory.Conversation) convCount++;
-                    else if (tag.Category == ItemCategory.GlobalRules) hasRules = true;
-                    else if (tag.Category == ItemCategory.GlobalSkills) hasSkills = true;
-                    else if (tag.Category == ItemCategory.GlobalMcp) hasMcp = true;
                 }
                 if (n.Nodes.Count > 0)
                 {
-                    CountCheckedItemsRecursive(n.Nodes, ref projCount, ref convCount, ref hasRules, ref hasSkills, ref hasMcp);
+                    CountCheckedItemsRecursive(n.Nodes, ref projCount, ref convCount);
                 }
             }
         }
@@ -1334,13 +1146,11 @@ namespace AntigravityCompanion
 
             List<ConversationSummaryInfo> selectedConvs = new List<ConversationSummaryInfo>();
             HashSet<string> selectedProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            bool importRules = false;
-            bool importSkills = false;
-            bool importMcp = false;
+            bool importGlobal = chkImportGlobal != null && chkImportGlobal.Enabled && chkImportGlobal.Checked;
 
-            CollectSelectedItems(tvBackup.Nodes, selectedConvs, selectedProjects, ref importRules, ref importSkills, ref importMcp);
+            CollectSelectedItems(tvBackup.Nodes, selectedConvs, selectedProjects);
 
-            if (selectedConvs.Count == 0 && !importRules && !importSkills && !importMcp)
+            if (selectedConvs.Count == 0 && !importGlobal)
             {
                 MessageBox.Show("未勾选任何需要导入的会话或配置项！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
@@ -1348,61 +1158,14 @@ namespace AntigravityCompanion
 
             if (!EnsureAntigravityClosed(true)) return;
 
-            // 冲突检测与解决向导
+            // 本地已有同名工程时，自动锁定本地工作区路径并执行无损增量合流 (Merge)
             Dictionary<string, string> projectUriOverrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            Dictionary<string, string> projectNewNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            HashSet<string> projectOverwriteNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            ConflictChoice? globalStrategy = null;
-
             foreach (string pName in selectedProjects)
             {
                 ProjectDiffNode pDiff = _currentDiffNodes.Find(x => string.Equals(x.ProjectName, pName, StringComparison.OrdinalIgnoreCase));
-                if (pDiff != null && pDiff.Status == DiffStatus.Conflicted)
+                if (pDiff != null && !string.IsNullOrEmpty(pDiff.LocalFolderUri))
                 {
-                    ConflictChoice choice;
-                    string targetName = pName;
-
-                    if (globalStrategy.HasValue)
-                    {
-                        choice = globalStrategy.Value;
-                        if (choice == ConflictChoice.Rename)
-                        {
-                            targetName = pName + "_Imported";
-                        }
-                    }
-                    else
-                    {
-                        using (ConflictResolutionDialog dlg = new ConflictResolutionDialog(pName, pDiff.LocalFolderUri, pDiff.BackupFolderUri))
-                        {
-                            if (dlg.ShowDialog(this) != DialogResult.OK)
-                            {
-                                Log("用户取消了冲突处理向导，导入操作中止", Color.FromArgb(217, 119, 6));
-                                return;
-                            }
-                            choice = dlg.Result.Choice;
-                            if (dlg.Result.ApplyToAll) globalStrategy = choice;
-                            if (choice == ConflictChoice.Rename && !string.IsNullOrEmpty(dlg.Result.NewProjectName))
-                            {
-                                targetName = dlg.Result.NewProjectName;
-                            }
-                        }
-                    }
-
-                    if (choice == ConflictChoice.Skip)
-                    {
-                        selectedConvs.RemoveAll(x => string.Equals(x.ProjectName, pName, StringComparison.OrdinalIgnoreCase));
-                        continue;
-                    }
-                    else if (choice == ConflictChoice.Rename)
-                    {
-                        projectUriOverrides[pName] = pDiff.BackupFolderUri;
-                        projectNewNames[pName] = targetName;
-                    }
-                    else if (choice == ConflictChoice.Overwrite)
-                    {
-                        projectUriOverrides[pName] = pDiff.BackupFolderUri;
-                        projectOverwriteNames.Add(pName);
-                    }
+                    projectUriOverrides[pName] = pDiff.LocalFolderUri;
                 }
             }
 
@@ -1412,7 +1175,7 @@ namespace AntigravityCompanion
             _worker = new BackgroundWorker();
             _worker.DoWork += (ws, we) =>
             {
-                string gemini = txtGeminiPath.Text.Trim();
+                string gemini = _geminiPath;
                 string srcHome = _backupIndex.SourceHome;
                 string curHome = HomePath;
                 int filesImported = 0;
@@ -1444,19 +1207,17 @@ namespace AntigravityCompanion
                             _highlightTracker.AddImportedProject(sc.ProjectName);
                         }
 
-                        // 确保每个导入工程在本地 .gemini/config/projects/ 都有合法的标准 Project JSON (包含 projectResources 与 settings)
+                        // 确保每个导入工程在本地 .gemini/config/projects/ 都有合法的标准 Project JSON
                         foreach (string pName in selectedProjects)
                         {
                             if (string.IsNullOrEmpty(pName) || (SmartProjectFilter.IsJunkOrEphemeral(pName) && pName != "Outside of Project"))
                                 continue;
 
-                            string targetProjName = projectNewNames.ContainsKey(pName) ? projectNewNames[pName] : pName;
-                            
                             // 查找本地是否已有同名工程
                             string existingProjId = null;
                             foreach (KeyValuePair<string, ProjectMetadata> kvp in _localProjects)
                             {
-                                if (string.Equals(kvp.Value.Name, targetProjName, StringComparison.OrdinalIgnoreCase))
+                                if (string.Equals(kvp.Value.Name, pName, StringComparison.OrdinalIgnoreCase))
                                 {
                                     existingProjId = kvp.Key;
                                     break;
@@ -1482,22 +1243,16 @@ namespace AntigravityCompanion
                             }
 
                             projectNewIds[pName] = pId;
-                            if (!string.Equals(pName, targetProjName, StringComparison.OrdinalIgnoreCase))
-                            {
-                                projectNewIds[targetProjName] = pId;
-                            }
 
-                            // 写入标准 Project JSON (若不存在或指定覆盖)
+                            // 写入标准 Project JSON (仅在本地尚不存在时创建，绝不覆盖破坏本地已有工程路径)
                             string projFile = Path.Combine(projDir, pId + ".json");
-                            bool shouldOverwrite = projectOverwriteNames.Contains(pName) || projectNewNames.ContainsKey(pName);
-
-                            if (!File.Exists(projFile) || shouldOverwrite)
+                            if (!File.Exists(projFile))
                             {
                                 string folderUri = projectUriOverrides.ContainsKey(pName) 
                                     ? projectUriOverrides[pName] 
-                                    : ("file:///" + DirectStreamArchiver.UrlEncodePath(Path.Combine(HomePath, targetProjName).Replace('\\', '/'), false));
+                                    : ("file:///" + DirectStreamArchiver.UrlEncodePath(Path.Combine(HomePath, pName).Replace('\\', '/'), false));
 
-                                string jsonContent = GenerateStandardProjectJson(pId, targetProjName, folderUri);
+                                string jsonContent = GenerateStandardProjectJson(pId, pName, folderUri);
                                 File.WriteAllText(projFile, jsonContent, Encoding.UTF8);
                                 filesImported++;
                             }
@@ -1554,46 +1309,32 @@ namespace AntigravityCompanion
                                     }
                                 }
                             }
-                            // 工程配置 JSON 同步/提取 (包含跨机器路径重映射与覆盖逻辑)
+                            // 工程配置 JSON 同步/提取 (仅当本地尚无该工程文件且属于本次选中导入的工程时提取并重映射)
                             else if (norm.Contains("config/projects/") && norm.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                             {
                                 string pId = Path.GetFileNameWithoutExtension(norm);
                                 string dest = Path.Combine(gemini, "config", "projects", pId + ".json");
                                 
-                                using (StreamReader sr = new StreamReader(entry.Open(), Encoding.UTF8))
+                                if (!File.Exists(dest))
                                 {
-                                    string rawJson = sr.ReadToEnd();
-                                    string pNameInJson = DirectStreamArchiver.ExtractJsonValue(rawJson, "name");
-                                    bool shouldOverwrite = !string.IsNullOrEmpty(pNameInJson) && projectOverwriteNames.Contains(pNameInJson);
-
-                                    if (!File.Exists(dest) || shouldOverwrite)
+                                    using (StreamReader sr = new StreamReader(entry.Open(), Encoding.UTF8))
                                     {
-                                        string remappedJson = DirectStreamArchiver.RemapAllPathFormats(rawJson, srcHome, curHome);
-                                        File.WriteAllText(dest, remappedJson, Encoding.UTF8);
-                                        filesImported++;
+                                        string rawJson = sr.ReadToEnd();
+                                        string pNameInJson = DirectStreamArchiver.ExtractJsonValue(rawJson, "name");
+                                        if (!string.IsNullOrEmpty(pNameInJson) && selectedProjects.Contains(pNameInJson))
+                                        {
+                                            string remappedJson = DirectStreamArchiver.RemapAllPathFormats(rawJson, srcHome, curHome);
+                                            File.WriteAllText(dest, remappedJson, Encoding.UTF8);
+                                            filesImported++;
+                                        }
                                     }
                                 }
                             }
-                            // 全局规则
-                            else if (importRules && (norm.Contains("rules/") || norm.EndsWith(".geminirules") || norm.EndsWith("GEMINI.md")))
-                            {
-                                int idx = norm.IndexOf("data/");
-                                string rel = idx >= 0 ? norm.Substring(idx + 5) : norm;
-                                string dest = Path.Combine(gemini, rel.Replace('/', '\\'));
-                                ExtractZipEntrySafe(entry, dest);
-                                filesImported++;
-                            }
-                            // 全局技能
-                            else if (importSkills && norm.Contains("skills/"))
-                            {
-                                int idx = norm.IndexOf("data/");
-                                string rel = idx >= 0 ? norm.Substring(idx + 5) : norm;
-                                string dest = Path.Combine(gemini, rel.Replace('/', '\\'));
-                                ExtractZipEntrySafe(entry, dest);
-                                filesImported++;
-                            }
-                            // 全局 MCP
-                            else if (importMcp && (norm.Contains("mcp/") || norm.EndsWith("mcp_config.json")))
+                            // 全局配置 (用户规则、用户技能与插件、MCP 配置，严格排除 builtin/skills)
+                            else if (importGlobal && !norm.Contains("builtin/skills") && (
+                                     norm.Contains("rules/") || norm.EndsWith(".geminirules") || norm.EndsWith("GEMINI.md") || norm.EndsWith("AGENTS.md") ||
+                                     norm.Contains("skills/") || norm.Contains("plugins/") ||
+                                     norm.Contains("mcp/") || norm.EndsWith("mcp_config.json")))
                             {
                                 int idx = norm.IndexOf("data/");
                                 string rel = idx >= 0 ? norm.Substring(idx + 5) : norm;
@@ -1657,12 +1398,7 @@ namespace AntigravityCompanion
 
         public static string GenerateStandardProjectJson(string projId, string projName, string folderUri)
         {
-            string escUri = folderUri ?? "";
-            if (!escUri.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
-            {
-                string fwd = escUri.Replace('\\', '/');
-                escUri = "file:///" + DirectStreamArchiver.UrlEncodePath(fwd, false);
-            }
+            string escUri = LocalWorkspaceManager.ToFileUri(folderUri);
 
             string nowIso = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.ffffff000Z");
 
@@ -1706,8 +1442,7 @@ namespace AntigravityCompanion
             }
         }
 
-        private void CollectSelectedItems(TreeNodeCollection nodes, List<ConversationSummaryInfo> convList, 
-                                          HashSet<string> projSet, ref bool hasRules, ref bool hasSkills, ref bool hasMcp)
+        private void CollectSelectedItems(TreeNodeCollection nodes, List<ConversationSummaryInfo> convList, HashSet<string> projSet)
         {
             for (int i = 0; i < nodes.Count; i++)
             {
@@ -1724,13 +1459,10 @@ namespace AntigravityCompanion
                     {
                         projSet.Add(tag.ProjectName);
                     }
-                    else if (tag.Category == ItemCategory.GlobalRules) hasRules = true;
-                    else if (tag.Category == ItemCategory.GlobalSkills) hasSkills = true;
-                    else if (tag.Category == ItemCategory.GlobalMcp) hasMcp = true;
                 }
                 if (n.Nodes.Count > 0)
                 {
-                    CollectSelectedItems(n.Nodes, convList, projSet, ref hasRules, ref hasSkills, ref hasMcp);
+                    CollectSelectedItems(n.Nodes, convList, projSet);
                 }
             }
         }
@@ -1755,7 +1487,7 @@ namespace AntigravityCompanion
 
         private void CreateFullBackup(string dest)
         {
-            string gemini = txtGeminiPath.Text.Trim();
+            string gemini = _geminiPath;
             if (!Directory.Exists(gemini)) { MessageBox.Show("未找到 .gemini 目录: " + gemini, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error); return; }
 
             ProgressForm progressDlg = new ProgressForm("正在打包全量导出备份...", "正在执行高速流式压缩，请稍候...");
@@ -1792,7 +1524,10 @@ namespace AntigravityCompanion
                         if (!string.IsNullOrEmpty(s.ConversationId))
                         {
                             if (chkHideTemp.Checked && s.IsSubagent) continue;
-                            validCids.Add(s.ConversationId);
+                            if (SessionMetadataExtractor.IsLikelyConversationId(s.ConversationId))
+                            {
+                                validCids.Add(s.ConversationId.Trim());
+                            }
                         }
                     }
 
@@ -1801,50 +1536,29 @@ namespace AntigravityCompanion
 
                     foreach (string cid in validCids)
                     {
-                        string dbFile = Path.Combine(convDir, cid + ".db");
-                        if (File.Exists(dbFile))
+                        try
                         {
+                            string dbFile = Path.Combine(convDir, cid + ".db");
                             n += AddFileToArchive(archive, dbFile, "data/antigravity/conversations/" + cid + ".db");
-                        }
-                        string walFile = Path.Combine(convDir, cid + ".db-wal");
-                        if (File.Exists(walFile))
-                        {
+                            string walFile = Path.Combine(convDir, cid + ".db-wal");
                             n += AddFileToArchive(archive, walFile, "data/antigravity/conversations/" + cid + ".db-wal");
-                        }
-                        string shmFile = Path.Combine(convDir, cid + ".db-shm");
-                        if (File.Exists(shmFile))
-                        {
+                            string shmFile = Path.Combine(convDir, cid + ".db-shm");
                             n += AddFileToArchive(archive, shmFile, "data/antigravity/conversations/" + cid + ".db-shm");
-                        }
-                        string bDir = Path.Combine(brainDir, cid);
-                        if (Directory.Exists(bDir))
-                        {
+                            string bDir = Path.Combine(brainDir, cid);
                             n += AddDirToArchive(archive, bDir, "data/antigravity/brain/" + cid);
                         }
+                        catch {}
                     }
 
-                    n += AddDirToArchive(archive, Path.Combine(gemini, "antigravity", "annotations"), "data/antigravity/annotations");
                     n += AddFileToArchive(archive, Path.Combine(gemini, "antigravity", "agyhub_summaries_proto.pb"), "data/antigravity/agyhub_summaries_proto.pb");
-                    n += AddFileToArchive(archive, Path.Combine(gemini, "antigravity", "antigravity_state.pbtxt"), "data/antigravity/antigravity_state.pbtxt");
-                    n += AddFileToArchive(archive, Path.Combine(gemini, "installation_id"), "data/antigravity/installation_id");
-                    n += AddDirToArchive(archive, Path.Combine(gemini, "antigravity", "knowledge"), "data/antigravity/knowledge");
 
-                    // 3. 规则与内置技能
-                    progressDlg.UpdateMsg("正在归档规则与规范...");
+                    // 3. 用户全局规则、项目配置、自定义技能/插件与 MCP 配置 (严格排除 builtin/skills 与本机 installation_id)
+                    progressDlg.UpdateMsg("正在归档项目配置、用户规则与 MCP 配置...");
                     n += AddFileToArchive(archive, Path.Combine(gemini, ".geminirules"), "data/.geminirules");
                     n += AddFileToArchive(archive, Path.Combine(gemini, "GEMINI.md"), "data/GEMINI.md");
                     n += AddFileToArchive(archive, Path.Combine(gemini, "AGENTS.md"), "data/AGENTS.md");
-                    n += AddDirToArchive(archive, Path.Combine(gemini, "antigravity", "builtin", "skills"), "data/antigravity/builtin/skills");
-
-                    // 4. 完整 config 目录
-                    progressDlg.UpdateMsg("正在归档项目定义、自定义技能与全局配置...");
                     n += AddDirToArchive(archive, Path.Combine(gemini, "config"), "data/config");
-
-                    // 5. MCP 与客户端配置
                     n += AddDirToArchive(archive, Path.Combine(gemini, "antigravity", "mcp"), "data/antigravity/mcp");
-                    n += AddFileToArchive(archive, Path.Combine(gemini, "settings.json"), "data/settings.json");
-                    n += AddDirToArchive(archive, Path.Combine(gemini, "antigravity-ide"), "data/antigravity-ide");
-                    n += AddDirToArchive(archive, Path.Combine(gemini, "antigravity-cli"), "data/antigravity-cli");
                 }
 
                 we.Result = n;
@@ -1874,9 +1588,9 @@ namespace AntigravityCompanion
 
         private static int AddFileToArchive(ZipArchive archive, string filePath, string entryName)
         {
-            if (!File.Exists(filePath)) return 0;
             try
             {
+                if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return 0;
                 ZipArchiveEntry entry = archive.CreateEntry(entryName.Replace('\\', '/'), CompressionLevel.Fastest);
                 using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                 using (Stream s = entry.Open())
@@ -1890,10 +1604,10 @@ namespace AntigravityCompanion
 
         private static int AddDirToArchive(ZipArchive archive, string dirPath, string baseEntryDir)
         {
-            if (!Directory.Exists(dirPath)) return 0;
-            int count = 0;
             try
             {
+                if (string.IsNullOrEmpty(dirPath) || !Directory.Exists(dirPath)) return 0;
+                int count = 0;
                 string[] files = Directory.GetFiles(dirPath, "*", SearchOption.AllDirectories);
                 for (int i = 0; i < files.Length; i++)
                 {
@@ -1902,95 +1616,9 @@ namespace AntigravityCompanion
                     string entryName = baseEntryDir.TrimEnd('/') + "/" + rel.Replace('\\', '/');
                     count += AddFileToArchive(archive, f, entryName);
                 }
+                return count;
             }
-            catch {}
-            return count;
-        }
-
-        // ══════════════════════════════════════════════════════════
-        // 结构化配置浏览器与热编辑器 (带 .bak 安全备份保护)
-        // ══════════════════════════════════════════════════════════
-        private void RefreshConfigBrowser()
-        {
-            lbRules.Items.Clear();
-            lbSkills.Items.Clear();
-            lbMcp.Items.Clear();
-
-            string gemini = txtGeminiPath.Text.Trim();
-            List<ScanRoot> roots = ConfigBrowserScanner.DetectScanRoots(gemini, _localProjects);
-
-            List<BrowserItem> rules = ConfigBrowserScanner.ScanRules(roots);
-            List<BrowserItem> skills = ConfigBrowserScanner.ScanSkills(roots);
-            List<BrowserItem> mcps = ConfigBrowserScanner.ScanMcp(roots);
-
-            for (int i = 0; i < rules.Count; i++) lbRules.Items.Add(rules[i]);
-            for (int i = 0; i < skills.Count; i++) lbSkills.Items.Add(skills[i]);
-            for (int i = 0; i < mcps.Count; i++) lbMcp.Items.Add(mcps[i]);
-
-            if (lbRules.Items.Count > 0) lbRules.SelectedIndex = 0;
-        }
-
-        private void LoadSelectedItem(ListBox lb)
-        {
-            BrowserItem item = lb.SelectedItem as BrowserItem;
-            if (item != null && File.Exists(item.FilePath))
-            {
-                _currentEditingItem = item;
-                try
-                {
-                    rtbConfigEditor.Text = File.ReadAllText(item.FilePath, Encoding.UTF8);
-                    lblEditingFile.Text = "当前编辑: " + item.FilePath;
-                }
-                catch (Exception ex)
-                {
-                    rtbConfigEditor.Text = "读取文件失败: " + ex.Message;
-                }
-            }
-        }
-
-        private void BtnSaveConfig_Click(object sender, EventArgs e)
-        {
-            if (_currentEditingItem != null && !string.IsNullOrEmpty(_currentEditingItem.FilePath))
-            {
-                try
-                {
-                    if (File.Exists(_currentEditingItem.FilePath))
-                    {
-                        FileAttributes attr = File.GetAttributes(_currentEditingItem.FilePath);
-                        if ((attr & FileAttributes.ReadOnly) == FileAttributes.ReadOnly)
-                        {
-                            File.SetAttributes(_currentEditingItem.FilePath, attr & ~FileAttributes.ReadOnly);
-                        }
-                        string bak = _currentEditingItem.FilePath + ".bak";
-                        if (File.Exists(bak)) File.Delete(bak);
-                        File.Copy(_currentEditingItem.FilePath, bak);
-                    }
-
-                    File.WriteAllText(_currentEditingItem.FilePath, rtbConfigEditor.Text, Encoding.UTF8);
-                    Log("配置文件保存成功 (已自动备份 .bak): " + _currentEditingItem.FilePath, Color.FromArgb(22, 101, 52));
-                    MessageBox.Show("配置文件已安全保存！", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                catch (Exception ex)
-                {
-                    Log("保存配置文件失败: " + ex.Message, Color.FromArgb(220, 38, 38));
-                    MessageBox.Show("保存失败:\n" + ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
-        }
-
-        private void BtnOpenConfigFolder_Click(object sender, EventArgs e)
-        {
-            if (_currentEditingItem != null && !string.IsNullOrEmpty(_currentEditingItem.FilePath) && File.Exists(_currentEditingItem.FilePath))
-            {
-                try
-                {
-                    Process.Start("explorer.exe", "/select,\"" + _currentEditingItem.FilePath + "\"");
-                }
-                catch (Exception ex)
-                {
-                    Log("打开文件夹失败: " + ex.Message, Color.FromArgb(220, 38, 38));
-                }
-            }
+            catch { return 0; }
         }
 
         // ══════════════════════════════════════════════════════════
@@ -2108,6 +1736,866 @@ namespace AntigravityCompanion
                 }
             }
             return true;
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // F1 ~ F4 本地工作区治理与 Markdown 导出交互实现
+        // ══════════════════════════════════════════════════════════════════
+        private void BuildContextMenus()
+        {
+            ctxLocal = new ContextMenuStrip { Font = new Font("Segoe UI", 9f) };
+
+            ToolStripMenuItem miRename = new ToolStripMenuItem("重命名此会话 (F2)...");
+            miRename.Click += (s, e) => ActionRenameLocalSession();
+
+            ToolStripMenuItem miMove = new ToolStripMenuItem("移动所选会话到其他工程...");
+            miMove.Click += (s, e) => ActionMoveLocalSessionsToProject();
+
+            ToolStripMenuItem miRelocate = new ToolStripMenuItem("重定向此工程本地路径 / 修复工程注册...");
+            miRelocate.Click += (s, e) => ActionRelocateLocalProjectPath();
+
+            ToolStripMenuItem miExportMd = new ToolStripMenuItem("导出此会话对话记录为 Markdown (.md)...");
+            miExportMd.Click += (s, e) => ActionExportLocalSessionMarkdown();
+
+            ToolStripMenuItem miExportAgy = new ToolStripMenuItem("导出所选工程/会话为轻量备份包 (.agy)...");
+            miExportAgy.Click += (s, e) => ActionExportSelectedLocalToAgy();
+
+            ToolStripMenuItem miSelectAllLocal = new ToolStripMenuItem("全选本地项");
+            miSelectAllLocal.Click += (s, e) => SetAllLocalChecks(true);
+
+            ToolStripMenuItem miDeselectAllLocal = new ToolStripMenuItem("全不选本地项");
+            miDeselectAllLocal.Click += (s, e) => SetAllLocalChecks(false);
+
+            ToolStripMenuItem miDelete = new ToolStripMenuItem("彻底删除所选工程/会话 (Delete)...");
+            miDelete.ForeColor = Color.FromArgb(185, 28, 28);
+            miDelete.Click += (s, e) => ActionDeleteSelectedLocal();
+
+            ToolStripMenuItem miOrphanGc = new ToolStripMenuItem("扫描并清理孤儿数据库与脑区 (GC)...");
+            miOrphanGc.Click += (s, e) => ActionRunOrphanGarbageCollector();
+
+            ctxLocal.Items.AddRange(new ToolStripItem[] {
+                miRename, miMove, miRelocate,
+                new ToolStripSeparator(),
+                miExportMd, miExportAgy,
+                new ToolStripSeparator(),
+                miSelectAllLocal, miDeselectAllLocal,
+                new ToolStripSeparator(),
+                miDelete, miOrphanGc
+            });
+
+            ctxBackup = new ContextMenuStrip { Font = new Font("Segoe UI", 9f) };
+
+            ToolStripMenuItem miBackupExportMd = new ToolStripMenuItem("直接预览/导出此备份会话为 Markdown (.md) [免导入]...");
+            miBackupExportMd.Click += (s, e) => ActionExportBackupSessionMarkdown();
+
+            ToolStripMenuItem miBackupSelectNew = new ToolStripMenuItem("仅选新增与更新项");
+            miBackupSelectNew.Click += BtnSelectNewOnly_Click;
+
+            ToolStripMenuItem miBackupSelectAll = new ToolStripMenuItem("全选备份项");
+            miBackupSelectAll.Click += (s, e) => SetAllBackupChecks(true);
+
+            ToolStripMenuItem miBackupDeselectAll = new ToolStripMenuItem("全不选备份项");
+            miBackupDeselectAll.Click += (s, e) => SetAllBackupChecks(false);
+
+            ctxBackup.Items.AddRange(new ToolStripItem[] {
+                miBackupExportMd,
+                new ToolStripSeparator(),
+                miBackupSelectNew, miBackupSelectAll, miBackupDeselectAll
+            });
+        }
+
+        private void TvLocal_AfterCheck(object sender, TreeViewEventArgs e)
+        {
+            if (_isUpdatingChecks) return;
+            _isUpdatingChecks = true;
+            try
+            {
+                SetChildNodesChecked(e.Node, e.Node.Checked);
+                UpdateParentNodeChecked(e.Node);
+                SyncLocalCheckedRecursive(tvLocal.Nodes);
+            }
+            finally
+            {
+                _isUpdatingChecks = false;
+            }
+        }
+
+        private void SyncLocalCheckedRecursive(TreeNodeCollection nodes)
+        {
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                TreeNode n = nodes[i];
+                DiffItemNodeTag tag = n.Tag as DiffItemNodeTag;
+                if (tag != null)
+                {
+                    if (tag.Category == ItemCategory.Conversation && !string.IsNullOrEmpty(tag.Id))
+                    {
+                        if (n.Checked) _checkedLocalSessionIds.Add(tag.Id);
+                        else _checkedLocalSessionIds.Remove(tag.Id);
+                    }
+                    else if (tag.Category == ItemCategory.Project && !string.IsNullOrEmpty(tag.ProjectName))
+                    {
+                        if (n.Checked) _checkedLocalProjectNames.Add(tag.ProjectName);
+                        else _checkedLocalProjectNames.Remove(tag.ProjectName);
+                    }
+                }
+                if (n.Nodes.Count > 0)
+                {
+                    SyncLocalCheckedRecursive(n.Nodes);
+                }
+            }
+        }
+
+        private void SetAllLocalChecks(bool isChecked)
+        {
+            _isUpdatingChecks = true;
+            try
+            {
+                for (int i = 0; i < tvLocal.Nodes.Count; i++)
+                {
+                    TreeNode root = tvLocal.Nodes[i];
+                    root.Checked = isChecked;
+                    SetChildNodesChecked(root, isChecked);
+                }
+                SyncLocalCheckedRecursive(tvLocal.Nodes);
+            }
+            finally
+            {
+                _isUpdatingChecks = false;
+            }
+        }
+
+        private void TvLocal_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Delete)
+            {
+                e.Handled = true;
+                ActionDeleteSelectedLocal();
+            }
+            else if (e.KeyCode == Keys.F2)
+            {
+                e.Handled = true;
+                ActionRenameLocalSession();
+            }
+        }
+
+        /// <summary>
+        /// 获取本地树的目标选中项：优先读取复选框勾选集；若未勾选任何复选框，则自动回退至当前高亮选中节点 (SelectedNode)
+        /// </summary>
+        private void GetTargetLocalSelection(
+            out List<ConversationSummaryInfo> targetConvs,
+            out HashSet<string> targetConvIds,
+            out HashSet<string> targetWholeProjects)
+        {
+            targetConvs = new List<ConversationSummaryInfo>();
+            targetConvIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            targetWholeProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            for (int i = 0; i < tvLocal.Nodes.Count; i++)
+            {
+                TreeNode pNode = tvLocal.Nodes[i];
+                DiffItemNodeTag pTag = pNode.Tag as DiffItemNodeTag;
+                string pName = pTag != null ? pTag.ProjectName : null;
+
+                int checkedChildren = 0;
+                for (int j = 0; j < pNode.Nodes.Count; j++)
+                {
+                    TreeNode sNode = pNode.Nodes[j];
+                    if (sNode.Checked)
+                    {
+                        checkedChildren++;
+                        DiffItemNodeTag sTag = sNode.Tag as DiffItemNodeTag;
+                        if (sTag != null && sTag.SummaryInfo != null)
+                        {
+                            targetConvs.Add(sTag.SummaryInfo);
+                            targetConvIds.Add(sTag.SummaryInfo.ConversationId);
+                        }
+                    }
+                }
+
+                // 若工程节点本身被勾选且其下所有可见子会话均被勾选，视为整工程选中
+                if (pNode.Checked && !string.IsNullOrEmpty(pName) &&
+                    (pNode.Nodes.Count == 0 || checkedChildren == pNode.Nodes.Count))
+                {
+                    targetWholeProjects.Add(pName);
+                }
+            }
+
+            // 若未勾选任何复选框，则回退使用当前鼠标选中节点 (SelectedNode)
+            if (targetConvIds.Count == 0 && targetWholeProjects.Count == 0 && tvLocal.SelectedNode != null)
+            {
+                TreeNode sel = tvLocal.SelectedNode;
+                DiffItemNodeTag tag = sel.Tag as DiffItemNodeTag;
+                if (tag != null)
+                {
+                    if (tag.Category == ItemCategory.Project && !string.IsNullOrEmpty(tag.ProjectName))
+                    {
+                        targetWholeProjects.Add(tag.ProjectName);
+                        for (int i = 0; i < _localSummaries.Count; i++)
+                        {
+                            ConversationSummaryInfo s = _localSummaries[i];
+                            if (string.Equals(s.ProjectName, tag.ProjectName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                targetConvs.Add(s);
+                                targetConvIds.Add(s.ConversationId);
+                            }
+                        }
+                    }
+                    else if (tag.Category == ItemCategory.Conversation && tag.SummaryInfo != null)
+                    {
+                        targetConvs.Add(tag.SummaryInfo);
+                        targetConvIds.Add(tag.SummaryInfo.ConversationId);
+                    }
+                }
+            }
+        }
+
+        // ── F1-A: 级联物理删除所选本地会话或工程 ──
+        private void ActionDeleteSelectedLocal()
+        {
+            List<ConversationSummaryInfo> targetConvs;
+            HashSet<string> targetConvIds;
+            HashSet<string> targetWholeProjects;
+            GetTargetLocalSelection(out targetConvs, out targetConvIds, out targetWholeProjects);
+
+            if (targetConvIds.Count == 0 && targetWholeProjects.Count == 0)
+            {
+                MessageBox.Show("请先在左侧「本地环境」树中勾选或点击选中要删除的工程或会话！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            List<string> projList = new List<string>(targetWholeProjects);
+            string targetDesc = targetWholeProjects.Count > 0
+                ? string.Format("{0} 个完整工程（[{1}]）及所选的 {2} 条主会话", targetWholeProjects.Count, string.Join(", ", projList.ToArray()), targetConvIds.Count)
+                : string.Format("{0} 条会话", targetConvIds.Count);
+
+            DialogResult confirm = MessageBox.Show(
+                string.Format("确定要从本地环境中彻底物理删除以下内容吗？\n\n目标：{0}\n\n此操作将同时清理：\n1. agyhub_summaries_proto.pb 索引条目（自动备份 .bak）\n2. 关联的所有隐藏 Subagent 子会话\n3. conversations/<uuid>.db 数据库文件\n4. brain/<uuid>/ 脑区目录及所选整工程的 config/projects/<id>.json", targetDesc),
+                "确认彻底物理删除 (F1)",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (confirm != DialogResult.Yes) return;
+            if (!EnsureAntigravityClosed(true)) return;
+
+            try
+            {
+                DeletionResult res = LocalWorkspaceManager.DeleteSessionsAndProjects(
+                    _geminiPath, _localSummaries, _localProjects, targetConvIds, targetWholeProjects
+                );
+
+                _checkedLocalSessionIds.Clear();
+                _checkedLocalProjectNames.Clear();
+
+                Log(string.Format("物理删除完成：共移除 {0} 条会话（含子代理），删除 {1} 个 .db 文件、{2} 个脑区目录、{3} 个工程配置，释放 {4:F2} MB 空间",
+                    res.DeletedSessionCount, res.DeletedDbFilesCount, res.DeletedBrainDirsCount, res.DeletedProjectJsonCount, res.FreedMegabytes),
+                    Color.FromArgb(22, 101, 52));
+
+                MessageBox.Show(
+                    string.Format("彻底删除成功！\n\n• 清理会话总数（含子代理）：{0} 条\n• 删除数据库文件：{1} 个\n• 删除脑区文件夹：{2} 个\n• 移除工程配置文件：{3} 个\n• 释放磁盘空间：{4:F2} MB",
+                        res.DeletedSessionCount, res.DeletedDbFilesCount, res.DeletedBrainDirsCount, res.DeletedProjectJsonCount, res.FreedMegabytes),
+                    "删除完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                DetectPaths();
+                if (_backupIndex != null)
+                {
+                    _currentDiffNodes = VisualDiffEngine.ComputeDiff(_localSummaries, _backupIndex.Conversations);
+                    RenderBackupTree();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log("删除操作异常: " + ex.Message, Color.FromArgb(220, 38, 38));
+                MessageBox.Show("删除失败:\n" + ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // ── F1-B: 扫描并一键清理孤儿数据库与残余脑区 (Orphan GC) ──
+        private void ActionRunOrphanGarbageCollector()
+        {
+            if (string.IsNullOrEmpty(_geminiPath) || !Directory.Exists(_geminiPath))
+            {
+                MessageBox.Show("未检测到有效的本地 .gemini 目录！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            OrphanScanResult scan = LocalWorkspaceManager.ScanOrphanedData(_geminiPath);
+            if (scan.TotalOrphanItems == 0)
+            {
+                Log("孤儿垃圾扫描完成：本地 conversations/ 与 brain/ 非常干净，无任何孤儿残留。", Color.FromArgb(22, 101, 52));
+                MessageBox.Show("扫描完成：本地环境非常干净，未发现任何脱离索引的孤儿数据库或脑区目录！", "孤儿垃圾体检 (GC)", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            DialogResult confirm = MessageBox.Show(
+                string.Format("扫描发现以下已脱离 agyhub_summaries_proto.pb 索引的孤儿残留数据：\n\n• 残留会话 UUID 数量：{0} 个\n• 孤儿数据库文件 (.db/.wal/.shm)：{1} 个\n• 孤儿脑区文件夹 (brain/<uuid>)：{2} 个\n• 可回收磁盘空间：{3:F2} MB\n\n是否立即一键物理清理这些孤儿数据？",
+                    scan.OrphanSessionIds.Count, scan.OrphanDbFiles.Count, scan.OrphanBrainDirs.Count, scan.TotalOrphanMegabytes),
+                "孤儿数据库与脑区垃圾清理 (GC)",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (confirm != DialogResult.Yes) return;
+            if (!EnsureAntigravityClosed(true)) return;
+
+            DeletionResult res = LocalWorkspaceManager.CleanOrphanedData(scan);
+            Log(string.Format("孤儿垃圾清理完成：清理 {0} 个数据库文件，{1} 个脑区目录，释放 {2:F2} MB",
+                res.DeletedDbFilesCount, res.DeletedBrainDirsCount, res.FreedMegabytes), Color.FromArgb(22, 101, 52));
+
+            MessageBox.Show(
+                string.Format("孤儿垃圾清理完成！\n\n• 清理孤儿数据库文件：{0} 个\n• 清理孤儿脑区目录：{1} 个\n• 实际释放磁盘空间：{2:F2} MB",
+                    res.DeletedDbFilesCount, res.DeletedBrainDirsCount, res.FreedMegabytes),
+                "清理完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        // ── F2-A: 本地会话重命名 (双向固化 Field 1 & Field 15) ──
+        private void ActionRenameLocalSession()
+        {
+            TreeNode sel = tvLocal.SelectedNode;
+            DiffItemNodeTag tag = sel != null ? (sel.Tag as DiffItemNodeTag) : null;
+            if (tag == null || tag.Category != ItemCategory.Conversation || tag.SummaryInfo == null)
+            {
+                MessageBox.Show("请先在左侧树中点击选中一条需要重命名的会话！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            ConversationSummaryInfo info = tag.SummaryInfo;
+            using (TextInputDialog dlg = new TextInputDialog("重命名本地会话 (F2)", "请输入新的会话自定义标题（将双向固化至 Field 1 与 Field 15）：", info.DisplayTitle))
+            {
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                {
+                    string newTitle = dlg.InputValue.Trim();
+                    if (string.IsNullOrEmpty(newTitle) || string.Equals(newTitle, info.DisplayTitle, StringComparison.Ordinal))
+                        return;
+
+                    if (!EnsureAntigravityClosed(true)) return;
+
+                    if (LocalWorkspaceManager.RenameSession(_geminiPath, info.ConversationId, newTitle))
+                    {
+                        _highlightTracker.AddImportedConversation(info.ConversationId);
+                        Log(string.Format("会话 [{0}] 已重命名为: {1}", info.ConversationId, newTitle), Color.FromArgb(22, 101, 52));
+                        DetectPaths();
+                        if (_backupIndex != null)
+                        {
+                            _currentDiffNodes = VisualDiffEngine.ComputeDiff(_localSummaries, _backupIndex.Conversations);
+                            RenderBackupTree();
+                        }
+                    }
+                    else
+                    {
+                        MessageBox.Show("未能在 agyhub_summaries_proto.pb 中找到该会话节点。", "重命名失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                }
+            }
+        }
+
+        // ── F2-B: 会话跨工程迁移与归属重绑定 ──
+        private void ActionMoveLocalSessionsToProject()
+        {
+            List<ConversationSummaryInfo> targetConvs;
+            HashSet<string> targetConvIds;
+            HashSet<string> targetWholeProjects;
+            GetTargetLocalSelection(out targetConvs, out targetConvIds, out targetWholeProjects);
+
+            if (targetConvIds.Count == 0)
+            {
+                MessageBox.Show("请先在左侧树中勾选或选中要迁移归属的会话！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using (MoveToProjectDialog dlg = new MoveToProjectDialog(_localProjects, _localSummaries, HomePath))
+            {
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                {
+                    if (!EnsureAntigravityClosed(true)) return;
+
+                    List<string> cidList = new List<string>(targetConvIds);
+                    int moved = LocalWorkspaceManager.MoveSessionsToProject(
+                        _geminiPath, cidList, dlg.SelectedProjectName, dlg.SelectedProjectId, dlg.SelectedFolderUri
+                    );
+
+                    if (moved > 0)
+                    {
+                        _checkedLocalSessionIds.Clear();
+                        _checkedLocalProjectNames.Clear();
+                        _highlightTracker.AddImportedProject(dlg.SelectedProjectName);
+                        for (int i = 0; i < cidList.Count; i++)
+                            _highlightTracker.AddImportedConversation(cidList[i]);
+
+                        Log(string.Format("成功将 {0} 条会话（含子代理）迁移绑定至工程 [{1}]", moved, dlg.SelectedProjectName), Color.FromArgb(22, 101, 52));
+                        MessageBox.Show(string.Format("已成功将 {0} 条会话迁移至工程 [{1}]，并同步更新了 Proto 索引与 SQLite 数据库！", moved, dlg.SelectedProjectName),
+                            "迁移完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                        DetectPaths();
+                        if (_backupIndex != null)
+                        {
+                            _currentDiffNodes = VisualDiffEngine.ComputeDiff(_localSummaries, _backupIndex.Conversations);
+                            RenderBackupTree();
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── F2-C: 工程本地物理路径重定向与幽灵工程注册修复 ──
+        private void ActionRelocateLocalProjectPath()
+        {
+            TreeNode sel = tvLocal.SelectedNode;
+            DiffItemNodeTag tag = sel != null ? (sel.Tag as DiffItemNodeTag) : null;
+            if (tag == null)
+            {
+                MessageBox.Show("请先在左侧树中点击选中一个工程（或其下任意会话）！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string projName = tag.ProjectName;
+            if (string.IsNullOrEmpty(projName) || string.Equals(projName, "Outside of Project", StringComparison.OrdinalIgnoreCase))
+            {
+                MessageBox.Show("「Outside of Project」为全局无工程容器，无需绑定固定物理目录。若要将其下会话移入具体工程，请使用「移动所选会话到其他工程...」。",
+                    "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string existingProjId = null;
+            string currentUri = null;
+            foreach (KeyValuePair<string, ProjectMetadata> kvp in _localProjects)
+            {
+                if (string.Equals(kvp.Value.Name, projName, StringComparison.OrdinalIgnoreCase))
+                {
+                    existingProjId = kvp.Key;
+                    currentUri = kvp.Value.FolderUri;
+                    break;
+                }
+            }
+
+            using (FolderBrowserDialog fbd = new FolderBrowserDialog())
+            {
+                fbd.Description = string.Format("请为工程 [{0}] 选择新的本地工作区物理文件夹（将同步更新 config/projects/<id>.json、.pb 索引及所有关联 .db 数据库）：", projName);
+                if (!string.IsNullOrEmpty(currentUri))
+                {
+                    string decoded = DirectStreamArchiver.UnescapeUriString(currentUri);
+                    if (decoded.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
+                        decoded = decoded.Substring(8).Replace('/', '\\');
+                    if (Directory.Exists(decoded))
+                        fbd.SelectedPath = decoded;
+                }
+
+                if (fbd.ShowDialog(this) == DialogResult.OK && !string.IsNullOrEmpty(fbd.SelectedPath))
+                {
+                    if (!EnsureAntigravityClosed(true)) return;
+
+                    int updated = LocalWorkspaceManager.RelocateProjectPath(
+                        _geminiPath, existingProjId, projName, fbd.SelectedPath, _localSummaries
+                    );
+
+                    _highlightTracker.AddImportedProject(projName);
+                    Log(string.Format("工程 [{0}] 路径已重定向至 {1}（同步更新 {2} 条会话）", projName, fbd.SelectedPath, updated), Color.FromArgb(22, 101, 52));
+                    MessageBox.Show(
+                        string.Format("工程 [{0}] 物理路径重定向与注册修复完成！\n\n• 新工作区路径：{1}\n• 同步更新会话数：{2} 条", projName, fbd.SelectedPath, updated),
+                        "工程路径重定向完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                    DetectPaths();
+                }
+            }
+        }
+
+        // ── F3: 细粒度选择性轻量备份导出 (.agy) ──
+        private void ActionExportSelectedLocalToAgy()
+        {
+            List<ConversationSummaryInfo> targetConvs;
+            HashSet<string> targetConvIds;
+            HashSet<string> targetWholeProjects;
+            GetTargetLocalSelection(out targetConvs, out targetConvIds, out targetWholeProjects);
+
+            if (targetConvs.Count == 0)
+            {
+                MessageBox.Show("请先在左侧「本地环境」树中勾选或选中要导出的工程或会话！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            DialogResult incGlobal = MessageBox.Show(
+                string.Format("即将导出所选的 {0} 条会话为轻量级 .agy 备份包。\n\n是否在备份包中同时附带本机全局规则 (.geminirules / GEMINI.md)、插件与 MCP 配置？\n（点击「是」附带全局配置，点击「否」仅导出纯净会话与所属工程）", targetConvs.Count),
+                "选择性轻量备份导出 (F3)",
+                MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Question);
+
+            if (incGlobal == DialogResult.Cancel) return;
+            bool includeGlobal = (incGlobal == DialogResult.Yes);
+
+            SaveFileDialog dlg = new SaveFileDialog
+            {
+                Filter = "Antigravity 备份包 (*.agy)|*.agy|ZIP 压缩包 (*.zip)|*.zip",
+                FileName = string.Format("antigravity_selective_{0}sessions_{1}.agy", targetConvs.Count, DateTime.Now.ToString("yyyyMMdd_HHmmss")),
+                Title = "保存选择性轻量备份包 (.agy)"
+            };
+
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            try
+            {
+                this.Cursor = Cursors.WaitCursor;
+                int count = LocalWorkspaceManager.ExportSelectiveBackup(
+                    _geminiPath, HomePath, dlg.FileName, targetConvs, _localProjects, includeGlobal
+                );
+                Log(string.Format("选择性轻量备份导出成功：共打包 {0} 条会话（{1} 个归档条目）→ {2}", targetConvs.Count, count, dlg.FileName), Color.FromArgb(22, 101, 52));
+                MessageBox.Show(
+                    string.Format("选择性轻量备份包导出成功！\n\n• 导出会话数：{0} 条\n• 包含归档条目：{1} 个\n• 保存路径：{2}", targetConvs.Count, count, dlg.FileName),
+                    "导出完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                Log("选择性导出失败: " + ex.Message, Color.FromArgb(220, 38, 38));
+                MessageBox.Show("选择性导出失败:\n" + ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                this.Cursor = Cursors.Default;
+            }
+        }
+
+        // ── F4-A: 导出本地会话对话记录与 Artifacts 为 Markdown (.md) ──
+        private void ActionExportLocalSessionMarkdown()
+        {
+            TreeNode sel = tvLocal.SelectedNode;
+            DiffItemNodeTag tag = sel != null ? (sel.Tag as DiffItemNodeTag) : null;
+            if (tag == null || tag.Category != ItemCategory.Conversation || tag.SummaryInfo == null)
+            {
+                MessageBox.Show("请先在左侧树中点击选中一条要导出为 Markdown 的会话！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            ConversationSummaryInfo info = tag.SummaryInfo;
+            string safeTitle = SanitizeFileName(info.DisplayTitle);
+            SaveFileDialog dlg = new SaveFileDialog
+            {
+                Filter = "Markdown 文档 (*.md)|*.md|所有文件 (*.*)|*.*",
+                FileName = string.Format("{0}_{1}.md", safeTitle, info.ConversationId.Length >= 8 ? info.ConversationId.Substring(0, 8) : info.ConversationId),
+                Title = "导出本地会话对话记录为 Markdown (.md)"
+            };
+
+            if (dlg.ShowDialog(this) == DialogResult.OK)
+            {
+                try
+                {
+                    TranscriptMarkdownExporter.ExportLocalSessionToMarkdown(info, _geminiPath, dlg.FileName);
+                    Log(string.Format("已将本地会话 [{0}] 导出为 Markdown: {1}", info.DisplayTitle, dlg.FileName), Color.FromArgb(22, 101, 52));
+                    MessageBox.Show("会话 Markdown 导出成功！\n路径: " + dlg.FileName, "导出完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    Log("导出 Markdown 失败: " + ex.Message, Color.FromArgb(220, 38, 38));
+                    MessageBox.Show("导出 Markdown 失败:\n" + ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        // ── F4-B: 免导入直接从右侧备份包流式导出会话为 Markdown (.md) ──
+        private void ActionExportBackupSessionMarkdown()
+        {
+            if (_backupIndex == null || string.IsNullOrEmpty(_loadedBackupPath))
+            {
+                MessageBox.Show("请先打开一个 .agy 备份归档包！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            TreeNode sel = tvBackup.SelectedNode;
+            DiffItemNodeTag tag = sel != null ? (sel.Tag as DiffItemNodeTag) : null;
+            if (tag == null || tag.Category != ItemCategory.Conversation || tag.SummaryInfo == null)
+            {
+                MessageBox.Show("请先在右侧备份树中点击选中一条要预览/导出的备份会话！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            ConversationSummaryInfo info = tag.SummaryInfo;
+            string safeTitle = SanitizeFileName(info.DisplayTitle);
+            SaveFileDialog dlg = new SaveFileDialog
+            {
+                Filter = "Markdown 文档 (*.md)|*.md|所有文件 (*.*)|*.*",
+                FileName = string.Format("backup_{0}_{1}.md", safeTitle, info.ConversationId.Length >= 8 ? info.ConversationId.Substring(0, 8) : info.ConversationId),
+                Title = "从备份包直接流式导出会话为 Markdown (.md)"
+            };
+
+            if (dlg.ShowDialog(this) == DialogResult.OK)
+            {
+                try
+                {
+                    TranscriptMarkdownExporter.ExportBackupSessionToMarkdown(info, _loadedBackupPath, dlg.FileName);
+                    Log(string.Format("已从备份包免导入流式导出会话 [{0}] 为 Markdown: {1}", info.DisplayTitle, dlg.FileName), Color.FromArgb(22, 101, 52));
+                    MessageBox.Show("已从备份归档包直接流式提取并导出为 Markdown！\n路径: " + dlg.FileName, "免导入导出完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    Log("备份会话导出 Markdown 失败: " + ex.Message, Color.FromArgb(220, 38, 38));
+                    MessageBox.Show("备份会话导出 Markdown 失败:\n" + ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private static string SanitizeFileName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "session";
+            char[] invalid = Path.GetInvalidFileNameChars();
+            StringBuilder sb = new StringBuilder(name.Length);
+            for (int i = 0; i < name.Length; i++)
+            {
+                char c = name[i];
+                if (Array.IndexOf(invalid, c) >= 0 || c == ' ')
+                    sb.Append('_');
+                else
+                    sb.Append(c);
+            }
+            string res = sb.ToString().Trim('_');
+            if (res.Length > 48) res = res.Substring(0, 48);
+            return string.IsNullOrEmpty(res) ? "session" : res;
+        }
+    }
+
+    /// <summary>
+    /// 通用单行文本输入对话框 (用于 F2 会话重命名)
+    /// </summary>
+    public class TextInputDialog : Form
+    {
+        private TextBox txtInput;
+        public string InputValue
+        {
+            get { return txtInput != null ? txtInput.Text : string.Empty; }
+        }
+
+        public TextInputDialog(string title, string prompt, string defaultValue)
+        {
+            this.Text = title;
+            this.Size = new Size(480, 175);
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
+            this.StartPosition = FormStartPosition.CenterParent;
+            this.Font = new Font("Segoe UI", 9f);
+            this.BackColor = Color.White;
+
+            Label lbl = new Label
+            {
+                Text = prompt,
+                Location = new Point(16, 14),
+                Size = new Size(430, 22),
+                ForeColor = Color.FromArgb(30, 41, 59)
+            };
+
+            txtInput = new TextBox
+            {
+                Text = defaultValue ?? string.Empty,
+                Location = new Point(16, 42),
+                Size = new Size(430, 26),
+                Font = new Font("Segoe UI", 9.5f)
+            };
+
+            Button btnOk = new Button
+            {
+                Text = "确定",
+                DialogResult = DialogResult.OK,
+                Location = new Point(276, 86),
+                Size = new Size(80, 30),
+                BackColor = Color.FromArgb(37, 99, 235),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat
+            };
+            btnOk.FlatAppearance.BorderSize = 0;
+
+            Button btnCancel = new Button
+            {
+                Text = "取消",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(366, 86),
+                Size = new Size(80, 30),
+                FlatStyle = FlatStyle.Flat
+            };
+
+            this.Controls.AddRange(new Control[] { lbl, txtInput, btnOk, btnCancel });
+            this.AcceptButton = btnOk;
+            this.CancelButton = btnCancel;
+        }
+    }
+
+    /// <summary>
+    /// 会话跨工程迁移选择对话框 (用于 F2 移动会话至现有或新建工程)
+    /// </summary>
+    public class MoveToProjectDialog : Form
+    {
+        private ComboBox cmbProjects;
+        private TextBox txtFolderPath;
+        private readonly Dictionary<string, ProjectMetadata> _nameToProject = new Dictionary<string, ProjectMetadata>(StringComparer.OrdinalIgnoreCase);
+
+        public string SelectedProjectName
+        {
+            get { return cmbProjects != null ? cmbProjects.Text.Trim() : string.Empty; }
+        }
+
+        public string SelectedProjectId
+        {
+            get
+            {
+                string name = SelectedProjectName;
+                if (string.Equals(name, "Outside of Project", StringComparison.OrdinalIgnoreCase))
+                    return "outside-of-project";
+                ProjectMetadata meta;
+                if (_nameToProject.TryGetValue(name, out meta) && !string.IsNullOrEmpty(meta.Id))
+                    return meta.Id;
+                return Guid.NewGuid().ToString();
+            }
+        }
+
+        public string SelectedFolderUri
+        {
+            get
+            {
+                string name = SelectedProjectName;
+                if (string.Equals(name, "Outside of Project", StringComparison.OrdinalIgnoreCase))
+                    return string.Empty;
+                return LocalWorkspaceManager.ToFileUri(txtFolderPath != null ? txtFolderPath.Text.Trim() : string.Empty);
+            }
+        }
+
+        public MoveToProjectDialog(Dictionary<string, ProjectMetadata> localProjects, List<ConversationSummaryInfo> localSummaries, string homePath)
+        {
+            this.Text = "移动所选会话到其他工程 (F2)";
+            this.Size = new Size(520, 240);
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
+            this.StartPosition = FormStartPosition.CenterParent;
+            this.Font = new Font("Segoe UI", 9f);
+            this.BackColor = Color.White;
+
+            if (localProjects != null)
+            {
+                foreach (KeyValuePair<string, ProjectMetadata> kvp in localProjects)
+                {
+                    if (!string.IsNullOrEmpty(kvp.Value.Name))
+                        _nameToProject[kvp.Value.Name] = kvp.Value;
+                }
+            }
+            if (localSummaries != null)
+            {
+                for (int i = 0; i < localSummaries.Count; i++)
+                {
+                    ConversationSummaryInfo s = localSummaries[i];
+                    if (!string.IsNullOrEmpty(s.ProjectName) && !_nameToProject.ContainsKey(s.ProjectName))
+                    {
+                        _nameToProject[s.ProjectName] = new ProjectMetadata
+                        {
+                            Id = s.ProjectId,
+                            Name = s.ProjectName,
+                            FolderUri = s.FolderUri
+                        };
+                    }
+                }
+            }
+
+            Label lblProj = new Label
+            {
+                Text = "选择目标工程（也可直接输入新工程名称）：",
+                Location = new Point(16, 14),
+                Size = new Size(470, 20)
+            };
+
+            cmbProjects = new ComboBox
+            {
+                Location = new Point(16, 38),
+                Size = new Size(470, 26),
+                DropDownStyle = ComboBoxStyle.DropDown
+            };
+
+            foreach (KeyValuePair<string, ProjectMetadata> kvp in _nameToProject)
+            {
+                if (!SmartProjectFilter.IsJunkOrEphemeral(kvp.Key))
+                    cmbProjects.Items.Add(kvp.Key);
+            }
+            if (!cmbProjects.Items.Contains("Outside of Project"))
+                cmbProjects.Items.Add("Outside of Project");
+
+            Label lblFolder = new Label
+            {
+                Text = "目标工程工作区路径 (Folder URI / 物理目录)：",
+                Location = new Point(16, 76),
+                Size = new Size(470, 20)
+            };
+
+            txtFolderPath = new TextBox
+            {
+                Location = new Point(16, 100),
+                Size = new Size(380, 25)
+            };
+
+            Button btnBrowse = new Button
+            {
+                Text = "浏览...",
+                Location = new Point(404, 98),
+                Size = new Size(82, 27),
+                FlatStyle = FlatStyle.Flat
+            };
+            btnBrowse.Click += (s, e) =>
+            {
+                using (FolderBrowserDialog fbd = new FolderBrowserDialog())
+                {
+                    if (fbd.ShowDialog(this) == DialogResult.OK)
+                    {
+                        txtFolderPath.Text = fbd.SelectedPath;
+                        if (string.IsNullOrWhiteSpace(cmbProjects.Text))
+                        {
+                            cmbProjects.Text = Path.GetFileName(fbd.SelectedPath.TrimEnd('\\', '/'));
+                        }
+                    }
+                }
+            };
+
+            cmbProjects.SelectedIndexChanged += (s, e) =>
+            {
+                string selName = cmbProjects.Text.Trim();
+                if (string.Equals(selName, "Outside of Project", StringComparison.OrdinalIgnoreCase))
+                {
+                    txtFolderPath.Text = string.Empty;
+                    txtFolderPath.Enabled = false;
+                }
+                else
+                {
+                    txtFolderPath.Enabled = true;
+                    ProjectMetadata m;
+                    if (_nameToProject.TryGetValue(selName, out m) && !string.IsNullOrEmpty(m.FolderUri))
+                    {
+                        txtFolderPath.Text = m.FolderUri;
+                    }
+                    else if (!string.IsNullOrEmpty(homePath))
+                    {
+                        txtFolderPath.Text = Path.Combine(homePath, selName);
+                    }
+                }
+            };
+
+            if (cmbProjects.Items.Count > 0)
+                cmbProjects.SelectedIndex = 0;
+
+            Button btnOk = new Button
+            {
+                Text = "确定迁移",
+                DialogResult = DialogResult.OK,
+                Location = new Point(306, 148),
+                Size = new Size(86, 32),
+                BackColor = Color.FromArgb(37, 99, 235),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat
+            };
+            btnOk.FlatAppearance.BorderSize = 0;
+
+            Button btnCancel = new Button
+            {
+                Text = "取消",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(400, 148),
+                Size = new Size(86, 32),
+                FlatStyle = FlatStyle.Flat
+            };
+
+            this.Controls.AddRange(new Control[] { lblProj, cmbProjects, lblFolder, txtFolderPath, btnBrowse, btnOk, btnCancel });
+            this.AcceptButton = btnOk;
+            this.CancelButton = btnCancel;
         }
     }
 

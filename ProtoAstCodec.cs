@@ -158,7 +158,9 @@ namespace AntigravityCompanion
                         Buffer.BlockCopy(buffer, pos, node.RawBytes, 0, byteCount);
 
                         // 试探递归解析 sub-message
-                        if (byteCount > 0 && LooksLikeValidSubMessage(node.RawBytes))
+                        bool canSub = false;
+                        try { canSub = (byteCount > 0 && LooksLikeValidSubMessage(node.RawBytes)); } catch {}
+                        if (canSub)
                         {
                             try
                             {
@@ -294,48 +296,59 @@ namespace AntigravityCompanion
         public static bool LooksLikeValidSubMessage(byte[] data)
         {
             if (data == null || data.Length == 0) return false;
-            int pos = 0;
-            int validCount = 0;
-
-            while (pos < data.Length)
+            try
             {
-                ulong tag;
-                int tb = ReadVarint(data, pos, out tag);
-                if (tb == 0) return false;
-                pos += tb;
+                int pos = 0;
+                int validCount = 0;
 
-                int fn = (int)(tag >> 3);
-                int wt = (int)(tag & 0x07);
-
-                if (fn <= 0 || fn > 500000000) return false;
-                if (wt != 0 && wt != 1 && wt != 2 && wt != 5) return false;
-
-                switch (wt)
+                while (pos < data.Length)
                 {
-                    case 0:
-                        ulong v;
-                        int vb = ReadVarint(data, pos, out v);
-                        if (vb == 0) return false;
-                        pos += vb;
-                        break;
-                    case 1:
-                        pos += 8;
-                        break;
-                    case 2:
-                        ulong len;
-                        int lb = ReadVarint(data, pos, out len);
-                        if (lb == 0) return false;
-                        pos += lb + (int)len;
-                        break;
-                    case 5:
-                        pos += 4;
-                        break;
+                    ulong tag;
+                    int tb = ReadVarint(data, pos, out tag);
+                    if (tb <= 0) return false;
+                    pos += tb;
+
+                    int fn = (int)(tag >> 3);
+                    int wt = (int)(tag & 0x07);
+
+                    if (fn <= 0 || fn > 500000000) return false;
+                    if (wt != 0 && wt != 1 && wt != 2 && wt != 5) return false;
+
+                    switch (wt)
+                    {
+                        case 0:
+                            ulong v;
+                            int vb = ReadVarint(data, pos, out v);
+                            if (vb <= 0) return false;
+                            pos += vb;
+                            break;
+                        case 1:
+                            if (pos + 8 > data.Length) return false;
+                            pos += 8;
+                            break;
+                        case 2:
+                            ulong len;
+                            int lb = ReadVarint(data, pos, out len);
+                            if (lb <= 0) return false;
+                            if (len > (ulong)(data.Length - pos - lb)) return false; // 严防整型溢出与越界
+                            pos += lb + (int)len;
+                            break;
+                        case 5:
+                            if (pos + 4 > data.Length) return false;
+                            pos += 4;
+                            break;
+                    }
+
+                    if (pos < 0 || pos > data.Length) return false;
+                    validCount++;
                 }
 
-                validCount++;
+                return pos == data.Length && validCount > 0;
             }
-
-            return pos == data.Length && validCount > 0;
+            catch
+            {
+                return false;
+            }
         }
     }
 

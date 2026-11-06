@@ -196,27 +196,37 @@ namespace AntigravityCompanion
             string sEsc = srcHome.Replace("\\", "\\\\");
             string dEsc = curHome.Replace("\\", "\\\\");
 
-            string sUrl1 = UrlEncodePath(sFwd, true);
-            string dUrl1 = UrlEncodePath(dFwd, true);
-
-            string sUrl2 = UrlEncodePath(sFwd, false);
-            string dUrl2 = UrlEncodePath(dFwd, false);
-
             string result = text;
-            result = ReplaceExact(result, sUrl1, dUrl1);
-            result = ReplaceExact(result, sUrl2, dUrl2);
-            result = ReplaceExact(result, sEsc, dEsc);
-            result = ReplaceExact(result, sWin, dWin);
-            result = ReplaceExact(result, sFwd, dFwd);
+            result = ReplaceIgnoreCase(result, UrlEncodePath(sFwd, true), UrlEncodePath(dFwd, true));
+            result = ReplaceIgnoreCase(result, UrlEncodePath(sWin, true), UrlEncodePath(dWin, true));
+            result = ReplaceIgnoreCase(result, sFwd.Replace(":", "%3A"), dFwd.Replace(":", "%3A"));
+            result = ReplaceIgnoreCase(result, sEsc, dEsc);
+            result = ReplaceIgnoreCase(result, sWin, dWin);
+            result = ReplaceIgnoreCase(result, sFwd, dFwd);
 
             return result;
         }
 
-        private static string ReplaceExact(string input, string oldVal, string newVal)
+        private static string ReplaceIgnoreCase(string input, string oldVal, string newVal)
         {
-            if (string.IsNullOrEmpty(input) || string.IsNullOrEmpty(oldVal) || oldVal == newVal)
+            if (string.IsNullOrEmpty(input) || string.IsNullOrEmpty(oldVal) ||
+                string.Equals(oldVal, newVal, StringComparison.OrdinalIgnoreCase))
                 return input;
-            return input.Replace(oldVal, newVal);
+
+            int idx = input.IndexOf(oldVal, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0) return input;
+
+            StringBuilder sb = new StringBuilder(input.Length);
+            int lastIdx = 0;
+            while (idx >= 0)
+            {
+                sb.Append(input, lastIdx, idx - lastIdx);
+                sb.Append(newVal);
+                lastIdx = idx + oldVal.Length;
+                idx = input.IndexOf(oldVal, lastIdx, StringComparison.OrdinalIgnoreCase);
+            }
+            sb.Append(input, lastIdx, input.Length - lastIdx);
+            return sb.ToString();
         }
 
         public static string UrlEncodePath(string path, bool lowerCase)
