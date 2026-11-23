@@ -1,0 +1,18 @@
+{
+  "project-handoff-monitor": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "python skills/project-handoff/scripts/antigravity_hook.py pre-invocation",
+        "timeout": 5
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python skills/project-handoff/scripts/antigravity_hook.py stop",
+        "timeout": 5
+      }
+    ]
+  }
+}

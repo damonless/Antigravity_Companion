@@ -1,187 +1,129 @@
-# Antigravity Companion 使用说明书 (V0.6)
+# Antigravity Companion 使用说明书 (V0.8)
 
 ---
 
 ## 一、 软件概述
 
-**Antigravity Companion** 是专为 Google DeepMind Antigravity (AGY) 生态打造的原生双栏可视化差异对比、本地工作区深度治理与细粒度数据迁移工具。
+**Antigravity Companion V0.8** 是专为 Google DeepMind Antigravity (AGY) 生态打造的现代桌面工作台，集**环境概览体检、工程与 CLI 会话管理、三步式智能重命名、双向能力仓库 Diff 同步与 .agy 备份迁移**于一体。
 
-本工具基于纯原生 C# 5 / WinForms 与 .NET Framework 4.0/4.5+ 类库开发，**无任何外部依赖**。程序采用精简模块化架构（`ProtoAstCodec`、`SessionMetadataExtractor`、`VisualDiffEngine`、`StreamingZipIndexReader`、`LocalWorkspaceManager`、`TranscriptMarkdownExporter`、`MainForm`），支持单文件一键编译，免安装、即开即用。
+本工具基于纯原生 C# 5 / .NET Framework 4.8+ 与零外部 CDN 离线单页前端开发，编译为**单个独立可执行文件 `Antigravity_Companion.exe`**：启动后自动在纯用户态回环端口（`127.0.0.1` 动态端口，无需管理员权限或 UAC）启动内嵌 HTTP/1.1 + SSE 服务，并通过 Edge `--app`（回退 Chrome `--app` 或默认浏览器）以原生桌面应用形态运行；同时保留 `--legacy-ui` 命令行参数用于回退旧版 WinForms 双栏界面。
 
 ```mermaid
-graph TD
-    A["Antigravity Companion V0.6"] --> B["双栏可视化差异对比与细粒度导入"]
-    A --> C["会话元数据提取与自定义标题穿透"]
-    A --> D["临时与子代理会话智能过滤"]
-    A --> E["跨机全格式路径重映射与无损合流"]
-    A --> F["本地工作区深度治理引擎 (F1 & F2)"]
-    A --> G["细粒度轻量备份与文档导出引擎 (F3 & F4)"]
-    
-    B --> B1["左栏: 本地环境工程树 (Local Tree 级联复选)"]
-    B --> B2["右栏: 备份归档工程树 (Backup Tree 级联复选)"]
-    B --> B3["差异徽标: 新增 / 已修改 / 已对齐 / 本地独有"]
-    B --> B4["细粒度导入: .db + brain + .pb 索引分片合流"]
+flowchart TD
+    A["Antigravity Companion V0.8 单文件桌面工作台"] --> S1["1. 概览 (落地体检页)"]
+    A --> S2["2. 会话管理 (工程与 CLI 统一治理)"]
+    A --> S3["3. 智能重命名 (三步引导工作台)"]
+    A --> S4["4. 能力仓库 (双向 Diff 与源码对比)"]
+    A --> S5["5. 备份迁移 (.agy 全量/增量流式往返)"]
 
-    C --> C1["原生 Protobuf AST 编解码器"]
-    C --> C2["无损穿透 Field 15 custom_title_meta"]
+    S1 --> S1a["本机工程/主会话/CLI 会话/能力数卡片"]
+    S1 --> S1b["IDE 进程状态与只读孤儿体检 (GC)"]
 
-    D --> D1["精准识别 Field 23 子代理会话与 subagent-* 临时工程"]
-    D --> D2["工具栏实时切换显示/隐藏"]
+    S2 --> S2a["统一双行工程卡片 · 多根目录 · 最短区分父目录 · CLI 分组"]
+    S2 --> S2b["FTS5/LIKE 搜正文 · 抽屉式 Markdown 预览/导出 · F1/F2/F3"]
 
-    E --> E1["同名工程自动锁定本地路径静默增量合流"]
-    E --> E2["6 种路径编码大小写不敏感重映射"]
+    S3 --> S3a["Step 1 范围与规则 · Step 2 双栏预览/AI 润色 · Step 3 快照回滚"]
+    S3 --> S3b["可视化规则表单 + 沙盒试跑 + Field 9->4 分支与【...】标签吸收"]
 
-    F --> F1["F1: 级联物理删除 (会话/整工程/隐藏子代理) 与孤儿 GC"]
-    F --> F2["F2: 会话重命名 (双向固化) / 跨工程迁移 / 路径重定向"]
+    S4 --> S4a["双向同步方向标识 (两侧一致 / 仅仓库有 / 仓库较新 / 本机较新 / 冲突)"]
+    S4 --> S4b["右侧抽屉红绿行级 Diff · 缺失路径检测与一键重定位"]
 
-    G --> G1["F3: 选择性轻量备份导出 (.agy 裁剪分片)"]
-    G --> G2["F4: 会话对话流与 Artifacts 导出为 Markdown (.md 免导入流式提取)"]
+    S5 --> S5a["全量备份导出 / .agy 免解压探测 / 按需合流导入"]
 ```
 
-### 核心功能特性一览
+### V0.8 核心升级亮点
 
-| 模块 / 特性 | 核心能力 | 技术实现与处理边界 |
+| 模块 / 特性 | 核心能力 | 技术实现与安全边界 |
 | :--- | :--- | :--- |
-| **自定义标题提取** | 跨机器提取用户在 Antigravity 中重命名的真实会话标题 | 基于纯原生 Protobuf AST 编解码器，穿透解析 `Field 15` |
-| **流式秒级探测** | 打开 `.agy` 备份包时无需解压整个压缩包到磁盘 | 直接在内存中流式扫描核心索引文件，毫秒级完成解析 |
-| **子代理与垃圾过滤** | 自动净化 `subagent-*`、`Recovered project` 及子代理衍生会话 | 解析 `Field 23` 与 `Field 16` 标志位，支持工具栏实时切换 |
-| **双向差异对比** | 自动计算本地环境与备份包差异并赋予状态徽标 | 标定 `[新增]`、`[已修改/更新]`、`[已对齐]`、`[本地独有]` |
-| **静默跨机合流** | 遇到同名跨盘符/跨用户工程时自动锁定本地有效路径合流 | 自动将备份会话及 SQLite 轨迹元数据重映射至本地工程路径 |
-| **细粒度级联导入** | 仅将勾选的项目/会话及可选全局配置增量导入本地 | 级联提取 `conversations/*.db*`、`brain/<uuid>/**` 并合流 `.pb` 分片 |
-| **F1：级联物理删除与孤儿 GC** | 支持按单会话、多选或整工程（含 `Administrator` 等幽灵工程）彻底物理删除；一键扫描脱离索引的孤儿残留并回收空间 | 级联清除隐藏的 Subagent 会话，原子重写 `agyhub_summaries_proto.pb`（自动备份 `.bak`），物理删除 `.db*`、`brain/` 与 `config/projects/<id>.json`；扫描比对 Proto 索引回收脱离索引的残余文件并统计释放的 MB 空间 |
-| **F2：会话重命名与工程治理** | 支持会话原地重命名；支持将散落会话跨工程批量迁移绑定；支持重定向工程物理路径与修复工程注册 | 双向持久化固化 `Field 1` 与 `Field 15` 杜绝重启回退；原子更新 `.pb` `Field 9/17` 与底层 SQLite `trajectory_metadata_blob`；自动同步更新 `config/projects/*.json` |
-| **F3：选择性轻量备份导出** | 本地树级联勾选指定工程或单条会话，导出为轻量级 `.agy` 归档包 | 自动裁剪生成仅含所选会话分片的 `agyhub_summaries_proto.pb`，精准打包关联的 `.db`、`brain/` 与工程配置，可选包含全局规则/技能/MCP |
-| **F4：Markdown 对话记录导出** | 将会话明文对话记录与脑区产出文档导出为排版整洁的独立 `.md` 文件；**支持直接从右栏备份包免导入流式提取** | 解析 `transcript.jsonl` 并剥离 `<ADDITIONAL_METADATA>` 系统噪音；思考推理过程封装为 `<details>` 折叠块；无缝追加整合 `brain/<uuid>/*.md` 产出文档 |
+| **零依赖单文件桌面工作台** | 5 模块左侧固定导航（概览 / 会话管理 / 智能重命名 / 能力仓库 / 备份迁移）+ 浅灰默认 / 深色模式切换 + 28px 底部可折叠实时日志条 | `LocalWebHost`（纯用户态 `TcpListener` + SSE 推送 + 严格 `Host`/`Origin`/`SameSite=Strict`/CSP 无内联脚本防护）+ `NativeDialogBridge` 原生文件与目录弹窗 |
+| **工程归属修复与路径降噪** | 彻底修复二进制 `Field 17->1` 子消息与 `folderUris` 多根目录引起的工程丢失/分裂；支持 `antigravity-cli` 会话完整首问与 Markdown 预览 | `ProtoCodec.IsValidCascadeContainer` 与 `IsSafeDisplayProjectName` 防乱码穿透；同 basename 工程自动剥离共同前缀，展示最短区分父目录段 |
+| **三步式智能重命名 & 规则工作台** | 自动匹配 `Field 9->4` Git 分支与机型关键字、剥离尾缀 `"分支"`、折叠标题中/尾部元数据 `【标签】` 避免双重括号，默认取消勾选 0 步/通用水词会话 | 抽屉式 **可视化规则表单** 与 **沙盒试跑** 实时调优 `Repository/rename_rules.json`；**两步 AI 润色助手** 支持剪贴板与 JSON 文件双向交换；快照行级精准回滚 |
+| **方向感能力 Diff 矩阵** | 明确给出同步建议（`两侧一致` / `仅仓库有（可导入）` / `仅本机有（可入库）` / `仓库较新` / `本机较新` / `双方均有修改`） | 优先对比三层基线签名，缺失基线时回退统一 UTC 文件修改时间（含 ZIP 时间 UTC 校准）；抽屉支持受控有界行级红绿 LCS Diff 与 `{{HOME}}` 路径重定位 |
+| **安全进程门禁与只读 GC** | 只读孤儿体检即使在 IDE 运行锁定 `.pb` 时仍可安全执行；写入前自动检测运行中 IDE 并引导关闭或安全热写入 | `ReadAllBytesShared` / `ReadUtf8TextShared` 共享只读读取；清理与全量写前二次扫描防 TOCTOU；保留 `--legacy-ui` 兼容开关 |
 
 ---
 
-## 二、 核心操作流程
+## 二、 五大模块操作指南
 
-### 1. 跨机备份与差异导入工作流
+### 1. 概览（启动默认页）
+- **状态总览**：直观查看正式工程数、主会话数、CLI 会话数、本机与仓库能力对齐情况，以及可释放空间大小。
+- **IDE 运行门禁**：右上角实时展示 Antigravity IDE 主进程与语言服务数量；可一键触发只读孤儿体检、安全清理孤儿垃圾或直达智能重命名/能力同步入口。
 
-1. **启动与本地探测**：启动软件后自动定位 `%USERPROFILE%\.gemini`，左栏加载本地工程与真实会话标题。
-2. **加载备份归档**：点击顶部 **「打开备份包...」** 选择 `.agy` 或 `.zip` 备份包，右栏秒级展开备份内容并自动勾选所有 `[新增]` 与 `[已修改/更新]` 的主会话。
-3. **过滤与微调勾选**：
-   - 保持勾选 **`[x] 过滤临时工程与子代理会话`** 屏蔽内部子任务噪音；
-   - 如需同步迁移全局规则、自定义技能/插件与 MCP 配置，勾选 **`[ ] 同步导入全局配置`**；
-   - 使用右栏顶部 **「仅选新增/更新」**、**「全选」**、**「全不选」** 或手动勾选特定会话。
-4. **执行细粒度导入**：点击顶部 **「导入所选项到本地」**，程序自动合流选中会话、重写跨机工作区路径并刷新左栏（新导入项以粗体绿色高亮显示）。
-5. **全量备份导出**：点击顶部 **「全量备份导出...」**，程序按白名单将有效主会话、脑区目录、`.pb` 索引、项目配置及用户规则/技能/MCP 打包为 `.agy` 归档（自动排除已删除孤儿数据库、IDE 内置 `builtin/skills` 与本机 `installation_id`）。
+### 2. 会话管理
+- **左栏统一工程导航**：每个工程固定展示 2 行（工程名称 + 会话总数；物理路径按 `~` / `多目录 · N 个根目录` / 同名最短区分父目录折叠）。底部辅助分组集中收纳 `CLI 命令行会话`、`Outside of Project`、`子任务` 与临时对话。
+- **三层读取与搜正文**：自动按 **Layer 1 `.pbtxt` > Layer 2 `conversation_summaries.db` > Layer 3 `.pb`** 叠加标题；开启 **「搜正文」** 后通过 FTS5 `MATCH` 与安全转义 `LIKE` 检索完整对话文本。
+- **抽屉式 Markdown 预览与导出**：点击任意会话右侧 **「预览」** 在右侧抽屉渲染结构化 Markdown（已清理 `<ADDITIONAL_METADATA>` 噪音，兼容 CLI 会话脑区日志），支持一键复制或 **「导出为 .md」**；支持多选执行 **「迁移工程」**、**「导出 .agy」**、**「级联删除」** 及工程路径 **「重定位」**。
 
-### 2. 本地工作区治理指南 (F1 ~ F4 新增特性)
+### 3. 智能重命名（三步引导）
+1. **Step 1：范围筛选 & 规则调节**：支持按正式工程范围筛选，开关 **「已有【】前缀」**、**「0 步 / 通用水词」**、**「运行中」** 会话；点击 **「规则编辑器」** 打开可视化表单调节工程别名、多仓机型关键字与分支正则，支持 **「▶ 沙盒试跑规则」** 与源码 JSON 切换。
+2. **Step 2：双栏预览、手工微调与 AI 润色**：左侧勾选清单（默认不选 0 步/通用水词、已标前缀或运行中会话），右侧实时查看首问全文、提取分支与单行新标题编辑；点击 **「AI 润色」** 可选剪贴板协同或 `.txt` / JSON 文件往返批处理。
+3. **Step 3：确认并三层持久化写入**：点击执行后自动生成 `companion_rename_backups` 三层快照并写入 `.pbtxt` / `.db` / `.pb`；随时点击 **「⏪ 回滚历史」** 按批次恢复。
 
-#### F1: 会话/工程级联物理删除与孤儿垃圾清理 (GC)
-- **彻底物理删除会话或整工程**：
-  1. 在左栏「本地环境」树中，勾选要删除的会话或整工程（若未勾选任何复选框，则自动作用于当前鼠标点击选中的节点）；
-  2. 点击左栏头部操作区的 **「删除所选」** 按钮、按键盘 **`Delete`** 键，或右键选择 **「彻底删除所选工程/会话 (Delete)...」**；
-  3. 弹窗确认待删除清单（包含所选主会话下关联的所有隐藏 Subagent 子会话及工程名称）；
-  4. 确认后程序自动关闭 Antigravity 写入锁，从 `agyhub_summaries_proto.pb` 中移除节点（自动生成 `.bak` 安全备份），彻底物理删除磁盘上的 `conversations/<uuid>.db*`、`brain/<uuid>/` 与工程配置文件 `config/projects/<id>.json`，支持彻底清除 IDE 内部不可见的幽灵工程（如 `Administrator`、`InvertProject`）。
-- **孤儿垃圾清理 (GC)**：
-  1. 点击左栏头部操作区的 **「清理孤儿垃圾」** 按钮，或在左栏右键选择 **「扫描并清理孤儿数据库与脑区 (GC)...」**；
-  2. 程序自动扫描磁盘上的所有 `.db` 与 `brain/` 目录，并与当前 `agyhub_summaries_proto.pb` 活跃索引进行反向比对；
-  3. 发现脱离索引的残留孤儿文件时，弹窗提示孤儿会话数量与可释放的 MB 磁盘空间；
-  4. 点击确认即可一键物理清除所有孤儿残留。
+### 4. 能力仓库 (`Repository/`)
+- **分类筛选与同步建议**：按 `Plugin` / `Skill` / `Rule` / `MCP` / `Hook` 或同步方向筛选（`仅需处理` 快速定位未对齐项）。
+- **行级源码 Diff 抽屉**：点击 **「对比差异」** 查看具体 JSON 注册片段及文件逐行红绿 Diff，并在抽屉底栏直接执行 **「← 采纳仓库版到本地」** 或 **「推入内置仓库 →」**。
+- **脚本路径体检与重定位**：存在本机缺失脚本或可执行路径的 MCP / Hook 条目带黄色预警徽标，支持展开内联更换本地路径（支持原生文件选择框）。
 
-#### F2: 会话重命名、跨工程迁移与工程路径重定向
-- **本地会话原地重命名**：
-  1. 在左栏选中任意会话节点；
-  2. 按键盘 **`F2`** 键，或右键选择 **「重命名此会话 (F2)...」**；
-  3. 在输入框中输入新的自定义标题并确认；
-  4. 程序将新标题同步固化至 Protobuf 索引的 `Field 1`（主标题）与 `Field 15`（用户自定义标题元数据），确保 IDE 再次读取或刷新时标题不丢失、不退化。
-- **会话跨工程迁移与归属绑定**：
-  1. 在左栏勾选或选中一条或多条需要调整归属的会话（例如散落在 `Outside of Project` 或 `Administrator` 下的零散会话）；
-  2. 右键选择 **「移动所选会话到其他工程...」**；
-  3. 在对话框中选择现有工程，或输入新建工程名称与本地工作区物理路径；
-  4. 确认后程序原子级更新 `agyhub_summaries_proto.pb` 中的 `Field 9` 与 `Field 17`，并同步更新底层 SQLite 数据库的 `trajectory_metadata_blob`，完成会话与物理工作区的无缝绑定。
-- **工程物理路径重定向与注册修复**：
-  1. 在左栏选中目标工程节点（或其下任意会话）；
-  2. 右键选择 **「重定向此工程本地路径 / 修复工程注册...」**；
-  3. 在文件夹选取框中指定新的本地工作区路径；
-  4. 确认后程序自动修复/创建 `config/projects/<id>.json` 配置文件，并同步将该工程下所有关联会话的 `.pb` 索引与 SQLite 路径重定向至新目录。
-
-#### F3: 选择性轻量备份导出 (`.agy`)
-1. 在左栏「本地环境」树中，勾选需要分享或归档的特定工程或单条会话（支持级联半选/全选）；
-2. 点击左栏头部操作区的 **「导出所选(.agy)」** 按钮，或在左栏右键选择 **「导出所选工程/会话为轻量备份包 (.agy)...」**；
-3. 弹窗提示是否同时附带全局规则、插件与 MCP 配置（点击「是」包含全局配置，点击「否」仅导出纯净会话）；
-4. 选择保存路径，程序自动裁剪生成仅包含所选会话分片的 `agyhub_summaries_proto.pb` 索引，并将关联的 `.db` 数据库、`brain/` 目录与工程配置打包为轻量级 `.agy` 文件。
-
-#### F4: 会话对话记录与 Artifacts 导出为 Markdown (`.md`)
-- **本地会话导出**：
-  1. 在左栏选中任意会话节点；
-  2. 右键选择 **「导出此会话对话记录为 Markdown (.md)...」** 并指定保存路径；
-  3. 程序将 `transcript.jsonl` 中的对话流与脑区产出物无缝组装为标准化 `.md` 文件。
-- **备份包免导入流式提取**：
-  1. 打开任意 `.agy` 或 `.zip` 备份归档；
-  2. 在右栏「备份归档」树中选中任意感兴趣的备份会话；
-  3. 右键选择 **「直接预览/导出此备份会话为 Markdown (.md) [免导入]...」**；
-  4. 无需将备份数据导入本地环境，程序直接在内存中流式解构提取该会话的对话记录与脑区交付件并保存为 `.md`。
-- **Markdown 排版特性**：
-  - **提问降噪**：自动剥离提示词中的 `<ADDITIONAL_METADATA>` 系统注入标签，还原纯净用户指令；
-  - **思考过程折叠**：将 AI 内部思维链渲染为 GitHub 风格的 `<details><summary>思考过程 (Thinking Process)</summary>...</details>` 折叠区块；
-  - **交付件整合**：自动扫描并提取 `brain/<uuid>/*.md` 生成的所有架构文档与代码交付件，平铺追加在对话流末尾。
-
-### 3. 操作入口与快捷键速查表
-
-| 操作入口 / 快捷键 | 作用区域 | 功能说明 |
-| :--- | :--- | :--- |
-| **`F2`** / 右键菜单 | 左栏会话节点 | 重命名本地会话（双向固化 Field 1 与 Field 15） |
-| **`Delete`** / **「删除所选」** | 左栏工程或会话节点 | 级联物理删除所选工程/会话（含 Subagent、.db、brain/、project.json） |
-| **「清理孤儿垃圾」** / 右键菜单 | 左栏顶部栏 / 右键菜单 | 扫描比对脱离 .pb 索引的孤儿残留数据库与脑区并一键 GC 清理 |
-| **「导出所选(.agy)」** / 右键菜单 | 左栏顶部栏 / 右键菜单 | 细粒度选择性轻量备份导出（裁剪 Proto 索引分片） |
-| 右键 **「移动所选会话到其他工程...」** | 左栏会话节点 | 批量重绑定会话归属（修复 Outside of Project / 幽灵工程） |
-| 右键 **「重定向此工程本地路径...」** | 左栏工程节点 | 重定向工作区物理文件夹并修复 config/projects 注册 |
-| 右键 **「导出此会话对话记录为 Markdown...」** | 左栏会话节点 | 导出本地会话对话流明文与 brain/*.md 产出文档 |
-| 右键 **「直接预览/导出...[免导入]」** | 右栏备份会话节点 | 免导入流式提取备份包中指定会话为 Markdown 文档 |
-| **「仅选新增/更新」** / **「全选」** / **「全不选」** | 右栏顶部栏 | 快速调整备份包导入勾选项 |
+### 5. 备份迁移 (`.agy`)
+- **全量备份与选择性打包**：一键后台流式创建全量 `.agy` 归档（经 SSE 实时更新顶部进度提示），或在会话管理中按勾选导出轻量包。
+- **免解压流式导入**：打开外部 `.agy` 后，自动比对归档与本机的能力差异（支持红绿 Diff 查看）及各工程/会话新增状态，一键按 Key 级合流与路径重映射导入。
 
 ---
 
-## 三、 编译构建与自动化验证
+## 三、 启动参数与源码测试说明
 
-### 1. 源码结构
+### 1. 命令行参数（可选）
 
-```
+| 参数 | 说明 |
+| :--- | :--- |
+| `--legacy-ui` | 强制启动传统 WinForms 双栏界面（V0.8 保留兼容回退） |
+| `--no-browser` | 仅启动本地工作台 HTTP 服务并输出访问 URL，不自动拉起浏览器窗口 |
+| `--port <port>` | 指定回环监听端口（默认自动分配空闲端口 `0`） |
+| `--home <dir>` | 指定隔离测试或自定义用户主目录 |
+| `--repo <dir>` | 指定自定义能力仓库 `Repository` 目录 |
+| `--token <token>` | 指定固定访问会话令牌（默认每次启动通过 `RNGCryptoServiceProvider` 生成 32 字节随机令牌） |
+
+### 2. 源码目录结构
+
+```text
 Antigravity_Companion/
-├── .gitignore                          # Git 忽略规则
-├── app.ico                             # 嵌入式 Win32 原生应用图标
-├── build.bat                           # 原生单文件编译脚本 (csc.exe)
-├── ProtoAstCodec.cs                    # 原生 Protobuf AST 编解码器、分片合流与 SQLite 重映射
-├── SessionMetadataExtractor.cs         # 会话元数据提取器与临时工程/子代理过滤器
-├── StreamingZipIndexReader.cs          # 流式 Zip 索引读取器与多格式路径重映射工具
-├── VisualDiffEngine.cs                 # 双栏工程与会话差异比对引擎
-├── LocalWorkspaceManager.cs            # 本地工作区治理引擎 (F1 级联物理删除与孤儿 GC、F2 会话重命名/跨工程迁移/工程路径重定向、F3 选择性轻量备份导出)
-├── TranscriptMarkdownExporter.cs       # 会话明文对话记录 (transcript.jsonl) 与脑区产出文档 (brain/<uuid>/*.md) 的 Markdown 导出引擎 (F4)
-├── MainForm.cs                         # WinForms 双栏主界面与全套治理/备份/导入工作流
-└── tests/                              # 生产代码直连自动化测试套件
-    ├── build_tests.bat                 # 编译真实生产源码并执行回归测试
-    └── TestRunner.cs                   # 核心引擎端到端验证用例 (T01 - T14)
+├── AppServices.cs                    # 进程门禁、工作区聚合分组、备份传输调度与 STA 原生弹窗桥
+├── LocalWebHost.cs                   # 纯用户态 TcpListener HTTP/1.1 + SSE 服务、CSP 与 REST API
+├── WebShellLauncher.cs               # Edge/Chrome --app 独立桌面壳拉起与空闲生命周期托管
+├── ui/
+│   ├── index.html                    # 零外部依赖离线 SPA 骨架
+│   ├── styles.css                    # Slate Light (默认) / Dark 主题与极简排版样式系统
+│   └── app.js                        # 5 模块交互状态机、SSE 订阅、抽屉 Diff/Markdown/规则编辑器
+├── ProtoAstCodec.cs                  # 原生 Protobuf AST、Field 17/9 提取与 SQLite/FTS5 桥接
+├── SessionMetadataExtractor.cs       # 三层元数据叠加、多根目录匹配与 antigravity-cli 首问提取
+├── SessionRenameEngine.cs            # .pbtxt 编解码、规则合成、标签吸收、沙盒试跑、回滚与 AI 交换
+├── StreamingZipIndexReader.cs        # 流式 Zip 索引、多格式路径重映射与 folderUris 数组扫描
+├── VisualDiffEngine.cs               # 方向感知能力 Diff (三方基线 + UTC 时间) 与有界 LCS 行级 Diff
+├── LocalWorkspaceManager.cs          # 本地三层原子写入、级联删除与共享读锁只读孤儿 GC
+├── CapabilityRepositoryManager.cs    # 能力扫描、{{HOME}} 跨机泛化、键值级合流与同步基线持久化
+├── TranscriptMarkdownExporter.cs     # 会话流与 CLI 脑区日志 Markdown 有界预览与完整导出
+├── MainForm.cs                       # 程序入口路由、命令行解析与 --legacy-ui WinForms 界面
+├── build.bat                         # 编译单文件 Antigravity_Companion.exe（内嵌 ui/* 资源）
+├── Repository/                       # 明文能力仓库与重命名规则 rename_rules.json
+└── tests/
+    ├── build_tests.bat               # 编译并运行生产代码端到端验证套件
+    └── TestRunner.cs                 # 核心引擎与 HTTP 工作台全量测试套件 (T01 - T42)
 ```
 
-### 2. 编译与测试命令
+### 3. 编译构建与自动化验证 (`T01` ~ `T42`)
 
 ```cmd
 :: 1. 编译单文件可执行程序 Antigravity_Companion.exe
 cmd /c build.bat
 
-:: 2. 编译并运行生产代码自动化验证套件 (覆盖 T01 - T14 全量用例)
+:: 2. 编译并运行 42 项生产代码自动化验证套件
 cmd /c tests\build_tests.bat
 ```
 
-### 3. 自动化测试套件用例覆盖矩阵 (T01 ~ T14)
-
-| 用例编号 | 覆盖模块与功能点 | 验证目标 |
-| :--- | :--- | :--- |
-| **T01** | `ProtoAstCodec` | Protobuf 变长整数 (Varint) 编解码边界与 AST 结构往返保真度 |
-| **T02** | `SessionMetadataExtractor` | 真实 Proto 结构中 `Field 15` 用户自定义重命名标题无损穿透 |
-| **T03** | `SessionMetadataExtractor` | 非法扁平条目剔除与深层嵌套有效会话精准识别 |
-| **T04** | `SmartProjectFilter` | `subagent-*`、`Recovered project` 与子代理衍生会话过滤隔离 |
-| **T05** | `StreamingZipIndexReader` | `.agy` 归档免解压流式内存探测与毫秒级索引解析 |
-| **T06** | `VisualDiffEngine` | 双栏工程/会话状态差异计算与跨盘符同名工程智能合流 |
-| **T07** | `IncrementalProtoShardMerger`| 增量 Protobuf 索引分片无损追加合流与 URI 动态重映射 |
-| **T08** | `DirectStreamArchiver` | 6 种跨机工作区路径编码大小写不敏感重映射 |
-| **T09** | `LocalWorkspaceManager (F1)` | 级联物理删除会话/整工程、同步清理隐藏 Subagent 与 `.pb` 节点剔除 |
-| **T10** | `LocalWorkspaceManager (F1)` | 孤儿垃圾收集器 (GC) 反向比对扫描脱离索引的数据库与脑区并清理 |
-| **T11** | `LocalWorkspaceManager (F2)` | 会话重命名及 `Field 1` 与 `Field 15` 双向持久化固化验证 |
-| **T12** | `LocalWorkspaceManager (F2)` | 会话跨工程迁移与工程本地物理工作区路径重定向 |
-| **T13** | `LocalWorkspaceManager (F3)` | 细粒度选择性轻量备份导出、Proto 裁剪分片与往返解包验证 |
-| **T14** | `TranscriptMarkdownExporter (F4)`| 对话流 JSONL 解析、提示词降噪、思考过程折叠与免导入流式 Markdown 提取 |
+- **T01 ~ T36**：覆盖 Protobuf AST、三层标题同步、`winsqlite3.dll` FTS5/LIKE、`rename_rules.json` 规则合成、行级快照回滚、AI 剪贴板往返、五类能力 Key 级合流、`ZipSlip` 防御与共享读锁校验。
+- **T37**：验证 `Field 17->1` 二进制子消息防乱码保护、SQLite `ProjectId` 回填及 `folderUris` 多根目录归属匹配。
+- **T38**：验证 `Field 9->4` 多仓库分支筛选、尾缀 `"分支"` 剥离、`PayGo 【标签】` 折叠防双括号、正文强调保护及 0 步低价值识别。
+- **T39**：验证 `antigravity-cli/brain` 首问与 Markdown 导出回退、最短区分父目录计算及辅助分组隔离。
+- **T40**：验证三方基线/UTC 时间双向 Diff、有界 LCS 行级 Diff 截断护栏与 `.pb` 共享锁定状态下的只读 GC。
+- **T41**：验证纯用户态 `LocalWebHost` 动态端口、防 DNS 重绑定（`Host`）、CSRF `Origin`、`SameSite=Strict` Cookie 重载、CSP 头、UTF-8 中文 `Content-Length` 精确分帧及只读 API。
+- **T42**：验证隔离沙盒端到端 HTTP 闭环（执行重命名 -> 快照历史 -> 回滚、AI 提示词导出与 JSON 文件回填、能力入库/刷新/本地导入、GC 体检与 `.agy` 归档探测）。

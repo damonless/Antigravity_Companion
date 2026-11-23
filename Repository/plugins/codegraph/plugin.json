@@ -1,0 +1,12 @@
+{
+  "name": "codegraph",
+  "displayName": "CodeGraph AST Explorer",
+  "version": "1.0.0",
+  "description": "基于 AST 的代码符号拓扑与调用链精准探索插件，集成 codegraph MCP 服务与分级检索防盲搜规约。",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "使用 codegraph_explore 追踪目标函数的上游调用链与影响半径",
+    "同步当前分支的 CodeGraph 索引并检查图谱健康状态",
+    "分析核心结构体或状态标志在全工程中的读写扇出路径"
+  ]
+}

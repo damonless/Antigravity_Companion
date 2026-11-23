@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Antigravity Companion V0.8</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="appShell" class="app-shell">
+    <!-- Left Primary Navigation -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo" aria-hidden="true">A</div>
+        <div class="brand-text">
+          <div class="brand-name">Antigravity 伴侣</div>
+          <div class="brand-ver">V0.8 工作台</div>
+        </div>
+      </div>
+
+      <nav class="nav-list" id="navList" aria-label="主导航">
+        <button class="nav-item active" data-view="overview" type="button">
+          <span class="nav-icon" data-icon="home"></span>
+          <span class="nav-label">概览</span>
+        </button>
+        <button class="nav-item" data-view="sessions" type="button">
+          <span class="nav-icon" data-icon="message"></span>
+          <span class="nav-label">会话管理</span>
+          <span class="nav-pill" id="navCountSessions">0</span>
+        </button>
+        <button class="nav-item" data-view="rename" type="button">
+          <span class="nav-icon" data-icon="sparkles"></span>
+          <span class="nav-label">智能重命名</span>
+          <span class="nav-pill nav-pill-accent" id="navCountUntagged">0</span>
+        </button>
+        <button class="nav-item" data-view="capabilities" type="button">
+          <span class="nav-icon" data-icon="layers"></span>
+          <span class="nav-label">能力仓库</span>
+          <span class="nav-pill" id="navCountCapDiffs">0</span>
+        </button>
+        <button class="nav-item" data-view="backup" type="button">
+          <span class="nav-icon" data-icon="archive"></span>
+          <span class="nav-label">备份迁移</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="sidebar-btn" id="btnToggleTheme" type="button">
+          <span class="nav-icon" data-icon="moon"></span>
+          <span id="lblThemeToggle">深色模式</span>
+        </button>
+        <button class="sidebar-btn" id="btnGlobalRefresh" type="button">
+          <span class="nav-icon" data-icon="refresh"></span>
+          <span>刷新环境</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Right Area -->
+    <div class="workspace-col">
+      <!-- Minimal Top Bar -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <h1 class="page-title" id="pageTitle">概览</h1>
+          <span class="page-subtitle" id="pageSubtitle">查看本机状态、同步差异与存储健康度</span>
+        </div>
+        <div class="topbar-right">
+          <div class="ide-pill" id="ideStatusPill" title="点击可查看或安全关闭运行中的 Antigravity IDE">
+            <span class="status-dot idle" id="ideStatusDot"></span>
+            <span id="ideStatusText">检测中...</span>
+            <button class="btn-inline-link hidden" id="btnQuickCloseIde" type="button">安全关闭 IDE</button>
+          </div>
+          <div id="topbarActions" class="topbar-actions"></div>
+        </div>
+      </header>
+
+      <!-- Progress Banner (for Background Jobs) -->
+      <div class="job-banner hidden" id="jobBanner">
+        <div class="job-banner-text" id="jobBannerText">正在处理...</div>
+        <div class="job-progress-track">
+          <div class="job-progress-fill" id="jobProgressFill"></div>
+        </div>
+      </div>
+
+      <!-- Main Active View Canvas -->
+      <main class="main-canvas" id="mainCanvas"></main>
+
+      <!-- Collapsible 28px Bottom Activity Bar -->
+      <footer class="activity-strip" id="activityStrip">
+        <button class="activity-toggle" id="btnToggleLogs" type="button">
+          <span class="activity-dot" id="activityDot"></span>
+          <span class="activity-latest" id="activityLatest">就绪</span>
+          <span class="activity-chevron" id="activityChevron">展开日志 ▴</span>
+        </button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Expandable Bottom Log Drawer -->
+  <section class="log-drawer hidden" id="logDrawer" aria-label="活动日志">
+    <div class="log-drawer-header">
+      <span>活动与诊断日志</span>
+      <div class="row gap-sm">
+        <button class="btn btn-sm btn-ghost" id="btnCopyLogs" type="button">复制日志</button>
+        <button class="btn btn-sm btn-ghost" id="btnCloseLogs" type="button">收起</button>
+      </div>
+    </div>
+    <div class="log-drawer-body" id="logDrawerBody"></div>
+  </section>
+
+  <!-- Right Slide-Over Drawer (Markdown Preview / Code Diff / Rule Editor / AI Polish / Rollback History) -->
+  <div class="drawer-backdrop hidden" id="drawerBackdrop">
+    <aside class="drawer-panel" id="drawerPanel" role="dialog" aria-modal="true">
+      <div class="drawer-header">
+        <div>
+          <h2 class="drawer-title" id="drawerTitle">详情</h2>
+          <div class="drawer-sub" id="drawerSubtitle"></div>
+        </div>
+        <div class="drawer-header-actions">
+          <div id="drawerHeaderActions" class="row gap-sm"></div>
+          <button class="btn-icon" id="btnCloseDrawer" type="button" title="关闭 (Esc)">✕</button>
+        </div>
+      </div>
+      <div class="drawer-body" id="drawerBody"></div>
+    </aside>
+  </div>
+
+  <!-- Modal Dialog Host -->
+  <div class="modal-backdrop hidden" id="modalBackdrop">
+    <div class="modal-card" id="modalCard" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalTitle">确认操作</h3>
+        <button class="btn-icon" id="btnCloseModal" type="button">✕</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-footer" id="modalFooter"></div>
+    </div>
+  </div>
+
+  <!-- Toast Stack -->
+  <div class="toast-stack" id="toastStack"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

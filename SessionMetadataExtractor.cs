@@ -31,6 +31,13 @@ namespace AntigravityCompanion
         public bool IsSubagent;            // 是否为临时子代理会话
         public string SubagentRole;        // 子代理角色
         public string ParentConversationId;// 父会话 UUID
+        public string AgentName;           // 子代理名称 (来自 summary.sqlite agent_name)
+        public string FirstPromptSnippet;  // 首条用户提示词摘要 (来自 conversations_fts user_body)
+        public string GitBranchHint;       // Git 分支提示 (来自 raw_summary Field 9->4 / 兼容 9->3->4)
+        public List<KeyValuePair<string, string>> RepoBranchHints; // 多仓 (repoPath, branch) 列表
+        public bool IsCliSession;          // 是否为 antigravity-cli 会话 (default-cli-project)
+        public string RunStatus;           // 运行状态 (来自 summary.sqlite status)
+        public bool NotFullyIdle;          // 未完全空闲标志 (来自 summary.sqlite not_fully_idle)
         public ProtoNode RawProtoEntry;    // AST 原始节点
         public byte[] RawBytes;            // 原始二进制切片
 
@@ -48,6 +55,7 @@ namespace AntigravityCompanion
         public string Id;
         public string Name;
         public string FolderUri;
+        public List<string> FolderUris = new List<string>();
     }
 
     /// <summary>
@@ -61,6 +69,7 @@ namespace AntigravityCompanion
         public string Version;
         public Dictionary<string, ProjectMetadata> Projects;
         public List<ConversationSummaryInfo> Conversations;
+        public List<CapabilityItem> Capabilities;
         public HashSet<string> ExistingConvoDbFiles;
         public HashSet<string> ExistingBrainDirs;
         public bool HasRules;
@@ -74,6 +83,7 @@ namespace AntigravityCompanion
         {
             Projects = new Dictionary<string, ProjectMetadata>(StringComparer.OrdinalIgnoreCase);
             Conversations = new List<ConversationSummaryInfo>();
+            Capabilities = new List<CapabilityItem>();
             ExistingConvoDbFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             ExistingBrainDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         }
@@ -93,7 +103,9 @@ namespace AntigravityCompanion
 
             if (lower.StartsWith("subagent-") || lower.StartsWith("subagent_"))
                 return true;
-            if (lower.StartsWith("temp-") || lower.StartsWith("temp_"))
+            if (lower == "temp" || lower == "tmp" ||
+                lower.StartsWith("temp-playground") || lower.StartsWith("temp_playground") ||
+                lower.StartsWith("temp-eval") || lower.StartsWith("antigravity-eval"))
                 return true;
             if (lower.StartsWith("recovered project") || lower.StartsWith("recovered_project") ||
                 lower.StartsWith("recovered workspace") || lower.StartsWith("recovered_workspace"))
@@ -123,15 +135,30 @@ namespace AntigravityCompanion
     /// </summary>
     public static class SessionMetadataExtractor
     {
+        private static readonly HashSet<string> WindowsReservedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "CON", "PRN", "AUX", "NUL",
+            "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+        };
+
         public static bool IsLikelyConversationId(string s)
         {
-            if (string.IsNullOrEmpty(s)) return false;
+            if (string.IsNullOrWhiteSpace(s)) return false;
             s = s.Trim();
-            if (s.Length > 64) return false;
-            Guid g;
-            if (Guid.TryParse(s, out g)) return true;
-            if (s.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return false;
-            if (s.IndexOfAny(Path.GetInvalidPathChars()) >= 0) return false;
+            if (s.Length == 0 || s.Length > 64) return false;
+            if (s == "." || s == "..") return false;
+            if (WindowsReservedNames.Contains(s)) return false;
+
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = s[i];
+                bool valid = (c >= 'A' && c <= 'Z') ||
+                             (c >= 'a' && c <= 'z') ||
+                             (c >= '0' && c <= '9') ||
+                             c == '-' || c == '_';
+                if (!valid) return false;
+            }
             return true;
         }
         public static List<ConversationSummaryInfo> ExtractSummaries(byte[] pbData, Dictionary<string, ProjectMetadata> projectsMap)
@@ -168,20 +195,219 @@ namespace AntigravityCompanion
             return ExtractSummaries(pbBytes, null);
         }
 
+        /// <summary>
+        /// 叠加本机三层数据源 (Layer 1 .pbtxt 标注 &gt; Layer 2 summary.sqlite &gt; Layer 3 .pb Field 15 &gt; Field 1)
+        /// </summary>
+        public static void OverlayLocalThreeLayerMetadata(
+            List<ConversationSummaryInfo> list,
+            string geminiPath,
+            Dictionary<string, SummaryDbRowInfo> dbSnapshot)
+        {
+            OverlayLocalThreeLayerMetadata(list, geminiPath, dbSnapshot, null);
+        }
+
+        public static void OverlayLocalThreeLayerMetadata(
+            List<ConversationSummaryInfo> list,
+            string geminiPath,
+            Dictionary<string, SummaryDbRowInfo> dbSnapshot,
+            Dictionary<string, ProjectMetadata> localProjects)
+        {
+            if (list == null || list.Count == 0) return;
+
+            string annotationsDir = !string.IsNullOrEmpty(geminiPath)
+                ? Path.Combine(geminiPath, "antigravity", "annotations")
+                : null;
+            bool hasAnnotationsDir = !string.IsNullOrEmpty(annotationsDir) && Directory.Exists(annotationsDir);
+
+            for (int i = 0; i < list.Count; i++)
+            {
+                ConversationSummaryInfo s = list[i];
+                if (s == null || string.IsNullOrWhiteSpace(s.ConversationId)) continue;
+
+                string cid = s.ConversationId.Trim();
+                SummaryDbRowInfo dbRow = null;
+                if (dbSnapshot != null)
+                {
+                    dbSnapshot.TryGetValue(cid, out dbRow);
+                }
+
+                if (dbRow != null)
+                {
+                    if (dbRow.AgentName != null) s.AgentName = dbRow.AgentName;
+                    if (!string.IsNullOrEmpty(dbRow.FirstPromptSnippet)) s.FirstPromptSnippet = dbRow.FirstPromptSnippet;
+                    if (!string.IsNullOrEmpty(dbRow.GitBranchHint)) s.GitBranchHint = dbRow.GitBranchHint;
+                    if (dbRow.RepoBranchHints != null && dbRow.RepoBranchHints.Count > 0) s.RepoBranchHints = dbRow.RepoBranchHints;
+                    if (dbRow.Status != null) s.RunStatus = dbRow.Status;
+                    s.NotFullyIdle = dbRow.NotFullyIdle;
+
+                    if (string.IsNullOrWhiteSpace(s.ProjectId) && !string.IsNullOrWhiteSpace(dbRow.ProjectId))
+                    {
+                        s.ProjectId = dbRow.ProjectId.Trim();
+                        ResolveProjectInfo(s, localProjects);
+                    }
+                    else if (localProjects != null && !string.IsNullOrEmpty(s.ProjectId))
+                    {
+                        ResolveProjectInfo(s, localProjects);
+                    }
+
+                    if (string.Equals(dbRow.ProjectId, "default-cli-project", StringComparison.OrdinalIgnoreCase) ||
+                        (!string.IsNullOrEmpty(dbRow.Source) && dbRow.Source.IndexOf("cli", StringComparison.OrdinalIgnoreCase) >= 0) ||
+                        (!string.IsNullOrEmpty(dbRow.AppDataDir) && dbRow.AppDataDir.IndexOf("antigravity-cli", StringComparison.OrdinalIgnoreCase) >= 0))
+                    {
+                        s.IsCliSession = true;
+                    }
+                }
+
+                if (string.Equals(s.ProjectId, "default-cli-project", StringComparison.OrdinalIgnoreCase))
+                {
+                    s.IsCliSession = true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(s.AgentName))
+                {
+                    s.IsSubagent = true;
+                }
+
+                if (string.IsNullOrWhiteSpace(s.FirstPromptSnippet) && !string.IsNullOrEmpty(geminiPath) && IsLikelyConversationId(cid))
+                {
+                    string fallbackPrompt = TryReadFirstPromptFromTranscripts(geminiPath, cid);
+                    if (!string.IsNullOrEmpty(fallbackPrompt))
+                    {
+                        s.FirstPromptSnippet = fallbackPrompt;
+                    }
+                }
+
+                string pbtxtTitle = null;
+                if (hasAnnotationsDir && IsLikelyConversationId(cid))
+                {
+                    string pbtxtPath = Path.Combine(annotationsDir, cid + ".pbtxt");
+                    if (LocalWorkspaceManager.IsPathContainedUnder(annotationsDir, pbtxtPath) && File.Exists(pbtxtPath))
+                    {
+                        try
+                        {
+                            string rawPbtxt;
+                            using (FileStream fs = new FileStream(pbtxtPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                            using (StreamReader sr = new StreamReader(fs, Encoding.UTF8))
+                            {
+                                rawPbtxt = sr.ReadToEnd();
+                            }
+                            pbtxtTitle = PbtxtAnnotationCodec.ExtractTitle(rawPbtxt);
+                        }
+                        catch
+                        {
+                            // 单条标注读取锁定不阻断其余会话元数据叠加
+                        }
+                    }
+                }
+
+                string overlayTitle = null;
+                if (!string.IsNullOrWhiteSpace(pbtxtTitle))
+                {
+                    string trimmedPbtxt = pbtxtTitle.Trim();
+                    if (!IncrementalProtoShardMerger.IsSyntheticPlaceholderTitle(trimmedPbtxt))
+                    {
+                        overlayTitle = trimmedPbtxt;
+                    }
+                }
+
+                if (overlayTitle == null && dbRow != null && !string.IsNullOrWhiteSpace(dbRow.Title))
+                {
+                    string trimmedDb = dbRow.Title.Trim();
+                    if (!IncrementalProtoShardMerger.IsSyntheticPlaceholderTitle(trimmedDb))
+                    {
+                        overlayTitle = trimmedDb;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(overlayTitle))
+                {
+                    if (!s.HasCustomTitle || !string.Equals(overlayTitle, s.DisplayTitle, StringComparison.Ordinal))
+                    {
+                        s.CustomTitle = overlayTitle;
+                        s.DisplayTitle = overlayTitle;
+                        s.HasCustomTitle = true;
+                    }
+                }
+            }
+        }
+
+        private static string TryReadFirstPromptFromTranscripts(string geminiPath, string cid)
+        {
+            const int MaxLinesToScan = 60;
+            const int MaxSnippetChars = 1200;
+            if (string.IsNullOrEmpty(geminiPath) || !IsLikelyConversationId(cid)) return null;
+
+            string[] subRoots = new string[]
+            {
+                Path.Combine(geminiPath, "antigravity", "brain"),
+                Path.Combine(geminiPath, "antigravity-cli", "brain")
+            };
+            string[] fileNames = new string[] { "transcript_full.jsonl", "transcript.jsonl" };
+
+            for (int r = 0; r < subRoots.Length; r++)
+            {
+                string brainRoot = subRoots[r];
+                string convBrain = Path.Combine(brainRoot, cid);
+                if (!LocalWorkspaceManager.IsPathContainedUnder(brainRoot, convBrain) || !Directory.Exists(convBrain))
+                    continue;
+
+                string logsDir = Path.Combine(convBrain, ".system_generated", "logs");
+                if (!Directory.Exists(logsDir)) continue;
+
+                for (int f = 0; f < fileNames.Length; f++)
+                {
+                    string logPath = Path.Combine(logsDir, fileNames[f]);
+                    if (!LocalWorkspaceManager.IsPathContainedUnder(logsDir, logPath) || !File.Exists(logPath))
+                        continue;
+
+                    try
+                    {
+                        using (FileStream fs = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                        using (StreamReader sr = new StreamReader(fs, Encoding.UTF8))
+                        {
+                            for (int lineIdx = 0; lineIdx < MaxLinesToScan; lineIdx++)
+                            {
+                                string line = sr.ReadLine();
+                                if (line == null) break;
+                                if (line.IndexOf("USER_INPUT", StringComparison.Ordinal) < 0) continue;
+
+                                object parsed = MiniJson.Parse(line);
+                                IDictionary<string, object> dict = parsed as IDictionary<string, object>;
+                                if (dict == null) continue;
+
+                                object typeObj;
+                                if (!dict.TryGetValue("type", out typeObj) ||
+                                    !string.Equals(typeObj as string, "USER_INPUT", StringComparison.OrdinalIgnoreCase))
+                                    continue;
+
+                                object contentObj;
+                                string content = dict.TryGetValue("content", out contentObj) ? (contentObj as string) : null;
+                                if (!string.IsNullOrWhiteSpace(content))
+                                {
+                                    string trimmed = content.Trim();
+                                    return trimmed.Length > MaxSnippetChars
+                                        ? trimmed.Substring(0, MaxSnippetChars)
+                                        : trimmed;
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            return null;
+        }
+
         public static ConversationSummaryInfo ParseEntryNode(ProtoNode entryNode)
         {
             if (entryNode == null) return null;
             ConversationSummaryInfo info = new ConversationSummaryInfo();
             info.RawProtoEntry = entryNode;
 
-            if (entryNode.Children == null || entryNode.Children.Count == 0)
-            {
-                if (entryNode.RawBytes != null && entryNode.RawBytes.Length > 0)
-                {
-                    List<ProtoNode> sub = ProtoCodec.Decode(entryNode.RawBytes);
-                    if (sub != null && sub.Count > 0) entryNode.Children = sub;
-                }
-            }
+            ProtoCodec.DecodeSummaryEntryTree(entryNode);
 
             if (entryNode.Children == null)
             {
@@ -189,19 +415,6 @@ namespace AntigravityCompanion
             }
 
             ProtoNode metaSubmessage = entryNode.GetChild(2);
-            if (metaSubmessage != null && !metaSubmessage.HasChildren && metaSubmessage.RawBytes != null && metaSubmessage.RawBytes.Length > 0)
-            {
-                try
-                {
-                    List<ProtoNode> sub = ProtoCodec.Decode(metaSubmessage.RawBytes);
-                    if (sub != null && sub.Count > 0)
-                    {
-                        metaSubmessage.Children = sub;
-                    }
-                }
-                catch {}
-            }
-
             bool isRealProtoLayout = metaSubmessage != null && metaSubmessage.HasChildren;
 
             if (isRealProtoLayout)
@@ -212,7 +425,7 @@ namespace AntigravityCompanion
                     string idCandidate = f1.GetString();
                     if (IsLikelyConversationId(idCandidate))
                     {
-                        info.ConversationId = idCandidate;
+                        info.ConversationId = idCandidate.Trim();
                     }
                 }
 
@@ -223,7 +436,7 @@ namespace AntigravityCompanion
                     {
                         info.AutoSummaryTitle = child.GetString();
                     }
-                    else if (child.FieldNumber == 2) // Step count
+                    else if (child.FieldNumber == 2 && child.WireType == 0) // Step count
                     {
                         info.StepCount = child.GetInt32();
                     }
@@ -249,7 +462,7 @@ namespace AntigravityCompanion
                     {
                         ParseCustomTitleNode(child, info);
                     }
-                    else if (child.FieldNumber == 16) // User Interactions count
+                    else if (child.FieldNumber == 16 && child.WireType == 0) // User Interactions count
                     {
                         info.UserInteractions = child.GetInt32();
                     }
@@ -257,7 +470,7 @@ namespace AntigravityCompanion
                     {
                         ParseCascadeNode(child, info);
                     }
-                    else if (child.FieldNumber == 23) // Subagent / Ephemeral flag ★
+                    else if (child.FieldNumber == 23 && child.WireType == 0) // Subagent / Ephemeral flag ★
                     {
                         info.Field23 = child.GetInt32();
                         if (info.Field23 == 0) info.IsSubagent = true;
@@ -269,16 +482,23 @@ namespace AntigravityCompanion
                 return null;
             }
 
-            // 智能识别 Subagent / 临时子会话
+            if (string.IsNullOrEmpty(info.ProjectName) && !string.IsNullOrEmpty(info.FolderUri))
+            {
+                info.ProjectName = ExtractProjectNameFromUri(info.FolderUri);
+            }
+
+            // 识别 Subagent / 子代理会话（绝不因 Field23 == 1 && UserInteractions == 0 误杀主会话）
             if (info.Field23.HasValue && info.Field23.Value == 0)
             {
                 info.IsSubagent = true;
             }
-            else if (info.Field23.HasValue && info.Field23.Value == 1 && info.UserInteractions == 0)
+            else if (!string.IsNullOrEmpty(info.SubagentRole) || !string.IsNullOrEmpty(info.ParentConversationId))
             {
                 info.IsSubagent = true;
             }
-            else if (!string.IsNullOrEmpty(info.ProjectName) && (info.ProjectName.StartsWith("subagent-", StringComparison.OrdinalIgnoreCase) || info.ProjectName.StartsWith("subagent_", StringComparison.OrdinalIgnoreCase)))
+            else if (!string.IsNullOrEmpty(info.ProjectName) &&
+                     (info.ProjectName.StartsWith("subagent-", StringComparison.OrdinalIgnoreCase) ||
+                      info.ProjectName.StartsWith("subagent_", StringComparison.OrdinalIgnoreCase)))
             {
                 info.IsSubagent = true;
             }
@@ -305,12 +525,20 @@ namespace AntigravityCompanion
             if (!IsLikelyConversationId(info.ConversationId))
             {
                 info.ConversationId = Guid.NewGuid().ToString();
+                ProtoNode cidNode = entryNode.GetChild(1);
+                if (cidNode != null && cidNode.WireType == 2)
+                {
+                    cidNode.SetString(info.ConversationId);
+                }
+                else
+                {
+                    ProtoNode newCid = new ProtoNode(1, 2);
+                    newCid.SetString(info.ConversationId);
+                    entryNode.Children.Insert(0, newCid);
+                }
+                entryNode.IsModified = true;
             }
 
-            if (string.IsNullOrEmpty(info.ProjectName) && !string.IsNullOrEmpty(info.FolderUri))
-            {
-                info.ProjectName = ExtractProjectNameFromUri(info.FolderUri);
-            }
             if (string.IsNullOrEmpty(info.ProjectName))
             {
                 info.ProjectName = "Outside of Project";
@@ -371,6 +599,19 @@ namespace AntigravityCompanion
             }
         }
 
+        private static bool IsSafeDisplayProjectName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return false;
+            string s = name.Trim();
+            if (s.StartsWith("file:///", StringComparison.OrdinalIgnoreCase)) return false;
+            for (int i = 0; i < s.Length; i++)
+            {
+                char ch = s[i];
+                if (ch < 0x20 || ch == '\uFFFD') return false;
+            }
+            return true;
+        }
+
         private static void ParseCascadeNode(ProtoNode node, ConversationSummaryInfo info)
         {
             if (node == null) return;
@@ -381,10 +622,10 @@ namespace AntigravityCompanion
                 {
                     if (!nameNode.HasChildren && nameNode.WireType == 2)
                     {
-                        string s = nameNode.GetString();
-                        if (!string.IsNullOrEmpty(s) && !s.StartsWith("file:///"))
+                        string s;
+                        if (nameNode.TryGetStrictUtf8String(out s) && IsSafeDisplayProjectName(s))
                         {
-                            info.ProjectName = s;
+                            info.ProjectName = s.Trim();
                         }
                     }
                 }
@@ -402,7 +643,12 @@ namespace AntigravityCompanion
                 ProtoNode parentNode = node.GetChild(11);
                 if (parentNode != null)
                 {
-                    info.ParentConversationId = parentNode.GetString();
+                    string pid = parentNode.GetString();
+                    if (IsLikelyConversationId(pid))
+                    {
+                        info.ParentConversationId = pid.Trim();
+                        info.IsSubagent = true;
+                    }
                 }
                 ProtoNode pIdNode = node.GetChild(18);
                 if (pIdNode != null && string.IsNullOrEmpty(info.ProjectId))
@@ -427,7 +673,7 @@ namespace AntigravityCompanion
                     return ConvertEpochToDateTime(secNode.VarintValue);
                 }
             }
-            else if (node.RawBytes != null && node.RawBytes.Length == 8)
+            else if (node.WireType == 1 && node.RawBytes != null && node.RawBytes.Length == 8)
             {
                 long val = BitConverter.ToInt64(node.RawBytes, 0);
                 return ConvertEpochToDateTime((ulong)val);
@@ -439,13 +685,17 @@ namespace AntigravityCompanion
         {
             try
             {
-                if (epoch > 1000000000000000) // 微秒/纳秒
+                if (epoch > 100000000000000000UL) // 纳秒 (~1.79e18)
                 {
-                    epoch = epoch / 1000000;
+                    epoch = epoch / 1000000000UL;
                 }
-                else if (epoch > 100000000000) // 毫秒
+                else if (epoch > 1000000000000000UL) // 微秒 (~1.79e15)
                 {
-                    epoch = epoch / 1000;
+                    epoch = epoch / 1000000UL;
+                }
+                else if (epoch > 100000000000UL) // 毫秒
+                {
+                    epoch = epoch / 1000UL;
                 }
                 if (epoch > 0 && epoch < 253402300799)
                 {
@@ -457,14 +707,27 @@ namespace AntigravityCompanion
             return DateTime.MinValue;
         }
 
-        private static void ResolveProjectInfo(ConversationSummaryInfo info, Dictionary<string, ProjectMetadata> projectsMap)
+        internal static void ResolveProjectInfo(ConversationSummaryInfo info, Dictionary<string, ProjectMetadata> projectsMap)
         {
+            if (info == null) return;
+            if (!string.IsNullOrEmpty(info.ProjectId) &&
+                string.Equals(info.ProjectId.Trim(), "outside-of-project", StringComparison.OrdinalIgnoreCase))
+            {
+                info.ProjectId = "outside-of-project";
+                info.ProjectName = "Outside of Project";
+                info.FolderUri = null;
+                ApplySubagentNameFallback(info);
+                return;
+            }
+
             if (projectsMap != null && projectsMap.Count > 0)
             {
                 if (!string.IsNullOrEmpty(info.ProjectId) && projectsMap.ContainsKey(info.ProjectId))
                 {
-                    info.ProjectName = projectsMap[info.ProjectId].Name;
-                    if (string.IsNullOrEmpty(info.FolderUri)) info.FolderUri = projectsMap[info.ProjectId].FolderUri;
+                    ProjectMetadata pm = projectsMap[info.ProjectId];
+                    info.ProjectName = pm.Name;
+                    if (string.IsNullOrEmpty(info.FolderUri)) info.FolderUri = pm.FolderUri;
+                    ApplySubagentNameFallback(info);
                     return;
                 }
 
@@ -473,18 +736,30 @@ namespace AntigravityCompanion
                     string normUri = DirectStreamArchiver.NormalizeUri(info.FolderUri);
                     foreach (KeyValuePair<string, ProjectMetadata> kvp in projectsMap)
                     {
-                        string pNorm = DirectStreamArchiver.NormalizeUri(kvp.Value.FolderUri);
-                        if (string.Equals(normUri, pNorm, StringComparison.OrdinalIgnoreCase))
+                        bool matched = string.Equals(normUri, DirectStreamArchiver.NormalizeUri(kvp.Value.FolderUri), StringComparison.OrdinalIgnoreCase);
+                        if (!matched && kvp.Value.FolderUris != null)
+                        {
+                            for (int u = 0; u < kvp.Value.FolderUris.Count; u++)
+                            {
+                                if (string.Equals(normUri, DirectStreamArchiver.NormalizeUri(kvp.Value.FolderUris[u]), StringComparison.OrdinalIgnoreCase))
+                                {
+                                    matched = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (matched)
                         {
                             info.ProjectName = kvp.Value.Name;
                             info.ProjectId = kvp.Value.Id;
+                            ApplySubagentNameFallback(info);
                             return;
                         }
                     }
                 }
             }
 
-            if (string.IsNullOrEmpty(info.ProjectName) && !string.IsNullOrEmpty(info.FolderUri))
+            if ((string.IsNullOrEmpty(info.ProjectName) || info.ProjectName == "Outside of Project") && !string.IsNullOrEmpty(info.FolderUri))
             {
                 info.ProjectName = ExtractProjectNameFromUri(info.FolderUri);
             }
@@ -493,6 +768,17 @@ namespace AntigravityCompanion
             {
                 info.ProjectName = "Outside of Project";
             }
+            ApplySubagentNameFallback(info);
+        }
+
+        private static void ApplySubagentNameFallback(ConversationSummaryInfo info)
+        {
+            if (info == null || string.IsNullOrEmpty(info.ProjectName)) return;
+            if (info.ProjectName.StartsWith("subagent-", StringComparison.OrdinalIgnoreCase) ||
+                info.ProjectName.StartsWith("subagent_", StringComparison.OrdinalIgnoreCase))
+            {
+                info.IsSubagent = true;
+            }
         }
 
         public static string ExtractProjectNameFromUri(string uriStr)
@@ -500,13 +786,30 @@ namespace AntigravityCompanion
             if (string.IsNullOrEmpty(uriStr)) return "Outside of Project";
             try
             {
-                string decoded = DirectStreamArchiver.UnescapeUriString(uriStr).TrimEnd('/', '\\');
+                string decoded = DirectStreamArchiver.UnescapeUriString(uriStr).Trim();
+                if (decoded.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
+                    decoded = decoded.Substring(8);
+                else if (decoded.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+                    decoded = decoded.Substring(7);
+
+                decoded = decoded.TrimEnd('/', '\\').Trim();
+                if (string.IsNullOrEmpty(decoded)) return "Outside of Project";
+
+                if (decoded.Length == 2 && char.IsLetter(decoded[0]) && decoded[1] == ':')
+                    return "Drive_" + char.ToUpperInvariant(decoded[0]);
+
                 int idx = decoded.LastIndexOf('/');
-                if (idx < 0) idx = decoded.LastIndexOf('\\');
+                int bIdx = decoded.LastIndexOf('\\');
+                if (bIdx > idx) idx = bIdx;
                 if (idx >= 0 && idx < decoded.Length - 1)
                 {
                     string name = decoded.Substring(idx + 1).Trim();
-                    if (!string.IsNullOrEmpty(name)) return name;
+                    if (!string.IsNullOrEmpty(name))
+                    {
+                        if (name.Length == 2 && char.IsLetter(name[0]) && name[1] == ':')
+                            return "Drive_" + char.ToUpperInvariant(name[0]);
+                        return name;
+                    }
                 }
                 return decoded;
             }

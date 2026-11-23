@@ -1,0 +1,12 @@
+{
+  "name": "adversarial-review",
+  "displayName": "Adversarial Review & Dual-Agent Team",
+  "version": "1.0.0",
+  "description": "对抗式质量门禁套件：提供主/副双智能体三阶段协作（dual-agent-team）与上一轮方案六维红队审计（turn-audit）。",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "/turn-audit 启动红队副智能体严苛审查上一轮方案的漏洞与隐性假设",
+    "/dual-agent-team 启动主智能体与审查副智能体分三阶段协作完成当前任务",
+    "对刚才给出的技术方案进行六维对抗式边界条件与回归风险审计"
+  ]
+}

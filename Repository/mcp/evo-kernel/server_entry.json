@@ -1,0 +1,7 @@
+﻿{
+      "command": "node",
+      "args": [
+        "{{HOME}}/Desktop/Tools/EvoKernel/dist/cli/index.js",
+        "mcp"
+      ]
+    }

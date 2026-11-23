@@ -2,39 +2,55 @@
 # Antigravity Companion - Git Ignore Configuration
 # =====================================================================
 
-# Build & Execution Outputs
-*.exe
-*.dll
-*.pdb
-*.obj
-*.bin
+# Build & Execution Outputs (Root-anchored so vendored capability scripts/resources inside Repository/ stay trackable)
+/*.exe
+/*.dll
+/*.pdb
+/*.obj
+/*.bin
 
-# Backup Archives & Compression Packages
-*.agy
-*.zip
-*.7z
-*.tar
-*.gz
-*.bak
+# Root Backup Archives & Compression Packages
+/*.agy
+/*.zip
+/*.7z
+/*.tar
+/*.gz
+/*.bak
 
 # Temporary Files & Runtime Logs
 *.log
 *.tmp
 *.temp
+*.backup
 Thumbs.db
 [dD]esktop.ini
 
 # Test Execution Sandboxes & Test Binaries
-tests/sandbox/
-tests/sandboxes/
-tests/*.exe
-tests/*.pdb
-sandbox/
+/tests/sandbox/
+/tests/sandboxes/
+/tests/*.exe
+/tests/*.pdb
+/sandbox/
+
+# Capability Repository Secrets, Dependencies & Caches
+Repository/**/auth.json
+Repository/**/credentials.json
+Repository/**/.env
+Repository/**/.env.*
+Repository/**/*secret*.json
+Repository/**/*token*.json
+*.pem
+*.key
+**/__pycache__/
+*.py[cod]
+**/node_modules/
+**/.venv/
+**/venv/
 
 # IDE & Toolchain Metadata
 .vs/
 .vscode/
 .idea/
-/.codegraph/
-/.evo/
+.codegraph/
+.evo/
 .agents/

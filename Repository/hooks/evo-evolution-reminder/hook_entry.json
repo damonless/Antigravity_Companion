@@ -1,0 +1,16 @@
+{
+  "PreInvocation": [
+    {
+      "type": "command",
+      "command": "node evo_antigravity_hook.mjs PreInvocation",
+      "timeout": 5
+    }
+  ],
+  "Stop": [
+    {
+      "type": "command",
+      "command": "node evo_antigravity_hook.mjs Stop",
+      "timeout": 5
+    }
+  ]
+}
