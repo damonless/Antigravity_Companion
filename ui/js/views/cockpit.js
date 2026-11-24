@@ -195,6 +195,24 @@
       '</tbody></table></div>';
   }
 
+  function applyCockpitIdeWarning(res) {
+    var st = AGY.state;
+    var banner = AGY.dom.el('cpIdeWarningBanner');
+    var msgEl = AGY.dom.el('cpIdeWarningText');
+    if (res && (res.ideRunning || res.ideRunningWarning)) {
+      var msg = res.ideRunningWarning || '检测到 Antigravity 正在运行，部分配置需重启 IDE 或新开会话后生效。';
+      st.cockpitIdeWarning = msg;
+      if (banner && msgEl) {
+        msgEl.textContent = msg;
+        banner.classList.remove('hidden');
+      }
+      AGY.api.showToast(msg, 'warn');
+    } else if (res && res.ideRunning === false) {
+      st.cockpitIdeWarning = '';
+      if (banner) banner.classList.add('hidden');
+    }
+  }
+
   function bindSwitchboardRowEvents() {
     var tbody = AGY.dom.el('cpSwitchTbody');
     if (!tbody) return;
@@ -208,12 +226,14 @@
         var src = chk.getAttribute('data-src');
         var desired = !!chk.checked;
         try {
-          await AGY.api.apiFetch('/api/cockpit/toggle', {
+          var res = await AGY.api.apiFetch('/api/cockpit/toggle', {
             method: 'POST',
             body: JSON.stringify({ kind: kind, id: id, enabled: desired, sourcePath: src })
           });
           AGY.api.showToast('已' + (desired ? '启用' : '禁用') + ' [' + kind + '] ' + id + ' ✓', 'success');
-          if (AGY.app && AGY.app.refreshAllSilent) await AGY.app.refreshAllSilent();
+          applyCockpitIdeWarning(res);
+          if (AGY.app && AGY.app.markNonActiveDirty) AGY.app.markNonActiveDirty('cockpit');
+          if (AGY.app && AGY.app.refreshCoreAndActiveView) await AGY.app.refreshCoreAndActiveView();
         } catch (e) {
           chk.checked = !desired;
           AGY.api.showToast('切换失败：' + e.message, 'error');
@@ -288,7 +308,15 @@
       ['Hook', 'Hooks']
     ];
 
+    var ideWarnText = st.cockpitIdeWarning || '';
+    var ideWarnBanner =
+      '<div id="cpIdeWarningBanner" class="alert-banner between wrap gap-sm' + (ideWarnText ? '' : ' hidden') + '">' +
+        '<div><strong>⚠ 提示：</strong><span id="cpIdeWarningText">' + esc(ideWarnText) + '</span></div>' +
+        '<button class="btn btn-xs" id="btnDismissCpIdeWarn" type="button">知道了</button>' +
+      '</div>';
+
     el('mainCanvas').innerHTML =
+      ideWarnBanner +
       conflictBanner +
       '<div class="card" style="margin-bottom:16px">' +
         '<div class="between wrap gap-sm" style="margin-bottom:12px">' +
@@ -340,6 +368,14 @@
         '</div>' +
       '</div>';
 
+    if (el('btnDismissCpIdeWarn')) {
+      el('btnDismissCpIdeWarn').addEventListener('click', function () {
+        st.cockpitIdeWarning = '';
+        var b = el('cpIdeWarningBanner');
+        if (b) b.classList.add('hidden');
+      });
+    }
+
     if (el('btnCpEditConfigJson')) {
       el('btnCpEditConfigJson').addEventListener('click', function () {
         AGY.ui.openInlineEditorDrawer(us.configPath, '编辑 config.json');
@@ -366,6 +402,8 @@
         });
         st.cockpitData.userSettings = res.userSettings;
         AGY.api.showToast('全局 userSettings 已无损保存 ✓', 'success');
+        applyCockpitIdeWarning(res);
+        if (AGY.app && AGY.app.markNonActiveDirty) AGY.app.markNonActiveDirty('cockpit');
       } catch (e) {
         AGY.api.showToast('保存配置失败：' + e.message, 'error');
       }

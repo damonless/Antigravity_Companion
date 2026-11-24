@@ -19,6 +19,7 @@ namespace AntigravityCompanion
         public string CustomAgyCliPath;
         public string VaultPath;
         public bool StartWithWindows;
+        public int RuleTokenReferenceThreshold;
         public string LastRunUtc;
         public string LastFilePath;
         public long LastSizeBytes;
@@ -31,11 +32,12 @@ namespace AntigravityCompanion
             TargetDirectory = string.Empty;
             RetainCount = 5;
             Tier = "fast";
-            MinimizeToTray = true;
-            GlobalHotkey = "Ctrl+Alt+A";
+            MinimizeToTray = false;
+            GlobalHotkey = string.Empty;
             CustomAgyCliPath = string.Empty;
             VaultPath = string.Empty;
             StartWithWindows = false;
+            RuleTokenReferenceThreshold = 0;
             LastRunUtc = string.Empty;
             LastFilePath = string.Empty;
             LastSizeBytes = 0;
@@ -55,6 +57,7 @@ namespace AntigravityCompanion
             copy.CustomAgyCliPath = CustomAgyCliPath;
             copy.VaultPath = VaultPath;
             copy.StartWithWindows = StartWithWindows;
+            copy.RuleTokenReferenceThreshold = RuleTokenReferenceThreshold;
             copy.LastRunUtc = LastRunUtc;
             copy.LastFilePath = LastFilePath;
             copy.LastSizeBytes = LastSizeBytes;
@@ -126,6 +129,8 @@ namespace AntigravityCompanion
         private readonly Func<string, string, bool> _tryAcquireJob;
         private readonly Action _releaseJob;
         private readonly Action<string, string> _onLog;
+        private readonly object _mutationLock;
+        private readonly Func<bool> _isIdeRunning;
         private readonly object _sync = new object();
 
         private CompanionSettings _settings;
@@ -137,7 +142,7 @@ namespace AntigravityCompanion
             string homePath,
             string geminiPath,
             string explicitSettingsPath)
-            : this(homePath, geminiPath, explicitSettingsPath, null, null, null)
+            : this(homePath, geminiPath, explicitSettingsPath, null, null, null, null, null)
         {
         }
 
@@ -148,6 +153,19 @@ namespace AntigravityCompanion
             Func<string, string, bool> tryAcquireJob,
             Action releaseJob,
             Action<string, string> onLog)
+            : this(homePath, geminiPath, explicitSettingsPath, tryAcquireJob, releaseJob, onLog, null, null)
+        {
+        }
+
+        public ScheduledSnapshotService(
+            string homePath,
+            string geminiPath,
+            string explicitSettingsPath,
+            Func<string, string, bool> tryAcquireJob,
+            Action releaseJob,
+            Action<string, string> onLog,
+            object mutationLock,
+            Func<bool> isIdeRunning)
         {
             _homePath = string.IsNullOrWhiteSpace(homePath) ? WorkspaceService.ResolveDefaultHomePath() : homePath.Trim();
             _geminiPath = string.IsNullOrWhiteSpace(geminiPath) ? Path.Combine(_homePath, ".gemini") : geminiPath.Trim();
@@ -157,6 +175,8 @@ namespace AntigravityCompanion
             _tryAcquireJob = tryAcquireJob;
             _releaseJob = releaseJob;
             _onLog = onLog;
+            _mutationLock = mutationLock;
+            _isIdeRunning = isIdeRunning;
             _settings = LoadSettingsInternal();
         }
 
@@ -290,7 +310,7 @@ namespace AntigravityCompanion
             ExecuteSnapshotInternal(true);
         }
 
-        private SnapshotRunResult ExecuteSnapshotInternal(bool isScheduled)
+        internal SnapshotRunResult ExecuteSnapshotInternal(bool isScheduled)
         {
             SnapshotRunResult res = new SnapshotRunResult();
             if (Interlocked.CompareExchange(ref _snapshotRunningFlag, 1, 0) != 0)
@@ -319,6 +339,19 @@ namespace AntigravityCompanion
                 }
 
                 CompanionSettings cfg = GetSettings();
+                BackupTier tier = string.Equals(cfg.Tier, "full", StringComparison.OrdinalIgnoreCase)
+                    ? BackupTier.FullForensic
+                    : BackupTier.FastDaily;
+
+                if (isScheduled && tier == BackupTier.FullForensic && _isIdeRunning != null && _isIdeRunning())
+                {
+                    res.Ok = false;
+                    res.SkippedBusy = true;
+                    res.ErrorMessage = "检测到 IDE 正在运行，定时全量法证快照已安全跳过（建议使用 FastDaily 极速只读档）。";
+                    EmitLog("warn", res.ErrorMessage);
+                    return res;
+                }
+
                 string targetDir = string.IsNullOrWhiteSpace(cfg.TargetDirectory)
                     ? GetDefaultSnapshotDirectory(_geminiPath)
                     : cfg.TargetDirectory.Trim();
@@ -330,30 +363,41 @@ namespace AntigravityCompanion
                     throw new DirectoryNotFoundException("未找到 .gemini 目录: " + _geminiPath);
                 }
 
-                BackupTier tier = string.Equals(cfg.Tier, "full", StringComparison.OrdinalIgnoreCase)
-                    ? BackupTier.FullForensic
-                    : BackupTier.FastDaily;
-
-                Dictionary<string, ProjectMetadata> projs;
-                List<string> loadWarns;
-                List<ConversationSummaryInfo> sums = WorkspaceService.LoadLocalThreeLayerSummaries(_geminiPath, out projs, out loadWarns);
-                if (loadWarns != null && loadWarns.Count > 0)
-                    res.Warnings.AddRange(loadWarns);
-
                 string fileName = "snapshot_" + DateTime.Now.ToString("yyyyMMdd_HHmmss_fff", CultureInfo.InvariantCulture) + ".agy";
                 string destPath = Path.Combine(targetDir, fileName);
 
-                int fileCount;
-                List<string> bkWarnings;
-                ArchiveTransferService.CreateFullBackup(
-                    _geminiPath,
-                    _homePath,
-                    sums,
-                    destPath,
-                    tier,
-                    null,
-                    out fileCount,
-                    out bkWarnings);
+                int fileCount = 0;
+                List<string> bkWarnings = null;
+                bool lockTaken = false;
+                try
+                {
+                    if (_mutationLock != null)
+                    {
+                        Monitor.Enter(_mutationLock, ref lockTaken);
+                    }
+                    Dictionary<string, ProjectMetadata> projs;
+                    List<string> loadWarns;
+                    List<ConversationSummaryInfo> sums = WorkspaceService.LoadLocalThreeLayerSummaries(_geminiPath, out projs, out loadWarns);
+                    if (loadWarns != null && loadWarns.Count > 0)
+                        res.Warnings.AddRange(loadWarns);
+
+                    ArchiveTransferService.CreateFullBackup(
+                        _geminiPath,
+                        _homePath,
+                        sums,
+                        destPath,
+                        tier,
+                        null,
+                        out fileCount,
+                        out bkWarnings);
+                }
+                finally
+                {
+                    if (lockTaken)
+                    {
+                        Monitor.Exit(_mutationLock);
+                    }
+                }
                 if (bkWarnings != null && bkWarnings.Count > 0)
                     res.Warnings.AddRange(bkWarnings);
 
@@ -623,9 +667,11 @@ namespace AntigravityCompanion
             n.Tier = string.Equals((n.Tier ?? string.Empty).Trim(), "full", StringComparison.OrdinalIgnoreCase)
                 ? "full"
                 : "fast";
-            n.GlobalHotkey = string.IsNullOrWhiteSpace(n.GlobalHotkey) ? "Ctrl+Alt+A" : n.GlobalHotkey.Trim();
+            n.GlobalHotkey = string.IsNullOrWhiteSpace(n.GlobalHotkey) ? string.Empty : n.GlobalHotkey.Trim();
             n.CustomAgyCliPath = (n.CustomAgyCliPath ?? string.Empty).Trim();
             n.VaultPath = (n.VaultPath ?? string.Empty).Trim();
+            if (n.RuleTokenReferenceThreshold < 0) n.RuleTokenReferenceThreshold = 0;
+            if (n.RuleTokenReferenceThreshold > 100000) n.RuleTokenReferenceThreshold = 100000;
             n.LastRunUtc = n.LastRunUtc ?? string.Empty;
             n.LastFilePath = n.LastFilePath ?? string.Empty;
             n.LastError = n.LastError ?? string.Empty;
@@ -642,10 +688,11 @@ namespace AntigravityCompanion
             d["retainCount"] = safe.RetainCount;
             d["tier"] = safe.Tier ?? "fast";
             d["minimizeToTray"] = safe.MinimizeToTray;
-            d["globalHotkey"] = safe.GlobalHotkey ?? "Ctrl+Alt+A";
+            d["globalHotkey"] = safe.GlobalHotkey ?? string.Empty;
             d["customAgyCliPath"] = safe.CustomAgyCliPath ?? string.Empty;
             d["vaultPath"] = safe.VaultPath ?? string.Empty;
             d["startWithWindows"] = safe.StartWithWindows;
+            d["ruleTokenReferenceThreshold"] = safe.RuleTokenReferenceThreshold;
             d["lastRunUtc"] = safe.LastRunUtc ?? string.Empty;
             d["lastFilePath"] = safe.LastFilePath ?? string.Empty;
             d["lastSizeBytes"] = safe.LastSizeBytes;
@@ -663,11 +710,12 @@ namespace AntigravityCompanion
             s.TargetDirectory = UnifiedJson.GetString(dict, "targetDirectory", string.Empty);
             s.RetainCount = UnifiedJson.GetInt(dict, "retainCount", 5);
             s.Tier = UnifiedJson.GetString(dict, "tier", "fast");
-            s.MinimizeToTray = UnifiedJson.GetBool(dict, "minimizeToTray", true);
-            s.GlobalHotkey = UnifiedJson.GetString(dict, "globalHotkey", "Ctrl+Alt+A");
+            s.MinimizeToTray = UnifiedJson.GetBool(dict, "minimizeToTray", false);
+            s.GlobalHotkey = UnifiedJson.GetString(dict, "globalHotkey", string.Empty);
             s.CustomAgyCliPath = UnifiedJson.GetString(dict, "customAgyCliPath", string.Empty);
             s.VaultPath = UnifiedJson.GetString(dict, "vaultPath", string.Empty);
             s.StartWithWindows = UnifiedJson.GetBool(dict, "startWithWindows", false);
+            s.RuleTokenReferenceThreshold = UnifiedJson.GetInt(dict, "ruleTokenReferenceThreshold", 0);
             s.LastRunUtc = UnifiedJson.GetString(dict, "lastRunUtc", string.Empty);
             s.LastFilePath = UnifiedJson.GetString(dict, "lastFilePath", string.Empty);
             s.LastSizeBytes = ReadLong(dict, "lastSizeBytes", 0L);

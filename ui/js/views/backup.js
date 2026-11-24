@@ -159,13 +159,11 @@
     }
   }
 
-  function renderBackup() {
+  function renderBackupMigrationBody(subHost) {
     var el = AGY.dom.el;
     var st = AGY.state;
     var esc = AGY.ui.escapeHtml;
     var bd = st.backupData || { loaded: false };
-    var cfg = st.companionSettings || {};
-    var snap = st.snapshotStatus || {};
 
     var hero =
       '<div class="action-grid">' +
@@ -190,11 +188,11 @@
 
     var archiveSection = '';
     if (!bd.loaded) {
-      archiveSection = '<div class="card empty-state" style="margin-bottom:16px">尚未打开任何 .agy 备份包。点击右上「选择 .agy 文件...」即可安全审阅其内容。</div>';
+      archiveSection = '<div class="card empty-state">尚未打开任何 .agy 备份包。点击右上「选择 .agy 文件...」即可安全审阅其内容。</div>';
     } else {
       var capList = bd.capabilityDiffs || [];
       archiveSection =
-        '<div class="card" style="display:flex;flex-direction:column;min-height:0;margin-bottom:16px">' +
+        '<div class="card" style="display:flex;flex-direction:column;min-height:0">' +
           '<div class="between wrap gap-sm" style="margin-bottom:10px">' +
             '<div>' +
               '<strong>' + esc(bd.fileName) + '</strong> ' +
@@ -217,47 +215,13 @@
               '<input class="input" id="txtBkSearch" style="width:190px" placeholder="筛选归档条目..." value="' + esc(st.backupSearch) + '" />' +
             '</div>' +
           '</div>' +
-          '<div id="bkTableHost" style="max-height:380px;overflow:auto;border:1px solid var(--border);border-radius:8px">' + renderArchiveInnerTableHtml(bd) + '</div>' +
+          '<div id="bkTableHost" style="max-height:420px;overflow:auto;border:1px solid var(--border);border-radius:8px">' + renderArchiveInnerTableHtml(bd) + '</div>' +
         '</div>';
     }
 
-    var snapLastInfo = snap.lastRunUtc
-      ? ('上次执行：' + esc(snap.lastRunUtc) + ' · 大小：' + esc(snap.lastSizeMegabytes || 0) + ' MB' +
-         (snap.lastFilePath ? (' · 文件：' + esc(snap.lastFilePath)) : '') +
-         (snap.lastError ? (' · <span style="color:var(--red-text)">错误：' + esc(snap.lastError) + '</span>') : ''))
-      : '尚未执行过定时静默快照';
+    subHost.innerHTML = hero + archiveSection;
 
-    var hotkeyTip = cfg.hotkeyRegistered === false && cfg.hotkeyError
-      ? '<span class="badge badge-amber">' + esc(cfg.hotkeyError) + '</span>'
-      : '<span class="badge badge-green">全局热键就绪</span>';
-
-    var settingsPanel =
-      '<div class="card">' +
-        '<div class="between wrap gap-sm" style="margin-bottom:12px">' +
-          '<div><strong>定时静默快照、系统托盘与全局快捷键设置</strong><div class="muted" style="font-size:12px;margin-top:2px">' + snapLastInfo + '（目录内现有 ' + esc(snap.existingCount || 0) + ' 份）</div></div>' +
-          '<div class="row gap-sm">' +
-            '<button class="btn btn-sm" id="btnSnapshotRunNow">⚡ 立即执行极速快照</button>' +
-            '<button class="btn btn-sm btn-primary" id="btnSaveCompanionSettings">保存运行设置</button>' +
-          '</div>' +
-        '</div>' +
-        '<div class="form-grid" style="margin-bottom:12px">' +
-          '<div><label class="field-label">快照目标目录 (targetDirectory)</label><div class="row gap-sm"><input class="input" id="txtCfgTargetDir" value="' + esc(cfg.targetDirectory || '') + '" /><button class="btn btn-sm" id="btnCfgPickTargetDir">浏览...</button></div></div>' +
-          '<div><label class="field-label">默认快照等级 (tier) &amp; 保留份数 (retainCount)</label><div class="row gap-sm"><select class="select" id="selCfgTier" style="flex:1"><option value="fast"' + (cfg.tier !== 'full' ? ' selected' : '') + '>FastDaily (极速只读)</option><option value="full"' + (cfg.tier === 'full' ? ' selected' : '') + '>FullForensic (全量法证)</option></select><input class="input" id="numCfgRetain" type="number" min="1" max="100" value="' + esc(cfg.retainCount || 5) + '" style="width:90px" title="保留份数" /></div></div>' +
-          '<div><label class="field-label">定时周期（小时, intervalHours）</label><input class="input" id="numCfgInterval" type="number" min="1" max="720" value="' + esc(cfg.intervalHours || 12) + '" /></div>' +
-          '<div><label class="field-label">全局唤醒快捷键 (globalHotkey) ' + hotkeyTip + '</label><input class="input" id="txtCfgHotkey" value="' + esc(cfg.globalHotkey || 'Ctrl+Alt+A') + '" placeholder="例如 Ctrl+Alt+A" /></div>' +
-          '<div><label class="field-label">自定义 agy CLI 路径 (customAgyCliPath)</label><div class="row gap-sm"><input class="input" id="txtCfgAgyCli" value="' + esc(cfg.customAgyCliPath || '') + '" placeholder="留空自动探测 PATH" /><button class="btn btn-sm" id="btnCfgPickCli">浏览...</button></div></div>' +
-        '</div>' +
-        '<div class="cockpit-grid" style="margin-bottom:0">' +
-          '<label class="switch-row" style="cursor:pointer"><span>启用定时静默只读快照 (不打断 IDE)</span><input type="checkbox" id="chkCfgEnabled"' + (cfg.enabled ? ' checked' : '') + ' /></label>' +
-          '<label class="switch-row" style="cursor:pointer"><span>关闭窗口后最小化常驻系统托盘 (minimizeToTray)</span><input type="checkbox" id="chkCfgTray"' + (cfg.minimizeToTray !== false ? ' checked' : '') + ' /></label>' +
-          '<label class="switch-row" style="cursor:pointer"><span>随 Windows 登录静默开机自启 (--tray-only)</span><input type="checkbox" id="chkCfgStartup"' + (cfg.startWithWindows ? ' checked' : '') + ' /></label>' +
-        '</div>' +
-      '</div>';
-
-    var root = el('mainCanvas');
-    root.innerHTML = hero + archiveSection + settingsPanel;
-
-    var tierBtns = root.querySelectorAll('[data-bktier]');
+    var tierBtns = subHost.querySelectorAll('[data-bktier]');
     for (var tb = 0; tb < tierBtns.length; tb++) {
       tierBtns[tb].addEventListener('click', function () {
         st.backupTier = this.getAttribute('data-bktier');
@@ -270,7 +234,7 @@
     el('btnOpenAgyFile').addEventListener('click', openBackupArchiveDialog);
 
     if (bd.loaded) {
-      var tabs = root.querySelectorAll('[data-bktab]');
+      var tabs = subHost.querySelectorAll('[data-bktab]');
       for (var i = 0; i < tabs.length; i++) {
         tabs[i].addEventListener('click', function () { st.backupTab = this.getAttribute('data-bktab'); renderBackup(); });
       }
@@ -289,56 +253,51 @@
       bindArchiveTableEvents(bd);
       updateBackupImportBtn();
     }
+  }
 
-    el('btnCfgPickTargetDir').addEventListener('click', async function () {
-      var pick = await AGY.api.apiFetch('/api/native/pick-folder', { method: 'POST', body: JSON.stringify({ title: '选择快照存放目录', initialPath: el('txtCfgTargetDir').value }) });
-      if (!pick.cancelled && pick.path) el('txtCfgTargetDir').value = pick.path;
-    });
-    el('btnCfgPickCli').addEventListener('click', async function () {
-      var pick = await AGY.api.apiFetch('/api/native/pick-open-file', { method: 'POST', body: JSON.stringify({ title: '选择 agy.exe / agy.cmd' }) });
-      if (!pick.cancelled && pick.path) el('txtCfgAgyCli').value = pick.path;
+  function renderBackup() {
+    var el = AGY.dom.el;
+    var st = AGY.state;
+    var isStorage = st.backupSubView === 'storage';
+
+    var root = el('mainCanvas');
+    root.innerHTML =
+      '<div class="between wrap gap-sm" style="margin-bottom:14px">' +
+        '<div class="pill-group" id="backupSubTabs">' +
+          '<button class="filter-pill ' + (!isStorage ? 'active' : '') + '" data-bksub="backup" type="button">备份与迁移</button>' +
+          '<button class="filter-pill ' + (isStorage ? 'active' : '') + '" data-bksub="storage" type="button">存储诊断与瘦身</button>' +
+        '</div>' +
+        '<button class="btn btn-sm btn-ghost" id="btnBackupGotoSettings" type="button">⚙ 定时快照与托盘设置 →</button>' +
+      '</div>' +
+      '<div id="backupSubHost"></div>';
+
+    var subBtns = root.querySelectorAll('[data-bksub]');
+    for (var i = 0; i < subBtns.length; i++) {
+      subBtns[i].addEventListener('click', function () {
+        var next = this.getAttribute('data-bksub');
+        if (next === st.backupSubView) return;
+        st.backupSubView = next;
+        if (next === 'backup' && (st.dirty.backup || !st.backupData)) {
+          renderBackup();
+          AGY.app.fetchViewDataOnly('backup').then(function () {
+            if (AGY.state.view === 'backup' && AGY.state.backupSubView === 'backup') renderBackup();
+          }).catch(function () {});
+        } else {
+          renderBackup();
+        }
+      });
+    }
+
+    el('btnBackupGotoSettings').addEventListener('click', function () {
+      AGY.app.switchView('settings');
     });
 
-    el('btnSaveCompanionSettings').addEventListener('click', async function () {
-      try {
-        var payload = {
-          enabled: !!el('chkCfgEnabled').checked,
-          intervalHours: parseInt(el('numCfgInterval').value, 10) || 12,
-          targetDirectory: el('txtCfgTargetDir').value.trim(),
-          retainCount: parseInt(el('numCfgRetain').value, 10) || 5,
-          tier: el('selCfgTier').value,
-          minimizeToTray: !!el('chkCfgTray').checked,
-          globalHotkey: el('txtCfgHotkey').value.trim() || 'Ctrl+Alt+A',
-          customAgyCliPath: el('txtCfgAgyCli').value.trim(),
-          startWithWindows: !!el('chkCfgStartup').checked
-        };
-        var saved = await AGY.api.apiFetch('/api/settings/companion', {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        });
-        st.companionSettings = saved;
-        st.snapshotStatus = await AGY.api.apiFetch('/api/snapshots/status');
-        renderBackup();
-        AGY.api.showToast('伴侣与定时快照设置已保存 ✓', 'success');
-      } catch (e) { AGY.api.showToast('保存设置失败：' + e.message, 'error'); }
-    });
-
-    el('btnSnapshotRunNow').addEventListener('click', async function () {
-      var btn = this;
-      btn.disabled = true;
-      btn.textContent = '快照创建中...';
-      try {
-        var res = await AGY.api.apiFetch('/api/snapshots/run-now', { method: 'POST', body: '{}' });
-        st.snapshotStatus = await AGY.api.apiFetch('/api/snapshots/status');
-        st.companionSettings = await AGY.api.apiFetch('/api/settings/companion');
-        renderBackup();
-        AGY.api.showToast('极速快照完成（' + res.sizeMegabytes + ' MB）✓', 'success');
-      } catch (e) {
-        btn.disabled = false;
-        btn.textContent = '⚡ 立即执行极速快照';
-        AGY.api.showToast('快照失败：' + e.message, 'error');
-      }
-    });
+    var subHost = el('backupSubHost');
+    if (isStorage) {
+      if (AGY.views.renderStorage) AGY.views.renderStorage(subHost);
+    } else {
+      renderBackupMigrationBody(subHost);
+    }
   }
 
   function preselectRecommendedBackupItems(bd) {

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -264,6 +265,7 @@ namespace AntigravityCompanion
         private static string TryProbeVersion(string exePath)
         {
             Process proc = null;
+            CliJobObject job = null;
             ManualResetEventSlim outEof = new ManualResetEventSlim(false);
             ManualResetEventSlim errEof = new ManualResetEventSlim(false);
             StringBuilder outSb = new StringBuilder();
@@ -285,6 +287,9 @@ namespace AntigravityCompanion
                 proc = Process.Start(psi);
                 if (proc == null) return string.Empty;
 
+                job = new CliJobObject();
+                job.TryAssign(proc);
+
                 proc.OutputDataReceived += delegate(object s, DataReceivedEventArgs e)
                 {
                     if (e.Data == null) { outEof.Set(); return; }
@@ -304,12 +309,24 @@ namespace AntigravityCompanion
 
                 if (!proc.WaitForExit(VersionCheckTimeoutMs))
                 {
-                    EnsureProcessTreeTerminated(proc);
+                    if (job != null) job.Terminate();
+                    EnsureProcessTreeTerminated(proc, job);
                     return string.Empty;
                 }
 
+                proc.WaitForExit();
                 try { outEof.Wait(300); } catch { }
                 try { errEof.Wait(200); } catch { }
+                if (job != null && !job.WaitForActiveProcessesZero(3000))
+                {
+                    job.Terminate();
+                    EnsureProcessTreeTerminated(proc, job);
+                }
+                else
+                {
+                    try { outEof.Wait(200); } catch { }
+                    try { errEof.Wait(100); } catch { }
+                }
 
                 if (proc.ExitCode == 0)
                 {
@@ -329,11 +346,7 @@ namespace AntigravityCompanion
             }
             finally
             {
-                if (proc != null)
-                {
-                    EnsureProcessTreeTerminated(proc);
-                    try { proc.Dispose(); } catch { }
-                }
+                CleanupProcessAndJob(proc, job);
                 outEof.Dispose();
                 errEof.Dispose();
             }
@@ -386,6 +399,7 @@ namespace AntigravityCompanion
             string prompt = BuildCompactCliPrompt(batch);
 
             Process proc = null;
+            CliJobObject job = null;
             ManualResetEventSlim outEof = new ManualResetEventSlim(false);
             ManualResetEventSlim errEof = new ManualResetEventSlim(false);
             StringBuilder outSb = new StringBuilder();
@@ -413,6 +427,9 @@ namespace AntigravityCompanion
                     res.ErrorOrHint = "无法启动 Antigravity CLI 进程: " + resolvedPath;
                     return res;
                 }
+
+                job = new CliJobObject();
+                job.TryAssign(proc);
 
                 proc.OutputDataReceived += delegate(object s, DataReceivedEventArgs e)
                 {
@@ -447,7 +464,8 @@ namespace AntigravityCompanion
 
                 if (!proc.WaitForExit(timeoutMs))
                 {
-                    EnsureProcessTreeTerminated(proc);
+                    if (job != null) job.Terminate();
+                    EnsureProcessTreeTerminated(proc, job);
                     res.Ok = false;
                     res.Status = CliSuggestStatus.Timeout;
                     res.ErrorOrHint = string.Format(CultureInfo.InvariantCulture, "agy CLI 调用超时（>{0}s），已终止子进程。", effectiveTimeoutSec);
@@ -455,8 +473,19 @@ namespace AntigravityCompanion
                     return res;
                 }
 
+                proc.WaitForExit();
                 try { outEof.Wait(1000); } catch { }
                 try { errEof.Wait(500); } catch { }
+                if (job != null && !job.WaitForActiveProcessesZero(3000))
+                {
+                    job.Terminate();
+                    EnsureProcessTreeTerminated(proc, job);
+                }
+                else
+                {
+                    try { outEof.Wait(200); } catch { }
+                    try { errEof.Wait(100); } catch { }
+                }
 
                 string stdoutText;
                 string stderrText;
@@ -506,11 +535,7 @@ namespace AntigravityCompanion
             }
             finally
             {
-                if (proc != null)
-                {
-                    EnsureProcessTreeTerminated(proc);
-                    try { proc.Dispose(); } catch { }
-                }
+                CleanupProcessAndJob(proc, job);
                 outEof.Dispose();
                 errEof.Dispose();
             }
@@ -850,36 +875,275 @@ namespace AntigravityCompanion
             return false;
         }
 
-        private static void EnsureProcessTreeTerminated(Process proc)
+        private static void CleanupProcessAndJob(Process proc, CliJobObject job)
         {
+            try
+            {
+                if (proc != null)
+                {
+                    bool needsTerminate = false;
+                    if (job != null && job.IsAssigned)
+                    {
+                        uint active;
+                        if (job.TryGetActiveProcessCount(out active) && active > 0)
+                        {
+                            needsTerminate = true;
+                        }
+                    }
+                    try
+                    {
+                        if (!proc.HasExited) needsTerminate = true;
+                    }
+                    catch
+                    {
+                        needsTerminate = true;
+                    }
+
+                    if (needsTerminate)
+                    {
+                        if (job != null) job.Terminate();
+                        EnsureProcessTreeTerminated(proc, job);
+                    }
+                    try { proc.Dispose(); } catch { }
+                }
+            }
+            finally
+            {
+                if (job != null)
+                {
+                    job.Dispose();
+                }
+            }
+        }
+
+        private static void EnsureProcessTreeTerminated(Process proc, CliJobObject job)
+        {
+            if (job != null)
+            {
+                job.Terminate();
+            }
             if (proc == null) return;
             try
             {
-                if (proc.HasExited) return;
-                int pid = proc.Id;
+                int pid = 0;
+                bool hasPid = false;
                 try
                 {
-                    ProcessStartInfo tk = new ProcessStartInfo();
-                    tk.FileName = "taskkill";
-                    tk.Arguments = "/F /T /PID " + pid.ToString(CultureInfo.InvariantCulture);
-                    tk.UseShellExecute = false;
-                    tk.CreateNoWindow = true;
-                    tk.RedirectStandardOutput = true;
-                    tk.RedirectStandardError = true;
-                    using (Process tkProc = Process.Start(tk))
-                    {
-                        if (tkProc != null) tkProc.WaitForExit(1500);
-                    }
+                    pid = proc.Id;
+                    hasPid = pid > 0;
                 }
                 catch { }
 
-                if (!proc.HasExited)
+                if (hasPid)
                 {
-                    try { proc.Kill(); } catch { }
+                    try
+                    {
+                        ProcessStartInfo tk = new ProcessStartInfo();
+                        tk.FileName = "taskkill";
+                        tk.Arguments = "/F /T /PID " + pid.ToString(CultureInfo.InvariantCulture);
+                        tk.UseShellExecute = false;
+                        tk.CreateNoWindow = true;
+                        tk.RedirectStandardOutput = true;
+                        tk.RedirectStandardError = true;
+                        using (Process tkProc = Process.Start(tk))
+                        {
+                            if (tkProc != null) tkProc.WaitForExit(1500);
+                        }
+                    }
+                    catch { }
                 }
+
+                try
+                {
+                    if (!proc.HasExited)
+                    {
+                        proc.Kill();
+                    }
+                }
+                catch { }
                 try { proc.WaitForExit(1000); } catch { }
             }
             catch { }
+        }
+
+        private sealed class CliJobObject : IDisposable
+        {
+            private const int JobObjectBasicAccountingInformation = 1;
+            private const int JobObjectExtendedLimitInformation = 9;
+            private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
+
+            [StructLayout(LayoutKind.Sequential)]
+            private struct JOBOBJECT_BASIC_LIMIT_INFORMATION
+            {
+                public long PerProcessUserTimeLimit;
+                public long PerJobUserTimeLimit;
+                public uint LimitFlags;
+                public UIntPtr MinimumWorkingSetSize;
+                public UIntPtr MaximumWorkingSetSize;
+                public uint ActiveProcessLimit;
+                public UIntPtr Affinity;
+                public uint PriorityClass;
+                public uint SchedulingClass;
+            }
+
+            [StructLayout(LayoutKind.Sequential)]
+            private struct IO_COUNTERS
+            {
+                public ulong ReadOperationCount;
+                public ulong WriteOperationCount;
+                public ulong OtherOperationCount;
+                public ulong ReadTransferCount;
+                public ulong WriteTransferCount;
+                public ulong OtherTransferCount;
+            }
+
+            [StructLayout(LayoutKind.Sequential)]
+            private struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+            {
+                public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
+                public IO_COUNTERS IoInfo;
+                public UIntPtr ProcessMemoryLimit;
+                public UIntPtr JobMemoryLimit;
+                public UIntPtr PeakProcessMemoryUsed;
+                public UIntPtr PeakJobMemoryUsed;
+            }
+
+            [StructLayout(LayoutKind.Sequential)]
+            private struct JOBOBJECT_BASIC_ACCOUNTING_INFORMATION
+            {
+                public long TotalUserTime;
+                public long TotalKernelTime;
+                public long ThisPeriodTotalUserTime;
+                public long ThisPeriodTotalKernelTime;
+                public uint TotalPageFaultCount;
+                public uint TotalProcesses;
+                public uint ActiveProcesses;
+                public uint TotalTerminatedProcesses;
+            }
+
+            [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+            private static extern IntPtr CreateJobObjectW(IntPtr lpJobAttributes, string lpName);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            private static extern bool SetInformationJobObject(
+                IntPtr hJob,
+                int jobObjectInfoClass,
+                ref JOBOBJECT_EXTENDED_LIMIT_INFORMATION lpJobObjectInfo,
+                uint cbJobObjectInfoLength);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            private static extern bool AssignProcessToJobObject(IntPtr hJob, IntPtr hProcess);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            private static extern bool QueryInformationJobObject(
+                IntPtr hJob,
+                int jobObjectInfoClass,
+                out JOBOBJECT_BASIC_ACCOUNTING_INFORMATION lpJobObjectInfo,
+                uint cbJobObjectInfoLength,
+                out uint lpReturnLength);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            private static extern bool TerminateJobObject(IntPtr hJob, uint uExitCode);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            private static extern bool CloseHandle(IntPtr hObject);
+
+            private IntPtr _handle;
+            private bool _assigned;
+
+            public CliJobObject()
+            {
+                try
+                {
+                    _handle = CreateJobObjectW(IntPtr.Zero, null);
+                    if (_handle != IntPtr.Zero)
+                    {
+                        JOBOBJECT_EXTENDED_LIMIT_INFORMATION info = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
+                        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                        int size = Marshal.SizeOf(typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
+                        SetInformationJobObject(_handle, JobObjectExtendedLimitInformation, ref info, (uint)size);
+                    }
+                }
+                catch
+                {
+                    _handle = IntPtr.Zero;
+                }
+            }
+
+            public bool IsAssigned
+            {
+                get { return _handle != IntPtr.Zero && _assigned; }
+            }
+
+            public bool TryAssign(Process proc)
+            {
+                if (_handle == IntPtr.Zero || proc == null) return false;
+                try
+                {
+                    _assigned = AssignProcessToJobObject(_handle, proc.Handle);
+                    return _assigned;
+                }
+                catch
+                {
+                    _assigned = false;
+                    return false;
+                }
+            }
+
+            public bool TryGetActiveProcessCount(out uint activeProcesses)
+            {
+                activeProcesses = 0;
+                if (_handle == IntPtr.Zero || !_assigned) return false;
+                try
+                {
+                    JOBOBJECT_BASIC_ACCOUNTING_INFORMATION acct;
+                    uint retLen;
+                    int size = Marshal.SizeOf(typeof(JOBOBJECT_BASIC_ACCOUNTING_INFORMATION));
+                    if (QueryInformationJobObject(_handle, JobObjectBasicAccountingInformation, out acct, (uint)size, out retLen))
+                    {
+                        activeProcesses = acct.ActiveProcesses;
+                        return true;
+                    }
+                }
+                catch { }
+                return false;
+            }
+
+            public bool WaitForActiveProcessesZero(int maxWaitMs)
+            {
+                if (_handle == IntPtr.Zero || !_assigned) return true;
+                Stopwatch sw = Stopwatch.StartNew();
+                while (true)
+                {
+                    uint active;
+                    if (!TryGetActiveProcessCount(out active))
+                        return true;
+                    if (active == 0)
+                        return true;
+                    if (sw.ElapsedMilliseconds >= maxWaitMs)
+                        return false;
+                    Thread.Sleep(25);
+                }
+            }
+
+            public void Terminate()
+            {
+                if (_handle != IntPtr.Zero && _assigned)
+                {
+                    try { TerminateJobObject(_handle, 1); } catch { }
+                }
+            }
+
+            public void Dispose()
+            {
+                IntPtr h = _handle;
+                _handle = IntPtr.Zero;
+                _assigned = false;
+                if (h != IntPtr.Zero)
+                {
+                    try { CloseHandle(h); } catch { }
+                }
+            }
         }
     }
 }

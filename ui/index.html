@@ -29,12 +29,12 @@
         </button>
         <button class="nav-item" data-view="sessions" type="button">
           <span class="nav-icon" data-icon="message"></span>
-          <span class="nav-label">会话与命名</span>
-          <span class="nav-pill nav-pill-accent" id="navCountUntagged" title="可整理未标前缀会话">0</span>
+          <span class="nav-label">会话管理</span>
         </button>
-        <button class="nav-item" data-view="storage" type="button">
-          <span class="nav-icon" data-icon="harddrive"></span>
-          <span class="nav-label">存储瘦身</span>
+        <button class="nav-item" data-view="rename" type="button">
+          <span class="nav-icon" data-icon="sparkles"></span>
+          <span class="nav-label">智能重命名</span>
+          <span class="nav-pill nav-pill-accent" id="navCountUntagged" title="可整理未标前缀会话">0</span>
         </button>
         <button class="nav-item" data-view="vault" type="button">
           <span class="nav-icon" data-icon="layers"></span>
@@ -43,12 +43,16 @@
         </button>
         <button class="nav-item" data-view="backup" type="button">
           <span class="nav-icon" data-icon="archive"></span>
-          <span class="nav-label">备份与快照</span>
+          <span class="nav-label">存储与备份</span>
         </button>
       </nav>
 
       <div class="sidebar-footer">
         <div class="sidebar-meta muted" id="navSessionTotalLabel">会话总数: 0</div>
+        <button class="sidebar-btn" id="btnOpenSettings" data-view="settings" type="button">
+          <span class="nav-icon" data-icon="settings"></span>
+          <span>⚙ 系统设置</span>
+        </button>
         <button class="sidebar-btn" id="btnToggleTheme" type="button">
           <span class="nav-icon" data-icon="moon"></span>
           <span id="lblThemeToggle">深色模式</span>
@@ -151,9 +155,11 @@
   <script src="/js/views/overview.js"></script>
   <script src="/js/views/cockpit.js"></script>
   <script src="/js/views/sessions.js"></script>
+  <script src="/js/views/rename.js"></script>
   <script src="/js/views/storage.js"></script>
   <script src="/js/views/vault.js"></script>
   <script src="/js/views/backup.js"></script>
+  <script src="/js/views/settings.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

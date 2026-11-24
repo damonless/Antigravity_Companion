@@ -18,8 +18,19 @@
     snapshotStatus: null,
     vaultStatus: null,
 
+    // Lazy refresh dirty flags (ACC-07)
+    dirty: {
+      overview: false,
+      cockpit: true,
+      sessions: true,
+      rename: true,
+      vault: true,
+      backup: true,
+      storage: true,
+      settings: true
+    },
+
     // Sessions & Rename state
-    sessionsSubMode: 'browse', // 'browse' | 'rename'
     selectedBucketKey: '__ALL__',
     auxExpanded: false,
     legacyCliExpanded: false,
@@ -47,13 +58,14 @@
     // Cockpit state
     cockpitSwitchFilter: 'ALL',
     cockpitSearch: '',
+    cockpitIdeWarning: '',
     mcpDoctorResults: null,
 
     // Storage state
     storageMinAgeDays: 7,
     storageMinSizeMb: 5,
     storageCheckedCids: {},
-    storageSlimMode: 'liposuction',
+    storageSlimMode: 'coldArchivePrune',
     storagePruneLegacyCli: false,
     lastSlimResult: null,
 
@@ -64,7 +76,8 @@
     capSearch: '',
     capChecked: {},
 
-    // Backup & Snapshots state
+    // Backup & Storage Sub-View state
+    backupSubView: 'backup', // 'backup' | 'storage'
     backupTier: 'fast',
     backupTab: 'caps',
     backupSearch: '',
@@ -72,6 +85,9 @@
     backupExpandedParents: {},
     backupCheckedCaps: {},
     backupCheckedConvs: {},
+
+    // Settings state
+    settingsCliStatus: null,
 
     logsOpen: false,
     drawerDirtyCheck: null

@@ -97,18 +97,49 @@
     }
   }
 
+  function getRuleThreshold() {
+    var st = AGY.state;
+    var cfg = st.companionSettings;
+    if (cfg && cfg.ruleTokenReferenceThreshold !== undefined) {
+      var t = Number(cfg.ruleTokenReferenceThreshold || 0);
+      return (!isNaN(t) && isFinite(t) && t > 0) ? t : 0;
+    }
+    var cp = st.cockpitData || {};
+    var tb = cp.tokenBudget || {};
+    return tb.threshold > 0 ? tb.threshold : 0;
+  }
+
   function renderInlineEditorHubHtml() {
     var esc = AGY.ui.escapeHtml;
+    var fmt = AGY.ui.formatBytes;
     var cp = AGY.state.cockpitData || {};
     var rules = cp.rules || [];
     var skills = cp.skills || [];
     var workspaces = cp.workspaces || [];
+    var threshold = getRuleThreshold();
 
     var rulesRows = rules.map(function (r) {
+      var bytes = r.byteCount !== undefined ? r.byteCount : 0;
+      var chars = r.charCount !== undefined ? r.charCount : 0;
+      var lines = r.lineCount !== undefined ? r.lineCount : 0;
+      var toks = r.estimatedTokens || 0;
+      var tokBadge;
+      if (threshold <= 0) {
+        tokBadge = '<span class="badge badge-neutral">参考约 ' + esc(toks) + ' tokens</span>';
+      } else if (toks > threshold) {
+        tokBadge = '<span class="badge badge-red">⚠ 参考约 ' + esc(toks) + ' / ' + esc(threshold) + ' tokens</span>';
+      } else if (toks > threshold * 0.75) {
+        tokBadge = '<span class="badge badge-amber">参考约 ' + esc(toks) + ' / ' + esc(threshold) + ' tokens</span>';
+      } else {
+        tokBadge = '<span class="badge badge-green">参考约 ' + esc(toks) + ' / ' + esc(threshold) + ' tokens</span>';
+      }
       return '<tr>' +
         '<td><strong>' + esc(r.id) + '</strong><div class="muted mono" style="font-size:11px">' + esc(r.sourcePath) + '</div></td>' +
         '<td><span class="badge badge-neutral">' + esc(r.scope) + '</span></td>' +
-        '<td class="mono">' + esc(r.estimatedTokens) + ' / 1500 ' + (r.overBudget ? '<span class="badge badge-red">超标</span>' : '<span class="badge badge-green">健康</span>') + '</td>' +
+        '<td>' +
+          '<div class="mono muted" style="font-size:11.5px;margin-bottom:3px">' + esc(fmt(bytes)) + ' (' + esc(bytes) + ' B) · ' + esc(chars) + ' 字符 · ' + esc(lines) + ' 行</div>' +
+          tokBadge +
+        '</td>' +
         '<td><button class="btn btn-xs vault-edit-btn" data-path="' + esc(r.sourcePath) + '" data-title="规则: ' + esc(r.id) + '">在线编辑</button></td>' +
       '</tr>';
     }).join('') || '<tr><td colspan="4" class="muted">未扫描到规则文件</td></tr>';
@@ -145,9 +176,9 @@
     }).join('') || '<tr><td colspan="3" class="muted">无已注册物理工作区</td></tr>';
 
     return '<div class="card" style="margin-bottom:14px">' +
-        '<div class="between" style="margin-bottom:8px"><strong>全局与插件常驻规则 (Rules Token 审计)</strong></div>' +
+        '<div class="between" style="margin-bottom:8px"><strong>全局与插件常驻规则（客观体量与参考 Token）</strong></div>' +
         '<div style="max-height:240px;overflow:auto;border:1px solid var(--border);border-radius:8px">' +
-          '<table class="data-table"><thead><tr><th>规则文件</th><th>作用域</th><th>Token 预算</th><th>操作</th></tr></thead><tbody>' + rulesRows + '</tbody></table>' +
+          '<table class="data-table"><thead><tr><th>规则文件</th><th>作用域</th><th>字节 / 字符 / 行数与参考 Token</th><th>操作</th></tr></thead><tbody>' + rulesRows + '</tbody></table>' +
         '</div>' +
       '</div>' +
       '<div class="card" style="margin-bottom:14px">' +
@@ -174,9 +205,37 @@
     var vs = st.vaultStatus || { vaultPath: (cd && (cd.vaultPath || cd.repositoryPath)) || '' };
 
     var totalAlways = tb.totalAlwaysOnTokens || 0;
-    var threshold = tb.threshold || 1500;
-    var meterPct = Math.min(100, Math.round((totalAlways / threshold) * 100));
-    var meterCls = totalAlways > threshold ? 'over' : (totalAlways > threshold * 0.75 ? 'warn' : '');
+    var threshold = getRuleThreshold();
+    var meterPct = threshold > 0 ? Math.min(100, Math.round((totalAlways / threshold) * 100)) : 0;
+    var meterCls = threshold > 0 ? (totalAlways > threshold ? 'over' : (totalAlways > threshold * 0.75 ? 'warn' : '')) : '';
+
+    var rulesList = cp.rules || [];
+    var totalRuleBytes = 0;
+    var totalRuleChars = 0;
+    var totalRuleLines = 0;
+    for (var ri = 0; ri < rulesList.length; ri++) {
+      totalRuleBytes += (rulesList[ri].byteCount || 0);
+      totalRuleChars += (rulesList[ri].charCount || 0);
+      totalRuleLines += (rulesList[ri].lineCount || 0);
+    }
+
+    var overCount = 0;
+    if (threshold > 0) {
+      for (var oi = 0; oi < rulesList.length; oi++) {
+        if ((rulesList[oi].estimatedTokens || 0) > threshold) overCount++;
+      }
+    }
+
+    var tokenBadgeHtml = '<span class="badge badge-neutral">未设阈值 (客观统计)</span>';
+    if (threshold > 0) {
+      if (overCount > 0) {
+        tokenBadgeHtml = '<span class="badge badge-red">⚠ ' + esc(overCount) + ' 份规则超过参考阈值 (' + esc(threshold) + ')</span>';
+      } else if (totalAlways > threshold) {
+        tokenBadgeHtml = '<span class="badge badge-amber">常驻合计超过参考阈值 (' + esc(threshold) + ')</span>';
+      } else {
+        tokenBadgeHtml = '<span class="badge badge-green">在参考阈值内 (' + esc(threshold) + ')</span>';
+      }
+    }
 
     var legacyBanner = '';
     if (vs.legacyMigrationNeeded) {
@@ -196,12 +255,16 @@
         '</div>' +
         '<div class="card">' +
           '<div class="between wrap gap-sm" style="margin-bottom:6px">' +
-            '<strong>常驻规则 Token 预算仪表盘</strong>' +
-            ((tb.overBudgetCount || 0) > 0 ? '<span class="badge badge-red">⚠ ' + esc(tb.overBudgetCount) + ' 份规则超预算</span>' : '<span class="badge badge-green">全局常驻健康</span>') +
+            '<strong>常驻规则体量与参考 Token 统计</strong>' +
+            tokenBadgeHtml +
           '</div>' +
           '<div class="token-meter-wrap">' +
-            '<div class="between" style="font-size:12px"><span>全局 ' + esc(tb.globalAlwaysOnTokens || 0) + ' + 启用插件 ' + esc(tb.enabledPluginRulesTokens || 0) + ' = <strong>' + esc(totalAlways) + '</strong> / ' + esc(threshold) + ' tokens</span><span class="muted">工程规则 ' + esc(tb.projectRulesTokens || 0) + '</span></div>' +
-            '<div class="token-meter-track"><div class="token-meter-fill ' + meterCls + '" style="width:' + meterPct + '%"></div></div>' +
+            '<div class="between wrap gap-sm" style="font-size:12px">' +
+              '<span>全局约 ' + esc(tb.globalAlwaysOnTokens || 0) + ' + 启用插件约 ' + esc(tb.enabledPluginRulesTokens || 0) + ' = <strong>' + esc(totalAlways) + '</strong>' + (threshold > 0 ? (' / ' + esc(threshold)) : '') + ' 参考 tokens</span>' +
+              '<span class="muted">工程规则约 ' + esc(tb.projectRulesTokens || 0) + ' tokens</span>' +
+            '</div>' +
+            '<div class="muted mono" style="font-size:11.5px">共 ' + esc(rulesList.length) + ' 份规则 · ' + esc(AGY.ui.formatBytes(totalRuleBytes)) + ' (' + esc(totalRuleBytes) + ' B) · ' + esc(totalRuleChars) + ' 字符 · ' + esc(totalRuleLines) + ' 行</div>' +
+            (threshold > 0 ? '<div class="token-meter-track"><div class="token-meter-fill ' + meterCls + '" style="width:' + meterPct + '%"></div></div>' : '') +
           '</div>' +
         '</div>' +
       '</div>' +

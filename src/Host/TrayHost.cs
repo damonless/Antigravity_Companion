@@ -136,6 +136,7 @@ namespace AntigravityCompanion
             _launchUrl = launchUrl ?? string.Empty;
             _trayOnly = trayOnly;
             _startUtc = DateTime.UtcNow;
+            HotkeyError = string.Empty;
 
             _menu = new ContextMenuStrip();
             _itemOpen = new ToolStripMenuItem("打开驾驶舱");
@@ -226,27 +227,36 @@ namespace AntigravityCompanion
 
             _itemStartup.Checked = cfg.StartWithWindows;
 
-            string desiredHotkey = string.IsNullOrWhiteSpace(cfg.GlobalHotkey) ? "Ctrl+Alt+A" : cfg.GlobalHotkey.Trim();
+            string desiredHotkey = string.IsNullOrWhiteSpace(cfg.GlobalHotkey) ? string.Empty : cfg.GlobalHotkey.Trim();
             if (_hotkeyWindow != null && !string.Equals(_activeHotkeyText, desiredHotkey, StringComparison.OrdinalIgnoreCase))
             {
                 _activeHotkeyText = desiredHotkey;
-                uint mods;
-                uint vk;
-                if (!TryParseHotkey(desiredHotkey, out mods, out vk))
+                if (string.IsNullOrEmpty(desiredHotkey))
                 {
                     _hotkeyWindow.UnregisterCurrent();
                     HotkeyRegistered = false;
-                    HotkeyError = "无效的全局热键格式: " + desiredHotkey;
+                    HotkeyError = string.Empty;
                 }
                 else
                 {
-                    string err;
-                    bool ok = _hotkeyWindow.TryRegister(mods, vk, out err);
-                    HotkeyRegistered = ok;
-                    HotkeyError = err ?? string.Empty;
-                    if (!ok && _host != null)
+                    uint mods;
+                    uint vk;
+                    if (!TryParseHotkey(desiredHotkey, out mods, out vk))
                     {
-                        _host.AppendLog("warn", "全局热键 [" + desiredHotkey + "] 注册失败（已降级为托盘唤醒）：" + HotkeyError);
+                        _hotkeyWindow.UnregisterCurrent();
+                        HotkeyRegistered = false;
+                        HotkeyError = "无效的全局热键格式: " + desiredHotkey;
+                    }
+                    else
+                    {
+                        string err;
+                        bool ok = _hotkeyWindow.TryRegister(mods, vk, out err);
+                        HotkeyRegistered = ok;
+                        HotkeyError = err ?? string.Empty;
+                        if (!ok && _host != null)
+                        {
+                            _host.AppendLog("warn", "全局热键 [" + desiredHotkey + "] 注册失败（已降级为托盘唤醒）：" + HotkeyError);
+                        }
                     }
                 }
 
@@ -301,7 +311,7 @@ namespace AntigravityCompanion
                 RefreshMenuState();
             }
 
-            bool minimizeToTray = true;
+            bool minimizeToTray = false;
             if (_host.SnapshotService != null)
             {
                 minimizeToTray = _host.SnapshotService.GetSettings().MinimizeToTray;
@@ -374,12 +384,22 @@ namespace AntigravityCompanion
         {
             if (_host == null || _host.SnapshotService == null) return;
             CompanionSettings cfg = _host.SnapshotService.GetSettings();
-            bool next = !cfg.StartWithWindows;
+            bool prev = cfg.StartWithWindows;
+            bool next = !prev;
             cfg.StartWithWindows = next;
             _host.SnapshotService.UpdateSettings(cfg);
-            if (_host.IsDefaultHome)
+            if (_host.IsDefaultHome || _host.SetStartWithWindowsOverride != null)
             {
-                ScheduledSnapshotService.SetStartWithWindows(next, Application.ExecutablePath);
+                bool regOk = _host.TryApplyStartWithWindows(next, Application.ExecutablePath);
+                if (!regOk)
+                {
+                    cfg.StartWithWindows = prev;
+                    _host.SnapshotService.UpdateSettings(cfg);
+                    _host.NotifySettingsChanged();
+                    RefreshMenuState();
+                    _host.AppendLog("warn", "无法写入 Windows 开机自启注册表，已自动回滚该开关。");
+                    return;
+                }
             }
             _host.NotifySettingsChanged();
             RefreshMenuState();

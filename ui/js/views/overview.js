@@ -85,7 +85,6 @@
             '<button class="btn btn-xs" data-ov-launch="explorer" data-path="' + esc(fg.fullPath || '') + '"' + (!fg.fullPath ? ' disabled' : '') + '>打开目录</button>' +
             '<button class="btn btn-xs" data-ov-launch="powershell" data-path="' + esc(fg.fullPath || '') + '"' + (!fg.fullPath ? ' disabled' : '') + '>开终端</button>' +
             '<button class="btn btn-xs" data-ov-sessions="' + esc(fg.bucketKey) + '">看会话</button>' +
-            '<button class="btn btn-xs btn-danger-outline" data-ov-delproj="' + esc(fg.projectId || '') + '" data-projname="' + esc(fg.projectName) + '"' + (!fg.projectId ? ' disabled' : '') + '>删除工程</button>' +
           '</div>' +
         '</div>';
       }).join('') + '</div>';
@@ -115,7 +114,7 @@
         '<div class="metric-card">' +
           '<div class="metric-label">未标前缀会话（可整理 vs 锁定）</div>' +
           '<div class="metric-value">' + esc(actionableUntagged) + ' <span class="muted" style="font-size:13px;font-weight:500">可改 / ' + esc(lockedUntagged) + ' 锁定</span></div>' +
-          '<div class="metric-desc">待同步能力差异：' + esc(diffTotal) + ' 项 · 常驻 Token：' + esc(tb.totalAlwaysOnTokens || 0) + '</div>' +
+          '<div class="metric-desc">待同步能力差异：' + esc(diffTotal) + ' 项 · 常驻参考约 ' + esc(tb.totalAlwaysOnTokens || 0) + ' tokens</div>' +
         '</div>' +
         '<div class="metric-card">' +
           '<div class="metric-label">孤儿残留体检</div>' + gcHtml +
@@ -144,8 +143,8 @@
         '</div>' +
         '<div class="quick-card">' +
           '<div>' +
-            '<div class="quick-card-title">子代理数据库无损抽脂瘦身</div>' +
-            '<div class="quick-card-desc">清理臃肿 <span class="mono">executor_metadata</span> 并 <span class="mono">VACUUM</span>，保留完整对话与导出能力，默认先建冷归档。</div>' +
+            '<div class="quick-card-title">存储诊断、冷归档与孤儿清理</div>' +
+            '<div class="quick-card-desc">可视化拆解占用体积、清理孤儿垃圾与安全冷归档子代理，保持环境整洁轻快。</div>' +
           '</div>' +
           '<button class="btn" data-jump="storage">存储体检 →</button>' +
         '</div>' +
@@ -155,8 +154,9 @@
         '<div class="between wrap gap-sm" style="margin-bottom:8px">' +
           '<strong>工作环境与 Portable Vault 路径</strong>' +
           '<div class="row gap-sm">' +
-            '<button class="btn btn-sm" data-jump="vault">能力与规则编辑器</button>' +
-            '<button class="btn btn-sm" data-jump="backup">定时快照与备份</button>' +
+            '<button class="btn btn-sm" data-jump="vault">能力与规则</button>' +
+            '<button class="btn btn-sm" data-jump="backup">存储与备份</button>' +
+            '<button class="btn btn-sm" data-jump="settings">⚙ 系统设置</button>' +
           '</div>' +
         '</div>' +
         '<div class="muted mono" style="font-size:12px;line-height:1.8">' +
@@ -171,14 +171,15 @@
     var jumpBtns = root.querySelectorAll('[data-jump]');
     for (var i = 0; i < jumpBtns.length; i++) {
       jumpBtns[i].addEventListener('click', function () {
-        AGY.app.switchView(this.getAttribute('data-jump'));
+        var target = this.getAttribute('data-jump');
+        if (target === 'backup') st.backupSubView = 'backup';
+        AGY.app.switchView(target);
       });
     }
     var jumpRen = root.querySelector('[data-jump-rename]');
     if (jumpRen) {
       jumpRen.addEventListener('click', function () {
-        st.sessionsSubMode = 'rename';
-        AGY.app.switchView('sessions');
+        AGY.app.switchView('rename');
       });
     }
 
@@ -186,7 +187,6 @@
     for (var sb = 0; sb < sessBtns.length; sb++) {
       sessBtns[sb].addEventListener('click', function () {
         st.selectedBucketKey = this.getAttribute('data-ov-sessions');
-        st.sessionsSubMode = 'browse';
         AGY.app.switchView('sessions');
       });
     }
@@ -205,15 +205,6 @@
         } catch (e) {
           AGY.api.showToast('启动失败：' + e.message, 'error');
         }
-      });
-    }
-
-    var delProjBtns = root.querySelectorAll('[data-ov-delproj]');
-    for (var dp = 0; dp < delProjBtns.length; dp++) {
-      delProjBtns[dp].addEventListener('click', function () {
-        var pid = this.getAttribute('data-ov-delproj');
-        var pName = this.getAttribute('data-projname');
-        openDeleteProjectModal(pid, pName);
       });
     }
 
@@ -243,38 +234,6 @@
     el('btnOverviewGcScan').addEventListener('click', handleReadOnlyGcScan);
     var btnClean = el('btnOverviewGcClean');
     if (btnClean) btnClean.addEventListener('click', function () { promptAndExecuteGcClean(false); });
-  }
-
-  function openDeleteProjectModal(projectId, projectName) {
-    var esc = AGY.ui.escapeHtml;
-    AGY.ui.openModal(
-      '确认删除工程 [' + projectName + '] 及其全部会话？',
-      '<div style="color:var(--red-text);font-weight:600;margin-bottom:8px">警告：此操作不可逆！</div>' +
-      '<div>将级联移除 <span class="mono">config/projects/' + esc(projectId) + '.json</span> 以及该工程名下的所有主会话、子任务 <span class="mono">.db/.pbtxt/brain</span>（不会删除您磁盘上的业务代码目录）。</div>',
-      '<button class="btn" data-act="cancel">取消</button><button class="btn btn-danger" data-act="go">确认删除工程记录</button>',
-      function (_mb, mf) {
-        mf.querySelector('[data-act="cancel"]').addEventListener('click', AGY.ui.closeModal);
-        mf.querySelector('[data-act="go"]').addEventListener('click', function () {
-          async function doDel(closeIde) {
-            try {
-              var res = await AGY.api.apiFetch('/api/sessions/delete', {
-                method: 'POST',
-                body: JSON.stringify({ projectIds: [projectId], closeIdeIfRunning: closeIde })
-              });
-              AGY.ui.closeModal();
-              await AGY.app.refreshAll('已删除工程记录，清理 ' + res.deletedSessions + ' 条会话（释放 ' + res.freedMegabytes + ' MB）');
-            } catch (e) {
-              if (e.status === 409 && e.data && e.data.code === 'IDE_RUNNING') {
-                AGY.ui.confirmCloseIdeModal(e.data.parentCount, e.data.lsCount, '删除工程 [' + projectName + ']', function () { doDel(true); });
-              } else {
-                AGY.api.showToast(e.message, 'error');
-              }
-            }
-          }
-          doDel(false);
-        });
-      }
-    );
   }
 
   async function handleReadOnlyGcScan() {

@@ -52,6 +52,12 @@ namespace AntigravityCompanion
             string msg = string.IsNullOrEmpty(error) ? "Operation failed." : error;
             return new OperationResult<T>(false, default(T), msg, warnings);
         }
+
+        public static OperationResult<T> FailWithData(string error, T data, List<string> warnings = null)
+        {
+            string msg = string.IsNullOrEmpty(error) ? "Operation failed." : error;
+            return new OperationResult<T>(false, data, msg, warnings);
+        }
     }
 
     /// <summary>
@@ -72,6 +78,11 @@ namespace AntigravityCompanion
         public static OperationResult<T> Fail<T>(string error, List<string> warnings = null)
         {
             return OperationResult<T>.Fail(error, warnings);
+        }
+
+        public static OperationResult<T> FailWithData<T>(string error, T data, List<string> warnings = null)
+        {
+            return OperationResult<T>.FailWithData(error, data, warnings);
         }
 
         public static OperationResult<object> Fail(string error, List<string> warnings = null)

@@ -219,6 +219,11 @@ html, body {
   text-align: left;
 }
 .sidebar-btn:hover { background: var(--bg-subtle); color: var(--text-primary); }
+.sidebar-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 600;
+}
 
 /* ── Main Workspace Column ── */
 .workspace-col {
@@ -970,6 +975,7 @@ html, body {
 }
 .toast.error { background: var(--red); color: #FFFFFF; }
 .toast.success { background: var(--green); color: #FFFFFF; }
+.toast.warn { background: var(--amber); color: #FFFFFF; }
 
 .empty-state {
   text-align: center;
@@ -1214,5 +1220,29 @@ html, body {
 .code-editor-area:focus {
   border-color: var(--accent);
   background: var(--bg-surface);
+}
+
+.experimental-details {
+  border: 1px solid rgba(217, 119, 6, 0.35);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
+  margin-top: 16px;
+}
+.experimental-summary {
+  padding: 13px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.experimental-summary::-webkit-details-marker { display: none; }
+.experimental-body {
+  padding: 0 16px 16px 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
 }
 

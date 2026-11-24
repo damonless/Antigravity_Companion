@@ -85,13 +85,19 @@ namespace AntigravityCompanion
                 {
                     if (!OpenUrlInPreferredShell(launchUrl))
                     {
-                        MessageBox.Show(
-                            "未检测到 Microsoft Edge / Chrome，且系统默认浏览器无法打开本地工作台：\r\n" + launchUrl,
-                            "无法启动工作台",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Error);
-                        host.Stop();
-                        return 1;
+                        try { Clipboard.SetText(launchUrl); } catch { }
+                        DialogResult dr = MessageBox.Show(
+                            "未检测到 Microsoft Edge / Chrome，且系统默认浏览器无法自动打开本地工作台：\r\n\r\n" +
+                            launchUrl +
+                            "\r\n\r\n已自动复制工作台地址到剪贴板。是否保持后台服务运行，以便您手动粘贴到任意浏览器打开？（无桌面环境也可使用 --no-browser 参数启动）",
+                            "无法自动打开浏览器",
+                            MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Warning);
+                        if (dr != DialogResult.Yes)
+                        {
+                            host.Stop();
+                            return 1;
+                        }
                     }
                 }
 

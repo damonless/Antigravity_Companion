@@ -39,6 +39,8 @@ namespace AntigravityCompanion
         public string PluginId = string.Empty;
         public string SourcePath = string.Empty;
         public int CharCount;
+        public int LineCount;
+        public int ByteCount;
         public int EstimatedTokens;
         public bool OverBudget;
         public bool AlwaysOn;
@@ -288,8 +290,26 @@ namespace AntigravityCompanion
         public static int EstimateTokenCount(string text)
         {
             if (string.IsNullOrEmpty(text)) return 0;
-            int byteCount = Encoding.UTF8.GetByteCount(text);
-            return (int)Math.Ceiling(byteCount / 3.5);
+            int cjkChars = 0;
+            int otherChars = 0;
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                if ((c >= 0x4E00 && c <= 0x9FFF) ||
+                    (c >= 0x3400 && c <= 0x4DBF) ||
+                    (c >= 0x3000 && c <= 0x30FF) ||
+                    (c >= 0xF900 && c <= 0xFAFF) ||
+                    (c >= 0xAC00 && c <= 0xD7AF) ||
+                    (c >= 0xFF00 && c <= 0xFFEF))
+                {
+                    cjkChars++;
+                }
+                else
+                {
+                    otherChars++;
+                }
+            }
+            return (int)Math.Ceiling(cjkChars / 1.5 + otherChars / 4.0);
         }
 
         // ══════════════════════════════════════════════════════════════════
@@ -297,6 +317,11 @@ namespace AntigravityCompanion
         // ══════════════════════════════════════════════════════════════════
 
         public static CockpitSnapshot ScanCockpit(string geminiPath, string homePath, string repoPath)
+        {
+            return ScanCockpit(geminiPath, homePath, repoPath, 0);
+        }
+
+        public static CockpitSnapshot ScanCockpit(string geminiPath, string homePath, string repoPath, int referenceTokenThreshold)
         {
             CockpitSnapshot snap = new CockpitSnapshot();
             if (string.IsNullOrWhiteSpace(geminiPath))
@@ -334,7 +359,7 @@ namespace AntigravityCompanion
             if (globalPluginsManifest != null) snap.Manifests.Add(globalPluginsManifest);
 
             // Global rules: ~/.gemini/GEMINI.md, AGENTS.md, .geminirules, ~/.gemini/config/GEMINI.md, ~/.gemini/config/rules/**
-            ScanGlobalRules(geminiPath, configDir, snap);
+            ScanGlobalRules(geminiPath, configDir, snap, referenceTokenThreshold);
 
             // Global standalone skills: ~/.gemini/config/skills/<id>/
             string skillsDir = Path.Combine(configDir, "skills");
@@ -358,13 +383,13 @@ namespace AntigravityCompanion
             }
 
             // Plugins: config.json plugins + config/plugins/<id>/ + plugins.json
-            ScanPlugins(configRoot, configJsonPath, Path.Combine(configDir, "plugins"), globalPluginsManifest, snap);
+            ScanPlugins(configRoot, configJsonPath, Path.Combine(configDir, "plugins"), globalPluginsManifest, snap, referenceTokenThreshold);
 
             // CLI configs: ~/.gemini/settings.json & ~/.gemini/antigravity-cli/settings.json
             ScanCliSettings(geminiPath, snap);
 
             // Registered Workspaces
-            ScanRegisteredWorkspaces(geminiPath, snap);
+            ScanRegisteredWorkspaces(geminiPath, snap, referenceTokenThreshold);
 
             // Apply global skills manifest visibility/status for skills referenced only in manifest
             if (globalSkillsManifest != null)
@@ -461,7 +486,7 @@ namespace AntigravityCompanion
             catch { }
         }
 
-        private static void ScanGlobalRules(string geminiPath, string configDir, CockpitSnapshot snap)
+        private static void ScanGlobalRules(string geminiPath, string configDir, CockpitSnapshot snap, int referenceTokenThreshold)
         {
             string[] rootFiles = new string[]
             {
@@ -483,7 +508,7 @@ namespace AntigravityCompanion
                     string id = full.StartsWith(Path.GetFullPath(configDir), StringComparison.OrdinalIgnoreCase)
                         ? "config/" + Path.GetFileName(rf)
                         : Path.GetFileName(rf);
-                    ScannedRuleInfo rule = BuildRuleInfo(id, "global", string.Empty, full, true, true);
+                    ScannedRuleInfo rule = BuildRuleInfo(id, "global", string.Empty, full, true, true, referenceTokenThreshold);
                     if (rule != null) snap.Rules.Add(rule);
                 }
                 catch { }
@@ -498,7 +523,7 @@ namespace AntigravityCompanion
                     string full = Path.GetFullPath(files[i]);
                     if (!seen.Add(full)) continue;
                     string rel = files[i].Substring(rulesDir.Length).TrimStart('\\', '/').Replace('\\', '/');
-                    ScannedRuleInfo rule = BuildRuleInfo("rules/" + rel, "global", string.Empty, full, true, true);
+                    ScannedRuleInfo rule = BuildRuleInfo("rules/" + rel, "global", string.Empty, full, true, true, referenceTokenThreshold);
                     if (rule != null) snap.Rules.Add(rule);
                 }
             }
@@ -509,7 +534,8 @@ namespace AntigravityCompanion
             string configJsonPath,
             string pluginsDir,
             ManifestControlInfo pluginsManifest,
-            CockpitSnapshot snap)
+            CockpitSnapshot snap,
+            int referenceTokenThreshold)
         {
             Dictionary<string, Dictionary<string, object>> configPluginEntries = new Dictionary<string, Dictionary<string, object>>(StringComparer.OrdinalIgnoreCase);
             if (configRoot != null)
@@ -625,7 +651,7 @@ namespace AntigravityCompanion
                         for (int r = 0; r < rFiles.Count; r++)
                         {
                             string rel = rFiles[r].Substring(pRulesDir.Length).TrimStart('\\', '/').Replace('\\', '/');
-                            ScannedRuleInfo rInfo = BuildRuleInfo("plugin:" + id + "/" + rel, "plugin:" + id, id, rFiles[r], true, pInfo.Enabled);
+                            ScannedRuleInfo rInfo = BuildRuleInfo("plugin:" + id + "/" + rel, "plugin:" + id, id, rFiles[r], true, pInfo.Enabled, referenceTokenThreshold);
                             if (rInfo != null)
                             {
                                 pInfo.Rules.Add(rInfo);
@@ -721,7 +747,7 @@ namespace AntigravityCompanion
             }
         }
 
-        private static void ScanRegisteredWorkspaces(string geminiPath, CockpitSnapshot snap)
+        private static void ScanRegisteredWorkspaces(string geminiPath, CockpitSnapshot snap, int referenceTokenThreshold)
         {
             Dictionary<string, ProjectMetadata> projects = WorkspaceService.LoadLocalProjects(geminiPath);
             if (projects == null || projects.Count == 0) return;
@@ -768,7 +794,7 @@ namespace AntigravityCompanion
                     if (File.Exists(geminiMd))
                     {
                         ws.HasGeminiMd = true;
-                        ScannedRuleInfo r = BuildRuleInfo(ws.ProjectName + "/GEMINI.md", scope, string.Empty, geminiMd, true, true);
+                        ScannedRuleInfo r = BuildRuleInfo(ws.ProjectName + "/GEMINI.md", scope, string.Empty, geminiMd, true, true, referenceTokenThreshold);
                         if (r != null) { ws.Rules.Add(r); snap.Rules.Add(r); }
                     }
 
@@ -776,7 +802,7 @@ namespace AntigravityCompanion
                     if (File.Exists(agentsMd))
                     {
                         ws.HasAgentsMd = true;
-                        ScannedRuleInfo r = BuildRuleInfo(ws.ProjectName + "/AGENTS.md", scope, string.Empty, agentsMd, true, true);
+                        ScannedRuleInfo r = BuildRuleInfo(ws.ProjectName + "/AGENTS.md", scope, string.Empty, agentsMd, true, true, referenceTokenThreshold);
                         if (r != null) { ws.Rules.Add(r); snap.Rules.Add(r); }
                     }
 
@@ -850,7 +876,7 @@ namespace AntigravityCompanion
                             for (int r = 0; r < rFiles.Count; r++)
                             {
                                 string rel = rFiles[r].Substring(pRulesDir.Length).TrimStart('\\', '/').Replace('\\', '/');
-                                ScannedRuleInfo rInfo = BuildRuleInfo(ws.ProjectName + "/" + curDirName + "/rules/" + rel, scope, string.Empty, rFiles[r], true, true);
+                                ScannedRuleInfo rInfo = BuildRuleInfo(ws.ProjectName + "/" + curDirName + "/rules/" + rel, scope, string.Empty, rFiles[r], true, true, referenceTokenThreshold);
                                 if (rInfo != null) { ws.Rules.Add(rInfo); snap.Rules.Add(rInfo); }
                             }
                         }
@@ -1364,7 +1390,7 @@ namespace AntigravityCompanion
             snap.OverBudgetCount = overCount;
         }
 
-        private static ScannedRuleInfo BuildRuleInfo(string id, string scope, string pluginId, string path, bool alwaysOn, bool enabled)
+        private static ScannedRuleInfo BuildRuleInfo(string id, string scope, string pluginId, string path, bool alwaysOn, bool enabled, int referenceTokenThreshold)
         {
             try
             {
@@ -1376,8 +1402,10 @@ namespace AntigravityCompanion
                 r.PluginId = pluginId ?? string.Empty;
                 r.SourcePath = path;
                 r.CharCount = text.Length;
+                r.LineCount = CountLines(text);
+                r.ByteCount = Encoding.UTF8.GetByteCount(text);
                 r.EstimatedTokens = tokens;
-                r.OverBudget = tokens > TokenBudgetThreshold;
+                r.OverBudget = (referenceTokenThreshold > 0 && tokens > referenceTokenThreshold);
                 r.AlwaysOn = alwaysOn;
                 r.Enabled = enabled;
                 return r;
@@ -1386,6 +1414,25 @@ namespace AntigravityCompanion
             {
                 return null;
             }
+        }
+
+        private static int CountLines(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return 0;
+            int lines = 1;
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (text[i] == '\n')
+                {
+                    if (i < text.Length - 1) lines++;
+                }
+                else if (text[i] == '\r')
+                {
+                    if (i + 1 < text.Length && text[i + 1] == '\n') continue;
+                    if (i < text.Length - 1) lines++;
+                }
+            }
+            return lines;
         }
 
         // ══════════════════════════════════════════════════════════════════
@@ -2515,6 +2562,16 @@ namespace AntigravityCompanion
             string repoPath,
             string rawPath)
         {
+            return ReadAllowedCustomizationFile(geminiPath, homePath, repoPath, rawPath, 0);
+        }
+
+        public static EditorFileResult ReadAllowedCustomizationFile(
+            string geminiPath,
+            string homePath,
+            string repoPath,
+            string rawPath,
+            int referenceTokenThreshold)
+        {
             EditorFileResult res = new EditorFileResult();
             string canonicalPath;
             int errCode;
@@ -2543,7 +2600,7 @@ namespace AntigravityCompanion
             res.Content = text;
             res.CharCount = text.Length;
             res.EstimatedTokens = tokens;
-            res.OverBudget = tokens > TokenBudgetThreshold;
+            res.OverBudget = (referenceTokenThreshold > 0 && tokens > referenceTokenThreshold);
             return res;
         }
 
@@ -2553,6 +2610,17 @@ namespace AntigravityCompanion
             string repoPath,
             string rawPath,
             string content)
+        {
+            return SaveAllowedCustomizationFile(geminiPath, homePath, repoPath, rawPath, content, 0);
+        }
+
+        public static EditorFileResult SaveAllowedCustomizationFile(
+            string geminiPath,
+            string homePath,
+            string repoPath,
+            string rawPath,
+            string content,
+            int referenceTokenThreshold)
         {
             EditorFileResult res = new EditorFileResult();
             string canonicalPath;
@@ -2601,7 +2669,7 @@ namespace AntigravityCompanion
             res.Content = text;
             res.CharCount = text.Length;
             res.EstimatedTokens = tokens;
-            res.OverBudget = tokens > TokenBudgetThreshold;
+            res.OverBudget = (referenceTokenThreshold > 0 && tokens > referenceTokenThreshold);
             res.BackupPath = bakPath ?? string.Empty;
             return res;
         }
@@ -2792,6 +2860,11 @@ namespace AntigravityCompanion
         // ══════════════════════════════════════════════════════════════════
 
         public static Dictionary<string, object> SerializeCockpitSummary(CockpitSnapshot snap, string geminiPath)
+        {
+            return SerializeCockpitSummary(snap, geminiPath, 0);
+        }
+
+        public static Dictionary<string, object> SerializeCockpitSummary(CockpitSnapshot snap, string geminiPath, int referenceTokenThreshold)
         {
             Dictionary<string, object> d = new Dictionary<string, object>();
             if (snap == null) return d;
@@ -2988,7 +3061,7 @@ namespace AntigravityCompanion
             }
 
             Dictionary<string, object> tb = new Dictionary<string, object>();
-            tb["threshold"] = TokenBudgetThreshold;
+            tb["threshold"] = referenceTokenThreshold > 0 ? referenceTokenThreshold : 0;
             tb["globalAlwaysOnTokens"] = snap.GlobalAlwaysOnTokens;
             tb["enabledPluginRulesTokens"] = snap.EnabledPluginRulesTokens;
             tb["projectRulesTokens"] = snap.ProjectRulesTokens;
@@ -3009,6 +3082,8 @@ namespace AntigravityCompanion
             rd["pluginId"] = r.PluginId;
             rd["sourcePath"] = r.SourcePath;
             rd["charCount"] = r.CharCount;
+            rd["lineCount"] = r.LineCount;
+            rd["byteCount"] = r.ByteCount;
             rd["estimatedTokens"] = r.EstimatedTokens;
             rd["overBudget"] = r.OverBudget;
             rd["alwaysOn"] = r.AlwaysOn;

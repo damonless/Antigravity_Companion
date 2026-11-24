@@ -4,12 +4,13 @@
   var AGY = window.AGY = window.AGY || {};
 
   var VIEW_META = {
-    overview: ['概览', '查看本机状态、已登记工程启动台、同步差异与存储健康度'],
+    overview: ['概览', '查看本机状态、工程启动台、同步差异与存储健康度'],
     cockpit: ['每日驾驶舱', '管理 Antigravity 全局配置、Plugin/MCP/Hook 开关与 MCP 健康体检'],
-    sessions: ['会话与智能命名', '统一浏览 IDE/CLI/历史归档对话、全文检索、Markdown 导出与三步重命名'],
-    storage: ['存储瘦身与孤儿清理', '可视化磁盘占用分析、5C 无损抽脂、5A 冷归档裁剪与孤儿垃圾回收'],
-    vault: ['能力仓库与规则编辑器', '在线编辑 Rule/Skill/.agents/、监控 Token 预算与 Portable Vault 双向同步'],
-    backup: ['备份迁移与定时快照', '分级 .agy 归档往返迁移、定时静默快照与系统托盘/全局热键设置']
+    sessions: ['会话管理', '统一浏览 IDE/CLI/历史归档对话、全文检索、Markdown 导出与工程维护'],
+    rename: ['智能重命名', '三步式会话命名向导、本地多仓规则、Zero-Key agy CLI 与离线 AI 润色'],
+    vault: ['能力与规则', '在线编辑 Rule/Skill/.agents/、参考字节/Token 统计与 Portable Vault 双向同步'],
+    backup: ['存储与备份', '分级 .agy 归档往返迁移、空间诊断、孤儿清理与高级微创瘦身'],
+    settings: ['系统设置', 'Portable Vault、agy CLI、系统托盘、全局快捷键、开机自启与定时静默快照']
   };
 
   function applyTheme(theme) {
@@ -108,46 +109,168 @@
     if (!foundFocused && cands.length > 0) st.renameFocusedCid = cands[0].cid;
   }
 
-  async function refreshAllSilent() {
+  function markNonActiveDirty(activeView) {
+    var dirty = AGY.state.dirty || {};
+    var keys = Object.keys(dirty);
+    for (var i = 0; i < keys.length; i++) {
+      dirty[keys[i]] = true;
+    }
+    if (activeView === 'backup') {
+      if (AGY.state.backupSubView === 'storage') dirty.storage = false;
+      else dirty.backup = false;
+    } else if (activeView) {
+      dirty[activeView] = false;
+    }
+    AGY.state.dirty = dirty;
+  }
+
+  function numSettingOrDefault(v, def) {
+    var n = parseFloat(v);
+    return (!isNaN(n) && isFinite(n) && n >= 0) ? n : def;
+  }
+
+  async function fetchViewDataOnly(view) {
     var api = AGY.api.apiFetch;
     var st = AGY.state;
-    var data = await Promise.all([
+    if (view === 'overview') {
+      var ovPair = await Promise.all([
+        api('/api/sessions'),
+        api('/api/cockpit/summary')
+      ]);
+      st.sessionsData = ovPair[0];
+      st.cockpitData = ovPair[1];
+      st.dirty.overview = false;
+    } else if (view === 'cockpit') {
+      st.cockpitData = await api('/api/cockpit/summary');
+      st.dirty.cockpit = false;
+    } else if (view === 'sessions') {
+      st.sessionsData = await api('/api/sessions');
+      st.dirty.sessions = false;
+    } else if (view === 'rename') {
+      applyFreshRenameData(await api('/api/rename/candidates'));
+      st.dirty.rename = false;
+    } else if (view === 'vault') {
+      var vRes = await Promise.all([
+        api('/api/capabilities'),
+        api('/api/vault/status'),
+        api('/api/cockpit/summary')
+      ]);
+      st.capData = vRes[0];
+      st.vaultStatus = vRes[1];
+      st.cockpitData = vRes[2];
+      st.dirty.vault = false;
+    } else if (view === 'backup') {
+      if (st.backupSubView === 'storage') {
+        if (AGY.views && AGY.views.runStorageAnalyze) {
+          await AGY.views.runStorageAnalyze(true);
+        } else {
+          st.storageData = await api('/api/storage/analyze', {
+            method: 'POST',
+            body: JSON.stringify({
+              topN: 30,
+              minAgeDays: numSettingOrDefault(st.storageMinAgeDays, 7),
+              minSizeMb: numSettingOrDefault(st.storageMinSizeMb, 5)
+            })
+          });
+          st.dirty.storage = false;
+        }
+      } else {
+        st.backupData = await api('/api/backup/current');
+        st.dirty.backup = false;
+      }
+    } else if (view === 'storage') {
+      if (AGY.views && AGY.views.runStorageAnalyze) {
+        await AGY.views.runStorageAnalyze(true);
+      } else {
+        st.storageData = await api('/api/storage/analyze', {
+          method: 'POST',
+          body: JSON.stringify({
+            topN: 30,
+            minAgeDays: numSettingOrDefault(st.storageMinAgeDays, 7),
+            minSizeMb: numSettingOrDefault(st.storageMinSizeMb, 5)
+          })
+        });
+        st.dirty.storage = false;
+      }
+    } else if (view === 'settings') {
+      var sRes = await Promise.all([
+        api('/api/settings/companion'),
+        api('/api/snapshots/status'),
+        api('/api/vault/status')
+      ]);
+      st.companionSettings = sRes[0];
+      st.snapshotStatus = sRes[1];
+      st.vaultStatus = sRes[2];
+      st.dirty.settings = false;
+    }
+  }
+
+  async function refreshCoreAndActiveView() {
+    var api = AGY.api.apiFetch;
+    var st = AGY.state;
+    var active = st.view || 'overview';
+    var coreRes = await Promise.all([
       api('/api/overview'),
-      api('/api/cockpit/summary'),
-      api('/api/sessions'),
-      api('/api/rename/candidates'),
-      api('/api/capabilities'),
-      api('/api/backup/current'),
       api('/api/settings/companion'),
-      api('/api/snapshots/status'),
-      api('/api/vault/status')
+      fetchViewDataOnly(active)
     ]);
-    st.overview = data[0];
-    st.cockpitData = data[1];
-    st.sessionsData = data[2];
-    applyFreshRenameData(data[3]);
-    st.capData = data[4];
-    st.backupData = data[5];
-    st.companionSettings = data[6];
-    st.snapshotStatus = data[7];
-    st.vaultStatus = data[8];
+    st.overview = coreRes[0];
+    st.companionSettings = coreRes[1];
     updateShellBars();
   }
 
+  async function refreshAllSilent() {
+    await refreshCoreAndActiveView();
+  }
+
   async function refreshAll(showToastMsg) {
-    await refreshAllSilent();
+    markNonActiveDirty(AGY.state.view || 'overview');
+    await refreshCoreAndActiveView();
     renderCurrentView();
     if (showToastMsg) AGY.api.showToast(showToastMsg, 'success');
   }
 
-  function switchView(view) {
-    AGY.state.view = view;
+  function updateSidebarActiveState(view) {
     var navBtns = document.querySelectorAll('#navList .nav-item');
     for (var i = 0; i < navBtns.length; i++) {
       var b = navBtns[i];
       b.classList.toggle('active', b.getAttribute('data-view') === view);
     }
-    renderCurrentView();
+    var setBtn = AGY.dom.el('btnOpenSettings');
+    if (setBtn) setBtn.classList.toggle('active', view === 'settings');
+  }
+
+  function switchView(view) {
+    var st = AGY.state;
+    if (view === 'storage') {
+      st.backupSubView = 'storage';
+      view = 'backup';
+    }
+    st.view = view;
+    updateSidebarActiveState(view);
+
+    var needsLazy = false;
+    if (view === 'backup' && st.backupSubView === 'storage') {
+      needsLazy = !!(st.dirty.storage || !st.storageData);
+    } else {
+      needsLazy = !!(st.dirty[view]);
+    }
+
+    if (needsLazy) {
+      if (view === 'backup' && st.backupSubView === 'storage') {
+        st._lazyFetchingStorage = true;
+      }
+      renderCurrentView();
+      fetchViewDataOnly(view).then(function () {
+        st._lazyFetchingStorage = false;
+        if (AGY.state.view === view) renderCurrentView();
+      }).catch(function (err) {
+        st._lazyFetchingStorage = false;
+        AGY.api.showToast('加载视图数据失败：' + (err && err.message ? err.message : String(err)), 'error');
+      });
+    } else {
+      renderCurrentView();
+    }
   }
 
   function renderCurrentView() {
@@ -199,6 +322,13 @@
     for (var i = 0; i < navBtns.length; i++) {
       navBtns[i].addEventListener('click', function () {
         switchView(this.getAttribute('data-view'));
+      });
+    }
+
+    var setBtn = el('btnOpenSettings');
+    if (setBtn) {
+      setBtn.addEventListener('click', function () {
+        switchView('settings');
       });
     }
 
@@ -271,14 +401,19 @@
       if (st.token) AGY.api.apiFetch('/api/app/heartbeat', { method: 'POST', body: '{}' }).catch(function () {});
     }, 2500);
 
-    await refreshAll();
+    await refreshCoreAndActiveView();
+    renderCurrentView();
   }
 
   AGY.app = {
     switchView: switchView,
     refreshAll: refreshAll,
     refreshAllSilent: refreshAllSilent,
+    refreshCoreAndActiveView: refreshCoreAndActiveView,
+    fetchViewDataOnly: fetchViewDataOnly,
+    markNonActiveDirty: markNonActiveDirty,
     applyFreshRenameData: applyFreshRenameData,
+    updateShellBars: updateShellBars,
     renderCurrentView: renderCurrentView
   };
 

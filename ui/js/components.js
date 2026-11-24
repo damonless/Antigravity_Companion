@@ -17,7 +17,8 @@
     eye: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
     edit: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
     folder: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
-    download: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+    download: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+    settings: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
   };
 
   function escapeHtml(str) {
@@ -344,16 +345,57 @@
       var dirty = false;
       var isJson = /\.(json|jsonc)$/i.test(data.path || filePath);
 
-      function renderBudgetBanner(tokens) {
-        var pct = Math.min(100, Math.round((tokens / 1500) * 100));
-        var cls = tokens > 1500 ? 'over' : (tokens > 1100 ? 'warn' : '');
-        var badge = tokens > 1500
-          ? '<span class="badge badge-red">⚠ 超出 1,500 Token 预算</span>'
-          : '<span class="badge badge-green">预算健康</span>';
-        return { pct: pct, cls: cls, badgeHtml: badge };
+      function countUtf8Bytes(text) {
+        if (!text) return 0;
+        try { return new TextEncoder().encode(String(text)).length; }
+        catch (_e) { return String(text).length * 2; }
       }
 
-      var bInit = renderBudgetBanner(data.estimatedTokens || estimateTokens(initialContent));
+      function countTextLines(text) {
+        if (!text) return 0;
+        return String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').length;
+      }
+
+      function getRefThreshold() {
+        var cfg = AGY.state.companionSettings || {};
+        var t = Number(cfg.ruleTokenReferenceThreshold || 0);
+        return (!isNaN(t) && isFinite(t) && t > 0) ? t : 0;
+      }
+
+      function renderBudgetBanner(tokens, bytes, chars, lines) {
+        var threshold = getRefThreshold();
+        if (threshold <= 0) {
+          return {
+            hasThreshold: false,
+            pct: 0,
+            cls: '',
+            tokenText: '参考估算约 ' + tokens + ' tokens',
+            metricsText: formatBytes(bytes) + ' (' + bytes + ' B) · ' + chars + ' 字符 · ' + lines + ' 行',
+            badgeHtml: '<span class="badge badge-neutral">客观体量统计</span>'
+          };
+        }
+        var pct = Math.min(100, Math.round((tokens / threshold) * 100));
+        var cls = tokens > threshold ? 'over' : (tokens > threshold * 0.75 ? 'warn' : '');
+        var badge = tokens > threshold
+          ? '<span class="badge badge-red">⚠ 超过参考阈值 (' + threshold + ')</span>'
+          : (tokens > threshold * 0.75
+            ? '<span class="badge badge-amber">接近参考阈值 (' + threshold + ')</span>'
+            : '<span class="badge badge-green">在参考阈值内</span>');
+        return {
+          hasThreshold: true,
+          pct: pct,
+          cls: cls,
+          tokenText: '参考约 ' + tokens + ' / ' + threshold + ' tokens',
+          metricsText: formatBytes(bytes) + ' (' + bytes + ' B) · ' + chars + ' 字符 · ' + lines + ' 行',
+          badgeHtml: badge
+        };
+      }
+
+      var initTokens = data.estimatedTokens || estimateTokens(initialContent);
+      var initBytes = countUtf8Bytes(initialContent);
+      var initChars = data.charCount !== undefined ? data.charCount : initialContent.length;
+      var initLines = countTextLines(initialContent);
+      var bInit = renderBudgetBanner(initTokens, initBytes, initChars, initLines);
       var hdrActions =
         '<button class="btn btn-sm" id="btnEditorCopy">复制源码</button>' +
         '<button class="btn btn-sm btn-primary" id="btnEditorSave">保存（自动 .bak）</button>';
@@ -365,20 +407,21 @@
             '<div id="editorBudgetBadge">' + bInit.badgeHtml + '</div>' +
           '</div>' +
           '<div class="token-meter-wrap">' +
-            '<div class="between" style="font-size:12px">' +
-              '<span id="lblEditorTokenCount">约 ' + (data.estimatedTokens || 0) + ' / 1,500 tokens</span>' +
-              '<span id="lblEditorCharCount">' + (data.charCount || 0) + ' 字符</span>' +
+            '<div class="between wrap gap-sm" style="font-size:12px">' +
+              '<span id="lblEditorTokenCount">' + escapeHtml(bInit.tokenText) + '</span>' +
+              '<span class="muted mono" id="lblEditorCharCount">' + escapeHtml(bInit.metricsText) + '</span>' +
             '</div>' +
-            '<div class="token-meter-track"><div class="token-meter-fill ' + bInit.cls + '" id="editorBudgetFill" style="width:' + bInit.pct + '%"></div></div>' +
+            '<div class="token-meter-track' + (bInit.hasThreshold ? '' : ' hidden') + '" id="editorBudgetTrack"><div class="token-meter-fill ' + bInit.cls + '" id="editorBudgetFill" style="width:' + bInit.pct + '%"></div></div>' +
           '</div>' +
         '</div>' +
         '<div id="editorSyntaxAlert" class="alert-banner danger hidden"></div>' +
         '<textarea class="code-editor-area" id="txtInlineEditor">' + escapeHtml(initialContent) + '</textarea>';
 
-      openDrawer(titleHint || '在线配置编辑器', '白名单安全校验 · 实时 Token 预算评估 · 原子写入自动备份', body, hdrActions, function (db, ha) {
+      openDrawer(titleHint || '在线配置编辑器', '白名单安全校验 · 客观体量统计 · 原子写入自动备份', body, hdrActions, function (db, ha) {
         var ta = db.querySelector('#txtInlineEditor');
         var lblTok = db.querySelector('#lblEditorTokenCount');
         var lblChr = db.querySelector('#lblEditorCharCount');
+        var track = db.querySelector('#editorBudgetTrack');
         var fill = db.querySelector('#editorBudgetFill');
         var badgeHost = db.querySelector('#editorBudgetBadge');
         var synAlert = db.querySelector('#editorSyntaxAlert');
@@ -387,9 +430,13 @@
           currentContent = this.value;
           dirty = currentContent !== initialContent;
           var toks = estimateTokens(currentContent);
-          var b = renderBudgetBanner(toks);
-          lblTok.textContent = '约 ' + toks + ' / 1,500 tokens';
-          lblChr.textContent = currentContent.length + ' 字符';
+          var bts = countUtf8Bytes(currentContent);
+          var chs = currentContent.length;
+          var lns = countTextLines(currentContent);
+          var b = renderBudgetBanner(toks, bts, chs, lns);
+          lblTok.textContent = b.tokenText;
+          lblChr.textContent = b.metricsText;
+          if (track) track.classList.toggle('hidden', !b.hasThreshold);
           fill.style.width = b.pct + '%';
           fill.className = 'token-meter-fill ' + b.cls;
           badgeHost.innerHTML = b.badgeHtml;

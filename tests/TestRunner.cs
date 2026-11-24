@@ -100,6 +100,12 @@ namespace AntigravityCompanion.Tests
             Run("T72_Stage4_HttpEmbeddedUiAssetsServed", T72_Stage4_HttpEmbeddedUiAssetsServed);
             Run("T73_Stage4_TrayHost_HotkeyParserAndMenuState", T73_Stage4_TrayHost_HotkeyParserAndMenuState);
             Run("T74_Stage4_CompanionCommandDispatcher_RegistrationParity", T74_Stage4_CompanionCommandDispatcher_RegistrationParity);
+            Run("T75_Wave1_Remediation_SecurityJobObjectAndDefaults", T75_Wave1_Remediation_SecurityJobObjectAndDefaults);
+            Run("T76_ACC02_JobObjectRepeatedDrainAndTimeoutCleanup", T76_ACC02_JobObjectRepeatedDrainAndTimeoutCleanup);
+            Run("T77_ACC03_ScheduledSnapshotMutationLockAndIdeSkip", T77_ACC03_ScheduledSnapshotMutationLockAndIdeSkip);
+            Run("T78_ACC04_CockpitSettingsAndToggleIdeRunningWarnings", T78_ACC04_CockpitSettingsAndToggleIdeRunningWarnings);
+            Run("T79_ACC05_ACC09_StartupRollbackAndHardenedDefaults", T79_ACC05_ACC09_StartupRollbackAndHardenedDefaults);
+            Run("T80_ACC06_ACC10_SecurityNormalizationAndTokenBudget", T80_ACC06_ACC10_SecurityNormalizationAndTokenBudget);
 
             sw.Stop();
             Console.WriteLine("-------------------------------------------------------------------------------");
@@ -5316,14 +5322,22 @@ namespace AntigravityCompanion.Tests
                 EditorFileResult r1 = AntigravityConfigService.ReadAllowedCustomizationFile(geminiDir, homeDir, vaultDir, geminiMd);
                 AssertTrue(r1.Ok && r1.Content.Contains("Initial Global Rule"), "T62: Allowed reading GEMINI.md");
 
-                string bigRule = new string('A', 6000); // ceil(6000 / 3.5) = 1715 > 1500
-                EditorFileResult s1 = AntigravityConfigService.SaveAllowedCustomizationFile(geminiDir, homeDir, vaultDir, wsRuleMd, bigRule);
-                AssertTrue(s1.Ok && s1.EstimatedTokens > 1500 && s1.OverBudget, "T62: Saved project .agents/ .md and flagged > 1500 tokens");
+                // Default referenceTokenThreshold == 0 produces no red alarm; explicit threshold 1500 flags > 1500
+                AssertEqual(100, AntigravityConfigService.EstimateTokenCount(new string('A', 400)), "T62: 400 ASCII chars -> 100 tokens");
+                AssertEqual(100, AntigravityConfigService.EstimateTokenCount(new string('中', 150)), "T62: 150 CJK chars -> 100 tokens");
+
+                string bigRule = new string('A', 6100); // ceil(6100 / 4.0) = 1525 > 1500
+                EditorFileResult sDefault = AntigravityConfigService.SaveAllowedCustomizationFile(geminiDir, homeDir, vaultDir, wsRuleMd, bigRule);
+                AssertTrue(sDefault.Ok && sDefault.EstimatedTokens == 1525 && !sDefault.OverBudget, "T62: Default threshold=0 does not flag OverBudget");
+                EditorFileResult s1 = AntigravityConfigService.SaveAllowedCustomizationFile(geminiDir, homeDir, vaultDir, wsRuleMd, bigRule, 1500);
+                AssertTrue(s1.Ok && s1.EstimatedTokens > 1500 && s1.OverBudget, "T62: Saved project .agents/ .md and flagged > 1500 tokens when threshold=1500");
                 AssertTrue(File.Exists(s1.BackupPath), "T62: Created backup on editor save");
 
-                CockpitSnapshot snap = AntigravityConfigService.ScanCockpit(geminiDir, homeDir, vaultDir);
-                AssertTrue(snap.OverBudgetCount >= 1 && snap.OverBudgetFiles.Exists(delegate(ScannedRuleInfo r) { return r.SourcePath == wsRuleMd; }),
-                    "T62: Cockpit token budget audit flagged over-budget rule");
+                CockpitSnapshot snapDefault = AntigravityConfigService.ScanCockpit(geminiDir, homeDir, vaultDir);
+                AssertEqual(0, snapDefault.OverBudgetCount, "T62: Default ScanCockpit has 0 over-budget alerts");
+                CockpitSnapshot snap = AntigravityConfigService.ScanCockpit(geminiDir, homeDir, vaultDir, 1500);
+                AssertTrue(snap.OverBudgetCount >= 1 && snap.OverBudgetFiles.Exists(delegate(ScannedRuleInfo r) { return r.SourcePath == wsRuleMd && r.LineCount >= 1 && r.ByteCount == 6100; }),
+                    "T62: Cockpit token budget audit flagged over-budget rule with LineCount and ByteCount");
 
                 // 2. Rejections: .. traversal, oauth_creds.json, *token*.json, outside root, non-.agents project file, invalid JSON
                 string travPath = geminiDir + "\\..\\OutsideSecret\\outside.json";
@@ -6193,13 +6207,21 @@ namespace AntigravityCompanion.Tests
                     AssertTrue(anResp.BodyText.Contains(cidSub) && anResp.BodyText.Contains("\"eligibleForSlim\":true"),
                         "T68: Storage analyze surfaces eligible subagent DB");
 
-                    // 2. POST /api/storage/slim (Liposuction)
+                    // 2. POST /api/storage/slim (ACC-01: blocks when IDE running unless closed, succeeds when IDE not running)
+                    host.IdeRunningOverride = delegate() { return true; };
+                    RawHttpTestResponse slimIde409 = SendRawTcpHttp(host.Port, null, "POST", "/api/storage/slim", apiHdr,
+                        "{\"mode\":\"liposuction\",\"minAgeDays\":7,\"minSizeMb\":5,\"verifyPreFlight\":true}");
+                    AssertEqual(409, slimIde409.StatusCode, "T68: POST /api/storage/slim returns 409 IDE_RUNNING when IDE running and closeIdeIfRunning=false");
+                    AssertTrue(slimIde409.BodyText.Contains("\"code\":\"IDE_RUNNING\""), "T68: Slim 409 body indicates code=IDE_RUNNING");
+
+                    host.IdeRunningOverride = delegate() { return false; };
                     RawHttpTestResponse slimResp = SendRawTcpHttp(host.Port, null, "POST", "/api/storage/slim", apiHdr,
                         "{\"mode\":\"liposuction\",\"minAgeDays\":7,\"minSizeMb\":5,\"verifyPreFlight\":true}");
                     AssertEqual(200, slimResp.StatusCode, "T68: POST /api/storage/slim returns 200: " + slimResp.BodyText);
                     AssertTrue(slimResp.BodyText.Contains("\"processedCount\":1") && slimResp.BodyText.Contains("\"preFlightPassed\":true"),
                         "T68: Storage slim processed 1 subagent with pre-flight pass");
                     AssertTrue(new FileInfo(subDbPath).Length < subBefore / 10, "T68: Subagent DB shrank via HTTP slim");
+                    host.IdeRunningOverride = null;
 
                     // 3. GET /api/rename/cli-status
                     RawHttpTestResponse cliStatResp = SendRawTcpHttp(host.Port, null, "GET", "/api/rename/cli-status?customCliPath=" + Uri.EscapeDataString(mockCmd), apiHdr, null);
@@ -6241,66 +6263,84 @@ namespace AntigravityCompanion.Tests
 
                     string fastHttpZip = Path.Combine(sb, "http_fast.agy");
                     string fullHttpZip = Path.Combine(sb, "http_full.agy");
+
+                    // Always verify IDE_RUNNING 409 guard via IdeRunningOverride=true (zero environment-conditional skips)
+                    host.IdeRunningOverride = delegate() { return true; };
+                    RawHttpTestResponse bkIde409 = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/full", apiHdr,
+                        "{\"outputPath\":\"" + UnifiedJson.EscapeString(fastHttpZip) + "\",\"tier\":\"fast\"}");
+                    AssertEqual(409, bkIde409.StatusCode, "T68: POST /api/backup/full returns 409 IDE_RUNNING when IdeRunningOverride=true");
+                    AssertTrue(bkIde409.BodyText.Contains("\"code\":\"IDE_RUNNING\""), "T68: Backup 409 payload indicates code=IDE_RUNNING");
+                    AssertTrue(!File.Exists(fastHttpZip), "T68: Blocked POST /api/backup/full did not create archive file");
+
+                    // Always verify full backup/open/import flow via IdeRunningOverride=false
+                    host.IdeRunningOverride = delegate() { return false; };
                     RawHttpTestResponse bkFast = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/full", apiHdr,
                         "{\"outputPath\":\"" + UnifiedJson.EscapeString(fastHttpZip) + "\",\"tier\":\"fast\"}");
-                    if (ProcessGuardService.IsAntigravityRunning())
+                    AssertEqual(202, bkFast.StatusCode, "T68: POST /api/backup/full (tier=fast) returns 202");
+                    for (int w = 0; w < 100 && !File.Exists(fastHttpZip); w++) System.Threading.Thread.Sleep(50);
+                    for (int w = 0; w < 100; w++)
                     {
-                        AssertEqual(409, bkFast.StatusCode, "T68: POST /api/backup/full returns 409 IDE_RUNNING when host IDE is running");
-                        AssertTrue(bkFast.BodyText.Contains("IDE_RUNNING"), "T68: 409 payload indicates IDE_RUNNING");
+                        RawHttpTestResponse jr = SendRawTcpHttp(host.Port, null, "GET", "/api/jobs/current", apiHdr, null);
+                        if (jr.BodyText.Contains("\"busy\":false")) break;
+                        System.Threading.Thread.Sleep(50);
                     }
-                    else
+                    BackupArchiveIndex fastHttpIdx = StreamingZipIndexReader.ReadIndex(fastHttpZip);
+                    AssertEqual("FastDaily", fastHttpIdx.BackupTier, "T68: HTTP fast backup recorded FastDaily tier");
+                    AssertTrue(fastHttpIdx.ExistingConvoDbFiles.Contains(cidRoot) && !fastHttpIdx.ExistingConvoDbFiles.Contains(cidSub),
+                        "T68: HTTP FastDaily excluded subagent DB");
+
+                    RawHttpTestResponse bkFull = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/full", apiHdr,
+                        "{\"outputPath\":\"" + UnifiedJson.EscapeString(fullHttpZip) + "\",\"tier\":\"full\"}");
+                    AssertEqual(202, bkFull.StatusCode, "T68: POST /api/backup/full (tier=full) returns 202");
+                    for (int w = 0; w < 100; w++)
                     {
-                        AssertEqual(202, bkFast.StatusCode, "T68: POST /api/backup/full (tier=fast) returns 202");
-                        for (int w = 0; w < 100 && !File.Exists(fastHttpZip); w++) System.Threading.Thread.Sleep(50);
-                        for (int w = 0; w < 100; w++)
-                        {
-                            RawHttpTestResponse jr = SendRawTcpHttp(host.Port, null, "GET", "/api/jobs/current", apiHdr, null);
-                            if (jr.BodyText.Contains("\"busy\":false")) break;
-                            System.Threading.Thread.Sleep(50);
-                        }
-                        BackupArchiveIndex fastHttpIdx = StreamingZipIndexReader.ReadIndex(fastHttpZip);
-                        AssertEqual("FastDaily", fastHttpIdx.BackupTier, "T68: HTTP fast backup recorded FastDaily tier");
-                        AssertTrue(fastHttpIdx.ExistingConvoDbFiles.Contains(cidRoot) && !fastHttpIdx.ExistingConvoDbFiles.Contains(cidSub),
-                            "T68: HTTP FastDaily excluded subagent DB");
-
-                        RawHttpTestResponse bkFull = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/full", apiHdr,
-                            "{\"outputPath\":\"" + UnifiedJson.EscapeString(fullHttpZip) + "\",\"tier\":\"full\"}");
-                        AssertEqual(202, bkFull.StatusCode, "T68: POST /api/backup/full (tier=full) returns 202");
-                        for (int w = 0; w < 100; w++)
-                        {
-                            RawHttpTestResponse jr = SendRawTcpHttp(host.Port, null, "GET", "/api/jobs/current", apiHdr, null);
-                            if (jr.BodyText.Contains("\"busy\":false") && File.Exists(fullHttpZip)) break;
-                            System.Threading.Thread.Sleep(50);
-                        }
-                        BackupArchiveIndex fullHttpIdx = StreamingZipIndexReader.ReadIndex(fullHttpZip);
-                        AssertEqual("FullForensic", fullHttpIdx.BackupTier, "T68: HTTP full backup recorded FullForensic tier");
-                        AssertTrue(fullHttpIdx.ExistingConvoDbFiles.Contains(cidSub), "T68: HTTP FullForensic included subagent DB");
-
-                        // Mutate local config.json, open fastHttpZip, and restore via POST /api/backup/import with restoreUserSettings=true
-                        File.WriteAllText(cfgPath68,
-                            "{\"userSettings\":{\"themeMode\":\"THEME_MODE_LIGHT\",\"localOnlyKeep\":\"yes\"},\"plugins\":{\"plug-68\":{\"enabled\":false}}}",
-                            Encoding.UTF8);
-                        RawHttpTestResponse openFast = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/open", apiHdr,
-                            "{\"archivePath\":\"" + UnifiedJson.EscapeString(fastHttpZip) + "\"}");
-                        AssertEqual(200, openFast.StatusCode, "T68: POST /api/backup/open succeeded");
-                        AssertTrue(openFast.BodyText.Contains("\"backupTier\":\"FastDaily\""), "T68: /api/backup/open returns backupTier");
-
-                        RawHttpTestResponse impRestore = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/import", apiHdr,
-                            "{\"cids\":[],\"capKeys\":[],\"restoreUserSettings\":true}");
-                        AssertEqual(202, impRestore.StatusCode, "T68: POST /api/backup/import (restoreUserSettings=true) returns 202");
-                        for (int w = 0; w < 100; w++)
-                        {
-                            RawHttpTestResponse jr = SendRawTcpHttp(host.Port, null, "GET", "/api/jobs/current", apiHdr, null);
-                            if (jr.BodyText.Contains("\"busy\":false")) break;
-                            System.Threading.Thread.Sleep(50);
-                        }
-                        Dictionary<string, object> restoredCfg = UnifiedJson.AsDict(UnifiedJson.Parse(File.ReadAllText(cfgPath68, Encoding.UTF8)));
-                        Dictionary<string, object> restoredUs = UnifiedJson.AsDict(restoredCfg["userSettings"]);
-                        Dictionary<string, object> restoredPlug = UnifiedJson.AsDict(UnifiedJson.AsDict(restoredCfg["plugins"])["plug-68"]);
-                        AssertEqual("THEME_MODE_DARK", UnifiedJson.GetString(restoredUs, "themeMode", ""), "T68: HTTP restoreUserSettings updated themeMode");
-                        AssertEqual("yes", UnifiedJson.GetString(restoredUs, "localOnlyKeep", ""), "T68: HTTP restoreUserSettings preserved localOnlyKeep");
-                        AssertTrue(UnifiedJson.GetBool(restoredPlug, "enabled", false), "T68: HTTP restoreUserSettings updated plugin enabled flag");
+                        RawHttpTestResponse jr = SendRawTcpHttp(host.Port, null, "GET", "/api/jobs/current", apiHdr, null);
+                        if (jr.BodyText.Contains("\"busy\":false") && File.Exists(fullHttpZip)) break;
+                        System.Threading.Thread.Sleep(50);
                     }
+                    BackupArchiveIndex fullHttpIdx = StreamingZipIndexReader.ReadIndex(fullHttpZip);
+                    AssertEqual("FullForensic", fullHttpIdx.BackupTier, "T68: HTTP full backup recorded FullForensic tier");
+                    AssertTrue(fullHttpIdx.ExistingConvoDbFiles.Contains(cidSub), "T68: HTTP FullForensic included subagent DB");
+
+                    // Mutate local config.json, open fastHttpZip, verify import guard on IDE running, then restore via POST /api/backup/import with restoreUserSettings=true
+                    File.WriteAllText(cfgPath68,
+                        "{\"userSettings\":{\"themeMode\":\"THEME_MODE_LIGHT\",\"localOnlyKeep\":\"yes\"},\"plugins\":{\"plug-68\":{\"enabled\":false}}}",
+                        Encoding.UTF8);
+                    RawHttpTestResponse openFast = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/open", apiHdr,
+                        "{\"archivePath\":\"" + UnifiedJson.EscapeString(fastHttpZip) + "\"}");
+                    AssertEqual(200, openFast.StatusCode, "T68: POST /api/backup/open succeeded");
+                    AssertTrue(openFast.BodyText.Contains("\"backupTier\":\"FastDaily\""), "T68: /api/backup/open returns backupTier");
+
+                    host.IdeRunningOverride = delegate() { return true; };
+                    RawHttpTestResponse impIde409 = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/import", apiHdr,
+                        "{\"cids\":[],\"capKeys\":[],\"restoreUserSettings\":true}");
+                    AssertEqual(409, impIde409.StatusCode, "T68: POST /api/backup/import (restoreUserSettings=true) returns 409 IDE_RUNNING when IDE running");
+                    AssertTrue(impIde409.BodyText.Contains("\"code\":\"IDE_RUNNING\""), "T68: Backup import 409 payload indicates code=IDE_RUNNING");
+
+                    host.IdeRunningOverride = delegate() { return false; };
+                    RawHttpTestResponse impRestore = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/import", apiHdr,
+                        "{\"cids\":[],\"capKeys\":[],\"restoreUserSettings\":true}");
+                    AssertEqual(202, impRestore.StatusCode, "T68: POST /api/backup/import (restoreUserSettings=true) returns 202");
+                    bool restoreJobDone = false;
+                    for (int w = 0; w < 100; w++)
+                    {
+                        RawHttpTestResponse jr = SendRawTcpHttp(host.Port, null, "GET", "/api/jobs/current", apiHdr, null);
+                        if (jr.BodyText.Contains("\"busy\":false"))
+                        {
+                            restoreJobDone = true;
+                            break;
+                        }
+                        System.Threading.Thread.Sleep(50);
+                    }
+                    AssertTrue(restoreJobDone, "T68: HTTP restoreUserSettings background job completed");
+                    Dictionary<string, object> restoredCfg = UnifiedJson.AsDict(UnifiedJson.Parse(File.ReadAllText(cfgPath68, Encoding.UTF8)));
+                    Dictionary<string, object> restoredUs = UnifiedJson.AsDict(restoredCfg["userSettings"]);
+                    Dictionary<string, object> restoredPlug = UnifiedJson.AsDict(UnifiedJson.AsDict(restoredCfg["plugins"])["plug-68"]);
+                    AssertEqual("THEME_MODE_DARK", UnifiedJson.GetString(restoredUs, "themeMode", ""), "T68: HTTP restoreUserSettings updated themeMode");
+                    AssertTrue(UnifiedJson.GetBool(restoredUs, "fromArchive", false), "T68: HTTP restoreUserSettings merged archive fromArchive key");
+                    AssertEqual("yes", UnifiedJson.GetString(restoredUs, "localOnlyKeep", ""), "T68: HTTP restoreUserSettings preserved localOnlyKeep");
+                    AssertTrue(UnifiedJson.GetBool(restoredPlug, "enabled", false), "T68: HTTP restoreUserSettings updated plugin enabled flag");
+                    host.IdeRunningOverride = null;
 
                     host.Stop();
                 }
@@ -6532,21 +6572,29 @@ namespace AntigravityCompanion.Tests
                     // 1. GET /api/settings/companion
                     RawHttpTestResponse getDef = SendRawTcpHttp(host.Port, null, "GET", "/api/settings/companion", apiHdr, null);
                     AssertEqual(200, getDef.StatusCode, "T71: GET /api/settings/companion returns 200");
-                    AssertTrue(getDef.BodyText.Contains("\"intervalHours\":12") && getDef.BodyText.Contains("\"globalHotkey\":\"Ctrl+Alt+A\""),
-                        "T71: Default companion settings returned");
+                    AssertTrue(getDef.BodyText.Contains("\"intervalHours\":12") &&
+                               getDef.BodyText.Contains("\"globalHotkey\":\"\"") &&
+                               getDef.BodyText.Contains("\"minimizeToTray\":false") &&
+                               getDef.BodyText.Contains("\"ruleTokenReferenceThreshold\":0"),
+                        "T71: Default companion settings returned with hardened Wave 1 defaults");
 
                     // 2. Invalid hotkey rejected with 400
                     RawHttpTestResponse badHk = SendRawTcpHttp(host.Port, null, "POST", "/api/settings/companion", apiHdr,
                         "{\"globalHotkey\":\"InvalidOnlyKey\"}");
                     AssertEqual(400, badHk.StatusCode, "T71: Invalid globalHotkey rejected with HTTP 400");
 
-                    // 3. POST /api/settings/companion valid update
+                    // 3. POST /api/settings/companion valid update + clearing hotkey back to empty
                     string customSnapDir = Path.Combine(sb, "CustomSnaps");
                     RawHttpTestResponse postCfg = SendRawTcpHttp(host.Port, null, "POST", "/api/settings/companion", apiHdr,
-                        "{\"enabled\":true,\"intervalHours\":6,\"retainCount\":3,\"tier\":\"fast\",\"minimizeToTray\":false,\"globalHotkey\":\"Ctrl+Alt+K\",\"targetDirectory\":\"" + UnifiedJson.EscapeString(customSnapDir) + "\"}");
+                        "{\"enabled\":true,\"intervalHours\":6,\"retainCount\":3,\"tier\":\"fast\",\"minimizeToTray\":false,\"globalHotkey\":\"Ctrl+Alt+K\",\"ruleTokenReferenceThreshold\":1500,\"targetDirectory\":\"" + UnifiedJson.EscapeString(customSnapDir) + "\"}");
                     AssertEqual(200, postCfg.StatusCode, "T71: POST /api/settings/companion returns 200: " + postCfg.BodyText);
-                    AssertTrue(postCfg.BodyText.Contains("\"intervalHours\":6") && postCfg.BodyText.Contains("\"globalHotkey\":\"Ctrl+Alt+K\""),
+                    AssertTrue(postCfg.BodyText.Contains("\"intervalHours\":6") && postCfg.BodyText.Contains("\"globalHotkey\":\"Ctrl+Alt+K\"") && postCfg.BodyText.Contains("\"ruleTokenReferenceThreshold\":1500"),
                         "T71: Updated companion settings echoed back");
+
+                    RawHttpTestResponse clearHk = SendRawTcpHttp(host.Port, null, "POST", "/api/settings/companion", apiHdr,
+                        "{\"globalHotkey\":\"\"}");
+                    AssertEqual(200, clearHk.StatusCode, "T71: Clearing globalHotkey to empty returns 200");
+                    AssertTrue(clearHk.BodyText.Contains("\"globalHotkey\":\"\""), "T71: Empty globalHotkey persisted without Ctrl+Alt+A fallback");
 
                     // 4. POST /api/snapshots/run-now
                     RawHttpTestResponse runNow = SendRawTcpHttp(host.Port, null, "POST", "/api/snapshots/run-now", apiHdr, "{}");
@@ -6616,9 +6664,11 @@ namespace AntigravityCompanion.Tests
                         "/js/views/overview.js",
                         "/js/views/cockpit.js",
                         "/js/views/sessions.js",
+                        "/js/views/rename.js",
                         "/js/views/storage.js",
                         "/js/views/vault.js",
-                        "/js/views/backup.js"
+                        "/js/views/backup.js",
+                        "/js/views/settings.js"
                     };
 
                     for (int i = 0; i < assetPaths.Length; i++)
@@ -6705,8 +6755,38 @@ namespace AntigravityCompanion.Tests
             {
                 string homeDir = Path.Combine(sb, "Home");
                 string geminiDir = Path.Combine(homeDir, ".gemini");
-                Directory.CreateDirectory(Path.Combine(geminiDir, "antigravity"));
-                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "Vault"), 0, "t74_tok"))
+                string agDir = Path.Combine(geminiDir, "antigravity");
+                string cfgDir = Path.Combine(geminiDir, "config");
+                string projDir = Path.Combine(cfgDir, "projects");
+                string vaultDir = Path.Combine(sb, "Vault");
+                Directory.CreateDirectory(agDir);
+                Directory.CreateDirectory(cfgDir);
+                Directory.CreateDirectory(projDir);
+                Directory.CreateDirectory(vaultDir);
+
+                // Seed plugin in config.json, MCP in mcp_config.json, and 1 session in proto + project json
+                File.WriteAllText(Path.Combine(cfgDir, "config.json"),
+                    "{\"plugins\":{\"plug-74\":{\"enabled\":false}},\"userSettings\":{\"autoExecutionPolicy\":\"CASCADE_COMMANDS_AUTO_EXECUTION_OFF\"}}",
+                    Encoding.UTF8);
+                string mcpFile = Path.Combine(cfgDir, "mcp_config.json");
+                File.WriteAllText(mcpFile,
+                    "{\"mcpServers\":{\"srv-74\":{\"command\":\"python\",\"args\":[\"tool74.py\"]}}}",
+                    Encoding.UTF8);
+
+                string cid74 = "c7400001-1111-4111-8111-111111111111";
+                string projId74 = "p7400001-1111-4111-8111-111111111111";
+                File.WriteAllText(Path.Combine(projDir, projId74 + ".json"),
+                    WorkspaceService.GenerateStandardProjectJson(projId74, "Proj74", "D:\\Work\\Proj74"), Encoding.UTF8);
+                byte[] pbBytes74 = ProtoCodec.Encode(new List<ProtoNode>
+                {
+                    BuildRealProtoEntry(cid74, "Original T74 Title", null, "file:///d%3A/Work/Proj74", "Proj74", projId74, 4, 1, 1)
+                });
+                File.WriteAllBytes(Path.Combine(agDir, "agyhub_summaries_proto.pb"), pbBytes74);
+
+                string token74 = "t74_tok";
+                Dictionary<string, string> apiHdr74 = new Dictionary<string, string> { { "X-AGY-Token", token74 } };
+
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, vaultDir, 0, token74))
                 {
                     host.Start();
                     CompanionCommandDispatcher disp = host.Dispatcher;
@@ -6726,7 +6806,16 @@ namespace AntigravityCompanion.Tests
                         "storage.analyze",
                         "settings.companion.get",
                         "snapshots.status",
-                        "vault.status"
+                        "vault.status",
+                        "cockpit.settings",
+                        "cockpit.toggle",
+                        "storage.slim",
+                        "settings.companion.update",
+                        "rename.commit",
+                        "vault.push",
+                        "vault.import",
+                        "backup.full",
+                        "backup.import"
                     };
 
                     for (int i = 0; i < expectedCmds.Length; i++)
@@ -6745,6 +6834,1187 @@ namespace AntigravityCompanion.Tests
 
                     OperationResult<Dictionary<string, object>> vRes = disp.Execute("vault.status", null);
                     AssertTrue(vRes.Ok && vRes.Data.ContainsKey("vaultPath"), "T74: vault.status executes cleanly");
+
+                    // 1. cockpit.settings (400 + valid write)
+                    OperationResult<Dictionary<string, object>> emptySetRes = disp.Execute("cockpit.settings", null);
+                    AssertTrue(!emptySetRes.Ok && emptySetRes.Data != null && UnifiedJson.GetInt(emptySetRes.Data, "httpStatusCode", 0) == 400,
+                        "T74: cockpit.settings rejects empty args with 400");
+
+                    host.IdeRunningOverride = delegate() { return false; };
+                    Dictionary<string, object> cockArgs = new Dictionary<string, object>();
+                    Dictionary<string, object> usPatch = new Dictionary<string, object>();
+                    usPatch["autoExecutionPolicy"] = "CASCADE_COMMANDS_AUTO_EXECUTION_AUTO";
+                    cockArgs["userSettings"] = usPatch;
+                    OperationResult<Dictionary<string, object>> cockWriteRes = disp.Execute("cockpit.settings", cockArgs);
+                    AssertTrue(cockWriteRes.Ok && UnifiedJson.GetBool(cockWriteRes.Data, "ok", false),
+                        "T74: cockpit.settings executes cleanly through Dispatcher: " + cockWriteRes.ErrorMessage);
+                    string cfgFile74 = Path.Combine(cfgDir, "config.json");
+                    AssertTrue(File.Exists(cfgFile74) && File.ReadAllText(cfgFile74, Encoding.UTF8).Contains("CASCADE_COMMANDS_AUTO_EXECUTION_AUTO"),
+                        "T74: cockpit.settings persisted config.json via Dispatcher");
+
+                    // 2. cockpit.toggle (400 + 404 + IDE running warning + case-insensitive Enabled key)
+                    OperationResult<Dictionary<string, object>> badTog = disp.Execute("cockpit.toggle", null);
+                    AssertTrue(!badTog.Ok && badTog.Data != null && UnifiedJson.GetInt(badTog.Data, "httpStatusCode", 0) == 400,
+                        "T74: cockpit.toggle rejects empty args with 400");
+
+                    Dictionary<string, object> missingTogArgs = new Dictionary<string, object>();
+                    missingTogArgs["kind"] = "plugin";
+                    missingTogArgs["id"] = "non-existent-plugin";
+                    OperationResult<Dictionary<string, object>> missingTog = disp.Execute("cockpit.toggle", missingTogArgs);
+                    AssertTrue(!missingTog.Ok && missingTog.Data != null && UnifiedJson.GetInt(missingTog.Data, "httpStatusCode", 0) == 404,
+                        "T74: cockpit.toggle returns 404 for unknown capability");
+
+                    host.IdeRunningOverride = delegate() { return true; };
+                    Dictionary<string, object> togOnArgs = new Dictionary<string, object>();
+                    togOnArgs["kind"] = "plugin";
+                    togOnArgs["id"] = "plug-74";
+                    togOnArgs["Enabled"] = true;
+                    OperationResult<Dictionary<string, object>> togOnRes = disp.Execute("cockpit.toggle", togOnArgs);
+                    AssertTrue(togOnRes.Ok &&
+                               UnifiedJson.GetBool(togOnRes.Data, "ok", false) &&
+                               UnifiedJson.GetBool(togOnRes.Data, "enabled", false) &&
+                               UnifiedJson.GetBool(togOnRes.Data, "ideRunning", false) &&
+                               !string.IsNullOrEmpty(UnifiedJson.GetString(togOnRes.Data, "ideRunningWarning", "")),
+                        "T74: cockpit.toggle enables plugin with IDE running warning via Dispatcher: " + togOnRes.ErrorMessage);
+                    host.IdeRunningOverride = delegate() { return false; };
+
+                    // 3. settings.companion.update (valid + invalid)
+                    Dictionary<string, object> compArgs = new Dictionary<string, object>();
+                    compArgs["intervalHours"] = 8;
+                    compArgs["ruleTokenReferenceThreshold"] = 1800;
+                    OperationResult<Dictionary<string, object>> compUpdRes = disp.Execute("settings.companion.update", compArgs);
+                    AssertTrue(compUpdRes.Ok && UnifiedJson.GetBool(compUpdRes.Data, "ok", false) &&
+                               UnifiedJson.GetInt(compUpdRes.Data, "intervalHours", 0) == 8 &&
+                               UnifiedJson.GetInt(compUpdRes.Data, "ruleTokenReferenceThreshold", 0) == 1800,
+                        "T74: settings.companion.update executes cleanly through Dispatcher: " + compUpdRes.ErrorMessage);
+
+                    Dictionary<string, object> badCompArgs = new Dictionary<string, object>();
+                    badCompArgs["intervalHours"] = 0;
+                    OperationResult<Dictionary<string, object>> badCompRes = disp.Execute("settings.companion.update", badCompArgs);
+                    AssertTrue(!badCompRes.Ok && badCompRes.Data != null && UnifiedJson.GetInt(badCompRes.Data, "httpStatusCode", 0) == 400,
+                        "T74: settings.companion.update rejects invalid intervalHours with 400");
+
+                    // 4. storage.slim (JOB_BUSY 409 + IDE_RUNNING 409 + valid 200)
+                    AssertTrue(host.TryAcquireJob("t74_busy", "Busy check"), "T74: Acquired host job lock");
+                    try
+                    {
+                        OperationResult<Dictionary<string, object>> busySlim = disp.Execute("storage.slim", new Dictionary<string, object>());
+                        AssertTrue(!busySlim.Ok && busySlim.Data != null &&
+                                   UnifiedJson.GetInt(busySlim.Data, "httpStatusCode", 0) == 409 &&
+                                   UnifiedJson.GetString(busySlim.Data, "code", "") == "JOB_BUSY",
+                            "T74: storage.slim returns 409 JOB_BUSY through Dispatcher when job lock held");
+                    }
+                    finally
+                    {
+                        host.ReleaseJob();
+                    }
+
+                    host.IdeRunningOverride = delegate() { return true; };
+                    OperationResult<Dictionary<string, object>> slimIdeRes = disp.Execute("storage.slim", new Dictionary<string, object>());
+                    AssertTrue(!slimIdeRes.Ok && slimIdeRes.Data != null &&
+                               UnifiedJson.GetInt(slimIdeRes.Data, "httpStatusCode", 0) == 409 &&
+                               UnifiedJson.GetString(slimIdeRes.Data, "code", "") == "IDE_RUNNING" &&
+                               UnifiedJson.GetInt(slimIdeRes.Data, "parentCount", -1) == 1 &&
+                               UnifiedJson.GetInt(slimIdeRes.Data, "lsCount", -1) == 0,
+                        "T74: storage.slim returns structured 409 IDE_RUNNING via Dispatcher");
+
+                    host.IdeRunningOverride = delegate() { return false; };
+                    OperationResult<Dictionary<string, object>> slimOkRes = disp.Execute("storage.slim", new Dictionary<string, object>());
+                    AssertTrue(slimOkRes.Ok && UnifiedJson.GetBool(slimOkRes.Data, "ok", false),
+                        "T74: storage.slim executes cleanly when IDE stopped: " + slimOkRes.ErrorMessage);
+
+                    // 5. rename.commit (400 + IDE_RUNNING 409 + valid single/items execution)
+                    OperationResult<Dictionary<string, object>> badRename = disp.Execute("rename.commit", null);
+                    AssertTrue(!badRename.Ok && badRename.Data != null && UnifiedJson.GetInt(badRename.Data, "httpStatusCode", 0) == 400,
+                        "T74: rename.commit rejects empty args with 400");
+
+                    host.IdeRunningOverride = delegate() { return true; };
+                    Dictionary<string, object> renIdeArgs = new Dictionary<string, object>();
+                    renIdeArgs["strategy"] = "auto";
+                    renIdeArgs["cid"] = cid74;
+                    renIdeArgs["newTitle"] = "【P74】Dispatcher Blocked";
+                    OperationResult<Dictionary<string, object>> renIdeRes = disp.Execute("rename.commit", renIdeArgs);
+                    AssertTrue(!renIdeRes.Ok && renIdeRes.Data != null &&
+                               UnifiedJson.GetInt(renIdeRes.Data, "httpStatusCode", 0) == 409 &&
+                               UnifiedJson.GetString(renIdeRes.Data, "code", "") == "IDE_RUNNING" &&
+                               UnifiedJson.GetInt(renIdeRes.Data, "parentCount", -1) == 1 &&
+                               UnifiedJson.GetInt(renIdeRes.Data, "lsCount", -1) == 0,
+                        "T74: rename.commit returns structured 409 IDE_RUNNING via Dispatcher");
+
+                    host.IdeRunningOverride = delegate() { return false; };
+                    Dictionary<string, object> renOkArgs = new Dictionary<string, object>();
+                    Dictionary<string, object> renItem = new Dictionary<string, object>();
+                    renItem["cid"] = cid74;
+                    renItem["newTitle"] = "【P74】Renamed Via Dispatcher";
+                    renOkArgs["items"] = new List<object> { renItem };
+                    OperationResult<Dictionary<string, object>> renOkRes = disp.Execute("rename.commit", renOkArgs);
+                    AssertTrue(renOkRes.Ok && UnifiedJson.GetBool(renOkRes.Data, "ok", false) &&
+                               UnifiedJson.GetInt(renOkRes.Data, "renamedCount", 0) == 1,
+                        "T74: rename.commit executes cleanly via Dispatcher: " + renOkRes.ErrorMessage);
+
+                    // 6. vault.push & 7. vault.import (400 + 404 + real round-trip)
+                    OperationResult<Dictionary<string, object>> badPush = disp.Execute("vault.push", null);
+                    AssertTrue(!badPush.Ok && badPush.Data != null && UnifiedJson.GetInt(badPush.Data, "httpStatusCode", 0) == 400,
+                        "T74: vault.push rejects empty keys with 400");
+
+                    Dictionary<string, object> missPushArgs = new Dictionary<string, object>();
+                    missPushArgs["keys"] = new List<object> { "McpServer:missing-74" };
+                    OperationResult<Dictionary<string, object>> missPush = disp.Execute("vault.push", missPushArgs);
+                    AssertTrue(!missPush.Ok && missPush.Data != null && UnifiedJson.GetInt(missPush.Data, "httpStatusCode", 0) == 404,
+                        "T74: vault.push returns 404 for unknown key");
+
+                    Dictionary<string, object> pushArgs = new Dictionary<string, object>();
+                    pushArgs["keys"] = new List<object> { "McpServer:srv-74" };
+                    OperationResult<Dictionary<string, object>> pushRes = disp.Execute("vault.push", pushArgs);
+                    AssertTrue(pushRes.Ok && UnifiedJson.GetBool(pushRes.Data, "ok", false) &&
+                               UnifiedJson.GetInt(pushRes.Data, "written", 0) >= 1,
+                        "T74: vault.push writes McpServer:srv-74 to Vault via Dispatcher: " + pushRes.ErrorMessage);
+
+                    OperationResult<Dictionary<string, object>> badImp = disp.Execute("vault.import", null);
+                    AssertTrue(!badImp.Ok && badImp.Data != null && UnifiedJson.GetInt(badImp.Data, "httpStatusCode", 0) == 400,
+                        "T74: vault.import rejects empty keys with 400");
+
+                    // Clear local mcp_config.json then import srv-74 back via vault.import
+                    File.WriteAllText(mcpFile, "{\"mcpServers\":{}}", Encoding.UTF8);
+                    Dictionary<string, object> impArgs = new Dictionary<string, object>();
+                    impArgs["keys"] = new List<object> { "McpServer:srv-74" };
+                    impArgs["source"] = "repo";
+                    OperationResult<Dictionary<string, object>> impRes = disp.Execute("vault.import", impArgs);
+                    AssertTrue(impRes.Ok && UnifiedJson.GetBool(impRes.Data, "ok", false) &&
+                               UnifiedJson.GetInt(impRes.Data, "written", 0) >= 1 &&
+                               File.ReadAllText(mcpFile, Encoding.UTF8).Contains("srv-74"),
+                        "T74: vault.import restores McpServer:srv-74 from Vault via Dispatcher: " + impRes.ErrorMessage);
+
+                    // 8. backup.full (400 missing outputPath + 400 traversal + 409 IDE_RUNNING + 202 async archive)
+                    OperationResult<Dictionary<string, object>> badBk = disp.Execute("backup.full", new Dictionary<string, object>());
+                    AssertTrue(!badBk.Ok && badBk.Data != null && UnifiedJson.GetInt(badBk.Data, "httpStatusCode", 0) == 400,
+                        "T74: backup.full requires outputPath without hanging on UI dialog");
+
+                    Dictionary<string, object> travBkArgs = new Dictionary<string, object>();
+                    travBkArgs["outputPath"] = Path.Combine(sb, "..\\evil74.agy");
+                    OperationResult<Dictionary<string, object>> travBk = disp.Execute("backup.full", travBkArgs);
+                    AssertTrue(!travBk.Ok && travBk.Data != null && UnifiedJson.GetInt(travBk.Data, "httpStatusCode", 0) == 400,
+                        "T74: backup.full rejects .. traversal path with 400");
+
+                    string bkOut74 = Path.Combine(sb, "t74_full.agy");
+                    host.IdeRunningOverride = delegate() { return true; };
+                    Dictionary<string, object> bkIdeArgs = new Dictionary<string, object>();
+                    bkIdeArgs["outputPath"] = bkOut74;
+                    bkIdeArgs["closeIdeIfRunning"] = false;
+                    OperationResult<Dictionary<string, object>> bkIdeRes = disp.Execute("backup.full", bkIdeArgs);
+                    AssertTrue(!bkIdeRes.Ok && bkIdeRes.Data != null &&
+                               UnifiedJson.GetInt(bkIdeRes.Data, "httpStatusCode", 0) == 409 &&
+                               UnifiedJson.GetString(bkIdeRes.Data, "code", "") == "IDE_RUNNING",
+                        "T74: backup.full returns 409 IDE_RUNNING via Dispatcher");
+
+                    host.IdeRunningOverride = delegate() { return false; };
+                    Dictionary<string, object> bkOkArgs = new Dictionary<string, object>();
+                    bkOkArgs["outputPath"] = bkOut74;
+                    bkOkArgs["tier"] = "fast";
+                    OperationResult<Dictionary<string, object>> bkOkRes = disp.Execute("backup.full", bkOkArgs);
+                    AssertTrue(bkOkRes.Ok && UnifiedJson.GetBool(bkOkRes.Data, "accepted", false) &&
+                               UnifiedJson.GetInt(bkOkRes.Data, "httpStatusCode", 0) == 202,
+                        "T74: backup.full returns 202 accepted via Dispatcher: " + bkOkRes.ErrorMessage);
+
+                    for (int poll = 0; poll < 80; poll++)
+                    {
+                        RawHttpTestResponse jr = SendRawTcpHttp(host.Port, null, "GET", "/api/jobs/current", apiHdr74, null);
+                        if (jr.BodyText.Contains("\"busy\":false")) break;
+                        System.Threading.Thread.Sleep(50);
+                    }
+                    AssertTrue(File.Exists(bkOut74), "T74: backup.full created .agy archive on disk via Dispatcher");
+
+                    // 9. backup.import (400 empty + 400 no backup loaded + 409 IDE_RUNNING + 202 async import)
+                    OperationResult<Dictionary<string, object>> emptyBkImp = disp.Execute("backup.import", null);
+                    AssertTrue(!emptyBkImp.Ok && emptyBkImp.Data != null && UnifiedJson.GetInt(emptyBkImp.Data, "httpStatusCode", 0) == 400,
+                        "T74: backup.import rejects empty selection with 400");
+
+                    Dictionary<string, object> noBkImpArgs = new Dictionary<string, object>();
+                    noBkImpArgs["cids"] = new List<object> { cid74 };
+                    OperationResult<Dictionary<string, object>> noBkImp = disp.Execute("backup.import", noBkImpArgs);
+                    AssertTrue(!noBkImp.Ok && noBkImp.Data != null && UnifiedJson.GetInt(noBkImp.Data, "httpStatusCode", 0) == 400,
+                        "T74: backup.import returns 400 when no archive is loaded");
+
+                    RawHttpTestResponse openBkResp = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/open", apiHdr74,
+                        UnifiedJson.Serialize(new Dictionary<string, object> { { "archivePath", bkOut74 } }, false));
+                    AssertEqual(200, openBkResp.StatusCode, "T74: Opened backup archive for backup.import test");
+
+                    host.IdeRunningOverride = delegate() { return true; };
+                    Dictionary<string, object> bkImpIdeArgs = new Dictionary<string, object>();
+                    bkImpIdeArgs["cids"] = new List<object> { cid74 };
+                    bkImpIdeArgs["closeIdeIfRunning"] = false;
+                    OperationResult<Dictionary<string, object>> bkImpIdeRes = disp.Execute("backup.import", bkImpIdeArgs);
+                    AssertTrue(!bkImpIdeRes.Ok && bkImpIdeRes.Data != null &&
+                               UnifiedJson.GetInt(bkImpIdeRes.Data, "httpStatusCode", 0) == 409 &&
+                               UnifiedJson.GetString(bkImpIdeRes.Data, "code", "") == "IDE_RUNNING" &&
+                               UnifiedJson.GetInt(bkImpIdeRes.Data, "parentCount", -1) == 1 &&
+                               UnifiedJson.GetInt(bkImpIdeRes.Data, "lsCount", -1) == 0,
+                        "T74: backup.import returns structured 409 IDE_RUNNING via Dispatcher");
+
+                    host.IdeRunningOverride = delegate() { return false; };
+                    Dictionary<string, object> bkImpOkArgs = new Dictionary<string, object>();
+                    bkImpOkArgs["capKeys"] = new List<object> { "McpServer:srv-74" };
+                    OperationResult<Dictionary<string, object>> bkImpOkRes = disp.Execute("backup.import", bkImpOkArgs);
+                    AssertTrue(bkImpOkRes.Ok && UnifiedJson.GetBool(bkImpOkRes.Data, "accepted", false) &&
+                               UnifiedJson.GetInt(bkImpOkRes.Data, "httpStatusCode", 0) == 202,
+                        "T74: backup.import returns 202 accepted via Dispatcher: " + bkImpOkRes.ErrorMessage);
+
+                    for (int poll = 0; poll < 80; poll++)
+                    {
+                        RawHttpTestResponse jr = SendRawTcpHttp(host.Port, null, "GET", "/api/jobs/current", apiHdr74, null);
+                        if (jr.BodyText.Contains("\"busy\":false")) break;
+                        System.Threading.Thread.Sleep(50);
+                    }
+
+                    host.IdeRunningOverride = null;
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T75_Wave1_Remediation_SecurityJobObjectAndDefaults()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t75_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string cfgDir = Path.Combine(geminiDir, "config");
+                string projDir = Path.Combine(cfgDir, "projects");
+                string vaultDir = Path.Combine(sb, "Vault");
+                string coldDir = Path.Combine(geminiDir, "companion-cold-archives");
+                string regWsDir = Path.Combine(sb, "RegWs75");
+                string metaWsDir = Path.Combine(sb, "Proj&75");
+                Directory.CreateDirectory(cfgDir);
+                Directory.CreateDirectory(projDir);
+                Directory.CreateDirectory(vaultDir);
+                Directory.CreateDirectory(coldDir);
+                Directory.CreateDirectory(regWsDir);
+                Directory.CreateDirectory(metaWsDir);
+                Directory.CreateDirectory(Path.Combine(geminiDir, "antigravity"));
+
+                string homeSecretFile = Path.Combine(homeDir, "home_secret.txt");
+                File.WriteAllText(homeSecretFile, "not allowed via explorer", Encoding.UTF8);
+                string coldFile = Path.Combine(coldDir, "cold.agy");
+                File.WriteAllText(coldFile, "cold", Encoding.UTF8);
+
+                File.WriteAllText(Path.Combine(projDir, "p75a.json"),
+                    WorkspaceService.GenerateStandardProjectJson("p75a", "RegWs75", regWsDir), Encoding.UTF8);
+                File.WriteAllText(Path.Combine(projDir, "p75b.json"),
+                    WorkspaceService.GenerateStandardProjectJson("p75b", "Proj&75", metaWsDir), Encoding.UTF8);
+
+                File.WriteAllText(Path.Combine(cfgDir, "config.json"),
+                    "{\"plugins\":{\"plug-75\":{\"enabled\":false}},\"userSettings\":{\"autoExecutionPolicy\":\"CASCADE_COMMANDS_AUTO_EXECUTION_OFF\"}}",
+                    Encoding.UTF8);
+
+                // 1. A6: WorkspaceLauncherService.NormalizeDirArg & HomePath removal & .cmd metacharacter rejection (400)
+                AssertEqual(@"D:\", WorkspaceLauncherService.NormalizeDirArg(@"D:\"), "T75: NormalizeDirArg preserves drive root backslash");
+                AssertEqual(@"D:\", WorkspaceLauncherService.NormalizeDirArg(@"D:/"), "T75: NormalizeDirArg normalizes forward slash on drive root");
+                AssertEqual(@"D:\Work\Proj", WorkspaceLauncherService.NormalizeDirArg(@"D:\Work\Proj\"), "T75: NormalizeDirArg strips trailing slash on subdirectory");
+
+                string valDir;
+                int valCode;
+                string valErr;
+                AssertTrue(!WorkspaceLauncherService.ValidateWorkspaceDirectory(geminiDir, homeDir, vaultDir, homeDir, out valDir, out valCode, out valErr) && valCode == 403,
+                    "T75: A6 blocks HomePath from allowed workspace roots (403)");
+                AssertTrue(WorkspaceLauncherService.ValidateWorkspaceDirectory(geminiDir, homeDir, vaultDir, regWsDir, out valDir, out valCode, out valErr),
+                    "T75: Registered workspace allowed");
+
+                string ideBinDir = Path.Combine(geminiDir, "antigravity-ide", "bin");
+                Directory.CreateDirectory(ideBinDir);
+                File.WriteAllText(Path.Combine(ideBinDir, "antigravity-ide.cmd"), "@echo off\r\n", Encoding.UTF8);
+                WorkspaceLaunchResult metaRes = WorkspaceLauncherService.LaunchWorkspace(geminiDir, homeDir, vaultDir, metaWsDir, "cli");
+                AssertTrue(!metaRes.Ok && metaRes.HttpStatusCode == 400, "T75: A6 rejects & metacharacter in .cmd CLI launch with HTTP 400");
+                string emptyLocalApp = Path.Combine(sb, "EmptyLocalApp");
+                Directory.CreateDirectory(emptyLocalApp);
+                WorkspaceLaunchResult metaIdeCmdRes = WorkspaceLauncherService.LaunchWorkspace(geminiDir, homeDir, vaultDir, metaWsDir, "ide", emptyLocalApp, "");
+                AssertTrue(!metaIdeCmdRes.Ok && metaIdeCmdRes.HttpStatusCode == 400, "T75: A6 rejects & metacharacter when IDE falls back to .cmd with HTTP 400");
+
+                string bigGeminiMd = Path.Combine(geminiDir, "GEMINI.md");
+                File.WriteAllText(bigGeminiMd, new string('中', 2400) + "\r\nsecond line", Encoding.UTF8);
+
+                // 2. A6 (Explorer), A4 (Cockpit IDE warning), A5 (startupRollback), B5 (HTTP ruleTokenReferenceThreshold)
+                string token = "t75_tok";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, vaultDir, 0, token))
+                {
+                    host.Start();
+
+                    RawHttpTestResponse expHome = SendRawTcpHttp(host.Port, null, "POST", "/api/native/open-in-explorer", apiHdr,
+                        "{\"path\":\"" + UnifiedJson.EscapeString(homeSecretFile) + "\"}");
+                    AssertEqual(403, expHome.StatusCode, "T75: A6 open-in-explorer rejects HomePath file with 403");
+
+                    RawHttpTestResponse cockDefSum = SendRawTcpHttp(host.Port, null, "GET", "/api/cockpit/summary", apiHdr, null);
+                    AssertEqual(200, cockDefSum.StatusCode, "T75: GET /api/cockpit/summary returns 200");
+                    AssertTrue(cockDefSum.BodyText.Contains("\"threshold\":0") &&
+                               cockDefSum.BodyText.Contains("\"overBudgetCount\":0") &&
+                               cockDefSum.BodyText.Contains("\"lineCount\":2") &&
+                               cockDefSum.BodyText.Contains("\"byteCount\":"),
+                        "T75: B5 Default threshold=0 reports 0 overBudgetCount and includes lineCount/byteCount");
+
+                    // A5: Startup registry failure rolls back startWithWindows and returns startupRollback=true
+                    host.SetStartWithWindowsOverride = delegate(bool en, string exe) { return false; };
+                    RawHttpTestResponse rbResp = SendRawTcpHttp(host.Port, null, "POST", "/api/settings/companion", apiHdr,
+                        "{\"startWithWindows\":true,\"ruleTokenReferenceThreshold\":1500}");
+                    AssertEqual(200, rbResp.StatusCode, "T75: A5 companion settings returns 200 with rollback payload");
+                    AssertTrue(rbResp.BodyText.Contains("\"startupRollback\":true") &&
+                               rbResp.BodyText.Contains("\"startupError\"") &&
+                               rbResp.BodyText.Contains("\"startWithWindows\":false") &&
+                               rbResp.BodyText.Contains("\"ruleTokenReferenceThreshold\":1500"),
+                        "T75: A5 rolls back startWithWindows to false and persists ruleTokenReferenceThreshold=1500");
+                    host.SetStartWithWindowsOverride = null;
+
+                    RawHttpTestResponse cockThreshSum = SendRawTcpHttp(host.Port, null, "GET", "/api/cockpit/summary", apiHdr, null);
+                    AssertEqual(200, cockThreshSum.StatusCode, "T75: GET /api/cockpit/summary with threshold=1500 returns 200");
+                    AssertTrue(cockThreshSum.BodyText.Contains("\"threshold\":1500") &&
+                               cockThreshSum.BodyText.Contains("\"overBudgetCount\":1"),
+                        "T75: B5 threshold=1500 flags overBudgetCount=1");
+
+                    host.IdeRunningOverride = delegate() { return true; };
+                    RawHttpTestResponse cockSetWarn = SendRawTcpHttp(host.Port, null, "POST", "/api/cockpit/settings", apiHdr,
+                        "{\"userSettings\":{\"autoExecutionPolicy\":\"CASCADE_COMMANDS_AUTO_EXECUTION_AUTO\"}}");
+                    AssertEqual(200, cockSetWarn.StatusCode, "T75: Cockpit settings returns 200");
+                    AssertTrue(cockSetWarn.BodyText.Contains("\"ideRunning\":true") && cockSetWarn.BodyText.Contains("重启 IDE"),
+                        "T75: A4 settings includes ideRunning=true and ideRunningWarning");
+
+                    RawHttpTestResponse cockTogWarn = SendRawTcpHttp(host.Port, null, "POST", "/api/cockpit/toggle", apiHdr,
+                        "{\"kind\":\"plugin\",\"id\":\"plug-75\",\"enabled\":true}");
+                    AssertEqual(200, cockTogWarn.StatusCode, "T75: Cockpit toggle returns 200");
+                    AssertTrue(cockTogWarn.BodyText.Contains("\"ideRunning\":true") && cockTogWarn.BodyText.Contains("重启 IDE"),
+                        "T75: A4 toggle includes ideRunning=true and ideRunningWarning");
+
+                    host.IdeRunningOverride = delegate() { return false; };
+                    RawHttpTestResponse cockSetOk = SendRawTcpHttp(host.Port, null, "POST", "/api/cockpit/settings", apiHdr,
+                        "{\"userSettings\":{\"autoExecutionPolicy\":\"CASCADE_COMMANDS_AUTO_EXECUTION_OFF\"}}");
+                    AssertEqual(200, cockSetOk.StatusCode, "T75: Cockpit settings returns 200 when IDE stopped");
+                    AssertTrue(cockSetOk.BodyText.Contains("\"ideRunning\":false") && cockSetOk.BodyText.Contains("\"ideRunningWarning\":\"\""),
+                        "T75: A4 settings returns ideRunning=false and empty warning when IDE stopped");
+
+                    // 3. B1 (TrayHost does not register hotkey when GlobalHotkey is empty)
+                    using (TrayHost tray = new TrayHost(host, "http://127.0.0.1:" + host.Port + "/?t=" + token, false, false))
+                    {
+                        AssertTrue(!tray.HotkeyRegistered && string.IsNullOrEmpty(tray.HotkeyError),
+                            "T75: B1 TrayHost does not register hotkey when default GlobalHotkey is empty");
+                    }
+
+                    host.Stop();
+                }
+
+                // 4. A3 (Scheduled FullForensic snapshot skips safely when IDE running + _mutationLock mutual exclusion)
+                string snapSettingsPath = Path.Combine(sb, "snap75_settings.json");
+                string snapOutDir = Path.Combine(sb, "snap75_out");
+                object mutLock = new object();
+                using (ScheduledSnapshotService snapSvc = new ScheduledSnapshotService(
+                    homeDir, geminiDir, snapSettingsPath, null, null, null, mutLock, delegate() { return true; }))
+                {
+                    CompanionSettings scfg = snapSvc.GetSettings();
+                    scfg.Enabled = true;
+                    scfg.Tier = "full";
+                    scfg.TargetDirectory = snapOutDir;
+                    snapSvc.UpdateSettings(scfg);
+
+                    SnapshotRunResult schedRes = snapSvc.ExecuteSnapshotInternal(true);
+                    AssertTrue(!schedRes.Ok && schedRes.SkippedBusy && schedRes.ErrorMessage.Contains("IDE"),
+                        "T75: A3 Scheduled FullForensic snapshot skips cleanly when IDE is running");
+                    AssertTrue(!Directory.Exists(snapOutDir),
+                        "T75: A3 Skipped scheduled snapshot did not create target directory or archive");
+
+                    // Multi-threaded _mutationLock contention check: snapshot waits until mutation thread releases mutLock
+                    System.Threading.ManualResetEventSlim lockAcquired = new System.Threading.ManualResetEventSlim(false);
+                    System.Threading.ManualResetEventSlim releaseLock = new System.Threading.ManualResetEventSlim(false);
+                    long lockReleasedTicks = 0;
+                    long snapFinishedTicks = 0;
+                    SnapshotRunResult manualRes = null;
+
+                    System.Threading.Thread blocker = new System.Threading.Thread(delegate()
+                    {
+                        lock (mutLock)
+                        {
+                            lockAcquired.Set();
+                            releaseLock.Wait(2000);
+                            System.Threading.Interlocked.Exchange(ref lockReleasedTicks, Stopwatch.GetTimestamp());
+                        }
+                    });
+                    blocker.Start();
+                    AssertTrue(lockAcquired.Wait(2000), "T75: Blocker acquired _mutationLock");
+
+                    System.Threading.Thread snapThread = new System.Threading.Thread(delegate()
+                    {
+                        manualRes = snapSvc.ExecuteSnapshotInternal(false);
+                        System.Threading.Interlocked.Exchange(ref snapFinishedTicks, Stopwatch.GetTimestamp());
+                    });
+                    snapThread.Start();
+                    System.Threading.Thread.Sleep(150);
+                    AssertTrue(System.Threading.Interlocked.Read(ref snapFinishedTicks) == 0, "T75: A3 Snapshot blocked while _mutationLock held");
+                    releaseLock.Set();
+                    blocker.Join(3000);
+                    snapThread.Join(10000);
+                    AssertTrue(manualRes != null && manualRes.Ok && System.Threading.Interlocked.Read(ref snapFinishedTicks) >= System.Threading.Interlocked.Read(ref lockReleasedTicks),
+                        "T75: A3 Snapshot completed only after _mutationLock released");
+                }
+
+                // 5. A2 (Job Object drains .cmd -> async detached powershell.exe child tree before returning & cleans up on timeout)
+                string cliDir = Path.Combine(sb, "cli75");
+                Directory.CreateDirectory(cliDir);
+                string cid75 = "a7500001-0000-4000-8000-000000000001";
+                List<SessionRenameCandidate> cand75 = new List<SessionRenameCandidate>
+                {
+                    new SessionRenameCandidate { ConversationId = cid75, ProjectName = "P75", OldTitle = "old", FirstPromptSnippet = "test" }
+                };
+
+                string drainMarker = Path.Combine(cliDir, "drained_async.txt");
+                string drainPs = Path.Combine(cliDir, "drain_async.ps1");
+                File.WriteAllText(drainPs,
+                    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\r\n" +
+                    "$null = [Console]::In.ReadToEnd()\r\n" +
+                    "[Console]::Out.WriteLine('[{\"cid\":\"" + cid75 + "\",\"title\":\"[P75] Job Drained\",\"summary\":\"ok\"}]')\r\n" +
+                    "[Console]::Out.Flush()\r\n" +
+                    "Start-Sleep -Milliseconds 250\r\n" +
+                    "[System.IO.File]::WriteAllText('" + drainMarker.Replace("'", "''") + "', 'done')\r\n",
+                    Encoding.UTF8);
+                string drainCmd = Path.Combine(cliDir, "agy.cmd");
+                File.WriteAllText(drainCmd,
+                    "@echo off\r\n" +
+                    "if \"%~1\"==\"--version\" (\r\n" +
+                    "  echo agy 75\r\n" +
+                    "  exit /b 0\r\n" +
+                    ")\r\n" +
+                    "start /b \"\" powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + drainPs + "\"\r\n" +
+                    "exit /b 0\r\n",
+                    new UTF8Encoding(false));
+
+                CliBatchSuggestionResult drainRes = AntigravityCliAdapter.GenerateBatchSuggestionsViaCli(cand75, drainCmd, 15, "", "", "");
+                AssertTrue(drainRes.Ok && drainRes.Suggestions.Count == 1, "T75: A2 CLI async child drain test succeeded: " + drainRes.ErrorOrHint);
+                AssertTrue(File.Exists(drainMarker), "T75: A2 Job Object waited for detached start /b powershell.exe to finish after cmd.exe exited");
+
+                string hangPidFile = Path.Combine(cliDir, "hang75.pid");
+                string hangPs = Path.Combine(cliDir, "hang75.ps1");
+                File.WriteAllText(hangPs,
+                    "[System.IO.File]::WriteAllText('" + hangPidFile.Replace("'", "''") + "', $PID.ToString())\r\n" +
+                    "Start-Sleep -Seconds 30\r\n",
+                    Encoding.UTF8);
+                string hangCmd = Path.Combine(cliDir, "agy_hang.cmd");
+                File.WriteAllText(hangCmd,
+                    "@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + hangPs + "\" %*\r\n",
+                    new UTF8Encoding(false));
+
+                CliBatchSuggestionResult timeoutRes = AntigravityCliAdapter.GenerateBatchSuggestionsViaCli(cand75, hangCmd, 1, "", "", "");
+                AssertTrue(!timeoutRes.Ok && timeoutRes.Status == CliSuggestStatus.Timeout, "T75: A2 CLI timeout detected");
+                if (File.Exists(hangPidFile))
+                {
+                    int hPid;
+                    if (int.TryParse(File.ReadAllText(hangPidFile).Trim(), out hPid))
+                    {
+                        bool alive = false;
+                        try
+                        {
+                            using (Process hp = Process.GetProcessById(hPid))
+                            {
+                                alive = !hp.HasExited;
+                            }
+                        }
+                        catch { alive = false; }
+                        AssertTrue(!alive, "T75: A2 Job Object terminated child powershell.exe on timeout");
+                    }
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T76_ACC02_JobObjectRepeatedDrainAndTimeoutCleanup()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t76_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(sb);
+            try
+            {
+                string cid76 = "a7600001-0000-4000-8000-000000000001";
+                List<SessionRenameCandidate> cand76 = new List<SessionRenameCandidate>
+                {
+                    new SessionRenameCandidate { ConversationId = cid76, ProjectName = "P76", OldTitle = "old", FirstPromptSnippet = "drain test" }
+                };
+
+                // 3 consecutive iterations of .cmd -> start /b powershell.exe + immediate Directory.Delete (0 IOException leak)
+                for (int iter = 0; iter < 3; iter++)
+                {
+                    string iterDir = Path.Combine(sb, "drain_iter_" + iter);
+                    Directory.CreateDirectory(iterDir);
+                    string marker = Path.Combine(iterDir, "drained_" + iter + ".txt");
+                    string psPath = Path.Combine(iterDir, "worker.ps1");
+                    File.WriteAllText(psPath,
+                        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\r\n" +
+                        "$null = [Console]::In.ReadToEnd()\r\n" +
+                        "[Console]::Out.WriteLine('[{\"cid\":\"" + cid76 + "\",\"title\":\"[P76] Iter " + iter + "\",\"summary\":\"ok\"}]')\r\n" +
+                        "[Console]::Out.Flush()\r\n" +
+                        "Start-Sleep -Milliseconds 150\r\n" +
+                        "[System.IO.File]::WriteAllText('" + marker.Replace("'", "''") + "', 'done')\r\n",
+                        Encoding.UTF8);
+
+                    string cmdPath = Path.Combine(iterDir, "agy.cmd");
+                    File.WriteAllText(cmdPath,
+                        "@echo off\r\n" +
+                        "if \"%~1\"==\"--version\" (\r\n" +
+                        "  echo agy 76." + iter + "\r\n" +
+                        "  exit /b 0\r\n" +
+                        ")\r\n" +
+                        "start /b \"\" powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + psPath + "\"\r\n" +
+                        "exit /b 0\r\n",
+                        new UTF8Encoding(false));
+
+                    CliBatchSuggestionResult res = AntigravityCliAdapter.GenerateBatchSuggestionsViaCli(cand76, cmdPath, 15, "", "", "");
+                    AssertTrue(res.Ok && res.Suggestions.Count == 1,
+                        "T76: Iteration " + iter + " drained detached start /b powershell.exe: " + res.ErrorOrHint);
+                    AssertTrue(File.Exists(marker),
+                        "T76: Iteration " + iter + " detached child completed marker write before return");
+
+                    // Immediate delete with zero sleep/retry: any lingering child process or open handle throws IOException
+                    bool deleteClean = false;
+                    try
+                    {
+                        Directory.Delete(iterDir, true);
+                        deleteClean = !Directory.Exists(iterDir);
+                    }
+                    catch (IOException ioEx)
+                    {
+                        AssertTrue(false, "T76: Iteration " + iter + " IOException handle leak on immediate delete: " + ioEx.Message);
+                    }
+                    AssertTrue(deleteClean, "T76: Iteration " + iter + " temp dir deleted immediately with 0 handle leaks");
+                }
+
+                // Timeout termination of multi-level process tree (cmd -> powershell -> grandchild cmd/ping) + immediate temp directory deletion
+                string toDir = Path.Combine(sb, "timeout_iter");
+                Directory.CreateDirectory(toDir);
+                string hangPidFile = Path.Combine(toDir, "hang76.pid");
+                string grandPidFile = Path.Combine(toDir, "grand76.pid");
+                string hangPs = Path.Combine(toDir, "hang.ps1");
+                File.WriteAllText(hangPs,
+                    "[System.IO.File]::WriteAllText('" + hangPidFile.Replace("'", "''") + "', $PID.ToString())\r\n" +
+                    "$gc = Start-Process -FilePath 'cmd.exe' -WindowStyle Hidden -PassThru -ArgumentList '/c','ping -n 30 127.0.0.1 >nul'\r\n" +
+                    "[System.IO.File]::WriteAllText('" + grandPidFile.Replace("'", "''") + "', $gc.Id.ToString())\r\n" +
+                    "Start-Sleep -Seconds 30\r\n",
+                    Encoding.UTF8);
+                string hangCmd = Path.Combine(toDir, "agy_hang.cmd");
+                File.WriteAllText(hangCmd,
+                    "@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + hangPs + "\" %*\r\n",
+                    new UTF8Encoding(false));
+
+                CliBatchSuggestionResult toRes = AntigravityCliAdapter.GenerateBatchSuggestionsViaCli(cand76, hangCmd, 4, "", "", "");
+                AssertTrue(!toRes.Ok && toRes.Status == CliSuggestStatus.Timeout, "T76: Timeout status returned");
+                AssertTrue(File.Exists(hangPidFile), "T76: Child powershell.exe started and wrote PID before timeout");
+                AssertTrue(File.Exists(grandPidFile), "T76: Grandchild cmd.exe started and wrote PID before timeout");
+
+                string[] pidFilesToCheck = new string[] { hangPidFile, grandPidFile };
+                for (int pi = 0; pi < pidFilesToCheck.Length; pi++)
+                {
+                    int hPid;
+                    AssertTrue(int.TryParse(File.ReadAllText(pidFilesToCheck[pi]).Trim(), out hPid), "T76: Parsed PID from " + Path.GetFileName(pidFilesToCheck[pi]));
+                    bool alive = false;
+                    try
+                    {
+                        using (Process hp = Process.GetProcessById(hPid))
+                        {
+                            alive = !hp.HasExited;
+                        }
+                    }
+                    catch { alive = false; }
+                    AssertTrue(!alive, "T76: Process tree member killed before timeout return (" + Path.GetFileName(pidFilesToCheck[pi]) + ")");
+                }
+
+                bool toDeleteClean = false;
+                try
+                {
+                    Directory.Delete(toDir, true);
+                    toDeleteClean = !Directory.Exists(toDir);
+                }
+                catch (IOException ioEx)
+                {
+                    AssertTrue(false, "T76: IOException handle leak on immediate delete after timeout: " + ioEx.Message);
+                }
+                AssertTrue(toDeleteClean, "T76: Timeout temp dir deleted immediately with 0 handle leaks");
+            }
+            finally
+            {
+                if (Directory.Exists(sb))
+                {
+                    try { Directory.Delete(sb, true); } catch { }
+                }
+            }
+        }
+
+        private static void T77_ACC03_ScheduledSnapshotMutationLockAndIdeSkip()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t77_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string agDir = Path.Combine(geminiDir, "antigravity");
+                Directory.CreateDirectory(Path.Combine(agDir, "conversations"));
+
+                string cidRoot = "a7700001-0000-4000-8000-000000000001";
+                string cidSub = "b7700002-0000-4000-8000-000000000002";
+                ProtoNode nRoot = BuildRealProtoEntry(cidRoot, "Root 77", null, "file:///c%3A/P77", "P77", "pid-77", 3, 1, 1);
+                ProtoNode nSub = BuildRealProtoEntry(cidSub, "Sub 77", null, "file:///c%3A/P77", "P77", "pid-77", 4, 1, 0);
+                nSub.GetChild(2).GetChild(17).Children.Add(new ProtoNode(11, 2) { RawBytes = Encoding.UTF8.GetBytes(cidRoot), IsModified = true });
+                File.WriteAllBytes(Path.Combine(agDir, "agyhub_summaries_proto.pb"), ProtoCodec.Encode(new List<ProtoNode> { nRoot, nSub }));
+                CreateMinimalValidSqliteDb(Path.Combine(agDir, "conversations", cidRoot + ".db"), cidRoot);
+                CreateMinimalValidSqliteDb(Path.Combine(agDir, "conversations", cidSub + ".db"), cidSub);
+
+                // 1. Direct ScheduledSnapshotService: FullForensic skipped when isIdeRunning()==true (no dir created); FastDaily NOT skipped
+                bool simIdeRunning = true;
+                object mutLock = new object();
+                string settingsPath = Path.Combine(sb, "snap77.json");
+                string fullSnapDir = Path.Combine(sb, "FullSnapsNeverCreatedWhenSkipped");
+                string fastSnapDir = Path.Combine(sb, "FastSnapsAllowedWhenIdeRunning");
+
+                using (ScheduledSnapshotService svc = new ScheduledSnapshotService(
+                    homeDir, geminiDir, settingsPath, null, null, null, mutLock, delegate() { return simIdeRunning; }))
+                {
+                    CompanionSettings cfg = svc.GetSettings();
+                    cfg.Enabled = true;
+                    cfg.Tier = "full";
+                    cfg.TargetDirectory = fullSnapDir;
+                    svc.UpdateSettings(cfg);
+
+                    SnapshotRunResult skipRes = svc.ExecuteSnapshotInternal(true);
+                    AssertTrue(!skipRes.Ok && skipRes.SkippedBusy, "T77: Scheduled FullForensic skipped when isIdeRunning()==true");
+                    AssertTrue(!Directory.Exists(fullSnapDir), "T77: Target directory was NOT created when FullForensic skipped");
+                    AssertEqual(string.Empty, svc.GetSettings().LastFilePath, "T77: LastFilePath remained empty after skip");
+
+                    // FastDaily scheduled snapshot proceeds even while isIdeRunning()==true
+                    cfg.Tier = "fast";
+                    cfg.TargetDirectory = fastSnapDir;
+                    svc.UpdateSettings(cfg);
+                    SnapshotRunResult fastRes = svc.ExecuteSnapshotInternal(true);
+                    AssertTrue(fastRes.Ok && File.Exists(fastRes.FilePath), "T77: Scheduled FastDaily succeeds while IDE is running: " + fastRes.ErrorMessage);
+                    BackupArchiveIndex fastIdx = StreamingZipIndexReader.ReadIndex(fastRes.FilePath);
+                    AssertEqual("FastDaily", fastIdx.BackupTier, "T77: FastDaily tier verified");
+
+                    // FullForensic succeeds once IDE stops
+                    simIdeRunning = false;
+                    cfg.Tier = "full";
+                    cfg.TargetDirectory = fullSnapDir;
+                    svc.UpdateSettings(cfg);
+                    SnapshotRunResult fullOkRes = svc.ExecuteSnapshotInternal(true);
+                    AssertTrue(fullOkRes.Ok && File.Exists(fullOkRes.FilePath), "T77: Scheduled FullForensic runs when isIdeRunning()==false: " + fullOkRes.ErrorMessage);
+                    BackupArchiveIndex fullIdx = StreamingZipIndexReader.ReadIndex(fullOkRes.FilePath);
+                    AssertEqual("FullForensic", fullIdx.BackupTier, "T77: FullForensic tier verified");
+                    AssertTrue(fullIdx.ExistingConvoDbFiles.Contains(cidSub), "T77: FullForensic included subagent DB");
+
+                    // MutationLock mutual exclusion: snapshot blocks while external mutation thread holds mutLock
+                    System.Threading.ManualResetEventSlim acquired = new System.Threading.ManualResetEventSlim(false);
+                    System.Threading.ManualResetEventSlim release = new System.Threading.ManualResetEventSlim(false);
+                    long releaseTicks = 0;
+                    long snapDoneTicks = 0;
+                    SnapshotRunResult contendedRes = null;
+
+                    System.Threading.Thread mutThread = new System.Threading.Thread(delegate()
+                    {
+                        lock (mutLock)
+                        {
+                            acquired.Set();
+                            release.Wait(2000);
+                            System.Threading.Interlocked.Exchange(ref releaseTicks, Stopwatch.GetTimestamp());
+                        }
+                    });
+                    mutThread.Start();
+                    AssertTrue(acquired.Wait(2000), "T77: Mutation thread acquired MutationLock");
+
+                    System.Threading.Thread snapThread = new System.Threading.Thread(delegate()
+                    {
+                        contendedRes = svc.RunSnapshotNow();
+                        System.Threading.Interlocked.Exchange(ref snapDoneTicks, Stopwatch.GetTimestamp());
+                    });
+                    snapThread.Start();
+                    System.Threading.Thread.Sleep(150);
+                    AssertTrue(System.Threading.Interlocked.Read(ref snapDoneTicks) == 0, "T77: RunSnapshotNow blocked while MutationLock held");
+
+                    release.Set();
+                    mutThread.Join(3000);
+                    snapThread.Join(10000);
+                    AssertTrue(contendedRes != null && contendedRes.Ok &&
+                               System.Threading.Interlocked.Read(ref snapDoneTicks) >= System.Threading.Interlocked.Read(ref releaseTicks),
+                        "T77: RunSnapshotNow completed strictly after MutationLock release");
+                }
+
+                // 2. Verify LocalWebHost wires IdeRunningOverride and MutationLock into host.SnapshotService
+                string hostSnapDir = Path.Combine(sb, "HostFullSnapDir");
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "Vault"), 0, "t77_tok"))
+                {
+                    host.Start();
+                    host.IdeRunningOverride = delegate() { return true; };
+                    CompanionSettings hcfg = host.SnapshotService.GetSettings();
+                    hcfg.Enabled = true;
+                    hcfg.Tier = "full";
+                    hcfg.TargetDirectory = hostSnapDir;
+                    host.SnapshotService.UpdateSettings(hcfg);
+
+                    SnapshotRunResult hostSkip = host.SnapshotService.ExecuteSnapshotInternal(true);
+                    AssertTrue(!hostSkip.Ok && hostSkip.SkippedBusy, "T77: LocalWebHost.SnapshotService respects IdeRunningOverride and skips FullForensic");
+                    AssertTrue(!Directory.Exists(hostSnapDir), "T77: LocalWebHost.SnapshotService did not create target directory when skipped");
+
+                    host.IdeRunningOverride = delegate() { return false; };
+                    System.Threading.ManualResetEventSlim hostAcquired = new System.Threading.ManualResetEventSlim(false);
+                    System.Threading.ManualResetEventSlim hostRelease = new System.Threading.ManualResetEventSlim(false);
+                    long hostRelTicks = 0;
+                    long hostSnapTicks = 0;
+                    SnapshotRunResult hostMutRes = null;
+
+                    System.Threading.Thread hostMutThread = new System.Threading.Thread(delegate()
+                    {
+                        lock (host.MutationLock)
+                        {
+                            hostAcquired.Set();
+                            hostRelease.Wait(2000);
+                            System.Threading.Interlocked.Exchange(ref hostRelTicks, Stopwatch.GetTimestamp());
+                        }
+                    });
+                    hostMutThread.Start();
+                    AssertTrue(hostAcquired.Wait(2000), "T77: Acquired LocalWebHost.MutationLock");
+
+                    System.Threading.Thread hostSnapThread = new System.Threading.Thread(delegate()
+                    {
+                        hostMutRes = host.SnapshotService.RunSnapshotNow();
+                        System.Threading.Interlocked.Exchange(ref hostSnapTicks, Stopwatch.GetTimestamp());
+                    });
+                    hostSnapThread.Start();
+                    System.Threading.Thread.Sleep(150);
+                    AssertTrue(System.Threading.Interlocked.Read(ref hostSnapTicks) == 0, "T77: host.SnapshotService blocked while host.MutationLock held");
+                    hostRelease.Set();
+                    hostMutThread.Join(3000);
+                    hostSnapThread.Join(10000);
+                    AssertTrue(hostMutRes != null && hostMutRes.Ok &&
+                               System.Threading.Interlocked.Read(ref hostSnapTicks) >= System.Threading.Interlocked.Read(ref hostRelTicks),
+                        "T77: host.SnapshotService completed strictly after host.MutationLock release");
+
+                    host.IdeRunningOverride = null;
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T78_ACC04_CockpitSettingsAndToggleIdeRunningWarnings()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t78_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string cfgDir = Path.Combine(geminiDir, "config");
+                Directory.CreateDirectory(Path.Combine(geminiDir, "antigravity"));
+                Directory.CreateDirectory(cfgDir);
+
+                string cfgPath = Path.Combine(cfgDir, "config.json");
+                File.WriteAllText(cfgPath,
+                    "{\"plugins\":{\"plug-78\":{\"enabled\":false}},\"userSettings\":{\"autoExecutionPolicy\":\"CASCADE_COMMANDS_AUTO_EXECUTION_OFF\"}}",
+                    Encoding.UTF8);
+                string mcpPath = Path.Combine(cfgDir, "mcp_config.json");
+                File.WriteAllText(mcpPath,
+                    "{\"mcpServers\":{\"srv-78\":{\"command\":\"python\",\"args\":[\"srv.py\"],\"disabled\":false}}}",
+                    Encoding.UTF8);
+
+                string token = "t78_tok";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "Vault"), 0, token))
+                {
+                    host.Start();
+
+                    // Case 1: IdeRunningOverride == true
+                    host.IdeRunningOverride = delegate() { return true; };
+
+                    RawHttpTestResponse setOn = SendRawTcpHttp(host.Port, null, "POST", "/api/cockpit/settings", apiHdr,
+                        "{\"userSettings\":{\"autoExecutionPolicy\":\"CASCADE_COMMANDS_AUTO_EXECUTION_AUTO\"}}");
+                    AssertEqual(200, setOn.StatusCode, "T78: POST /api/cockpit/settings (IDE running) returns 200");
+                    Dictionary<string, object> setOnDict = UnifiedJson.AsDict(UnifiedJson.Parse(setOn.BodyText));
+                    AssertTrue(UnifiedJson.GetBool(setOnDict, "ok", false), "T78: settings ok=true when IDE running");
+                    AssertTrue(UnifiedJson.GetBool(setOnDict, "ideRunning", false), "T78: settings ideRunning=true when IDE running");
+                    AssertTrue(!string.IsNullOrEmpty(UnifiedJson.GetString(setOnDict, "ideRunningWarning", "")),
+                        "T78: settings returns non-empty ideRunningWarning when IDE running");
+                    AssertTrue(File.ReadAllText(cfgPath, Encoding.UTF8).Contains("CASCADE_COMMANDS_AUTO_EXECUTION_AUTO"),
+                        "T78: settings persisted config.json while warning");
+
+                    RawHttpTestResponse togPlugOn = SendRawTcpHttp(host.Port, null, "POST", "/api/cockpit/toggle", apiHdr,
+                        "{\"kind\":\"plugin\",\"id\":\"plug-78\",\"enabled\":true}");
+                    AssertEqual(200, togPlugOn.StatusCode, "T78: POST /api/cockpit/toggle plugin (IDE running) returns 200");
+                    Dictionary<string, object> togPlugOnDict = UnifiedJson.AsDict(UnifiedJson.Parse(togPlugOn.BodyText));
+                    AssertTrue(UnifiedJson.GetBool(togPlugOnDict, "ok", false) && UnifiedJson.GetBool(togPlugOnDict, "enabled", false),
+                        "T78: plugin toggle succeeded");
+                    AssertTrue(UnifiedJson.GetBool(togPlugOnDict, "ideRunning", false), "T78: plugin toggle ideRunning=true");
+                    AssertTrue(!string.IsNullOrEmpty(UnifiedJson.GetString(togPlugOnDict, "ideRunningWarning", "")),
+                        "T78: plugin toggle returns ideRunningWarning when IDE running");
+
+                    RawHttpTestResponse togMcpOff = SendRawTcpHttp(host.Port, null, "POST", "/api/cockpit/toggle", apiHdr,
+                        "{\"kind\":\"mcp\",\"id\":\"srv-78\",\"enabled\":false}");
+                    AssertEqual(200, togMcpOff.StatusCode, "T78: POST /api/cockpit/toggle mcp (IDE running) returns 200");
+                    Dictionary<string, object> togMcpOffDict = UnifiedJson.AsDict(UnifiedJson.Parse(togMcpOff.BodyText));
+                    AssertTrue(UnifiedJson.GetBool(togMcpOffDict, "ok", false) && !UnifiedJson.GetBool(togMcpOffDict, "enabled", true),
+                        "T78: mcp toggle disabled succeeded");
+                    AssertTrue(UnifiedJson.GetBool(togMcpOffDict, "ideRunning", false), "T78: mcp toggle ideRunning=true");
+                    AssertTrue(!string.IsNullOrEmpty(UnifiedJson.GetString(togMcpOffDict, "ideRunningWarning", "")),
+                        "T78: mcp toggle returns ideRunningWarning when IDE running");
+
+                    // Case 2: IdeRunningOverride == false
+                    host.IdeRunningOverride = delegate() { return false; };
+
+                    RawHttpTestResponse setOff = SendRawTcpHttp(host.Port, null, "POST", "/api/cockpit/settings", apiHdr,
+                        "{\"userSettings\":{\"autoExecutionPolicy\":\"CASCADE_COMMANDS_AUTO_EXECUTION_OFF\"}}");
+                    AssertEqual(200, setOff.StatusCode, "T78: POST /api/cockpit/settings (IDE stopped) returns 200");
+                    Dictionary<string, object> setOffDict = UnifiedJson.AsDict(UnifiedJson.Parse(setOff.BodyText));
+                    AssertTrue(!UnifiedJson.GetBool(setOffDict, "ideRunning", true), "T78: settings ideRunning=false when IDE stopped");
+                    AssertEqual(string.Empty, UnifiedJson.GetString(setOffDict, "ideRunningWarning", "NON_EMPTY"),
+                        "T78: settings ideRunningWarning empty when IDE stopped");
+
+                    RawHttpTestResponse togPlugOff = SendRawTcpHttp(host.Port, null, "POST", "/api/cockpit/toggle", apiHdr,
+                        "{\"kind\":\"plugin\",\"id\":\"plug-78\",\"enabled\":false}");
+                    AssertEqual(200, togPlugOff.StatusCode, "T78: POST /api/cockpit/toggle plugin (IDE stopped) returns 200");
+                    Dictionary<string, object> togPlugOffDict = UnifiedJson.AsDict(UnifiedJson.Parse(togPlugOff.BodyText));
+                    AssertTrue(!UnifiedJson.GetBool(togPlugOffDict, "ideRunning", true), "T78: plugin toggle ideRunning=false when IDE stopped");
+                    AssertEqual(string.Empty, UnifiedJson.GetString(togPlugOffDict, "ideRunningWarning", "NON_EMPTY"),
+                        "T78: plugin toggle ideRunningWarning empty when IDE stopped");
+
+                    RawHttpTestResponse togMcpOn = SendRawTcpHttp(host.Port, null, "POST", "/api/cockpit/toggle", apiHdr,
+                        "{\"kind\":\"mcp\",\"id\":\"srv-78\",\"enabled\":true}");
+                    AssertEqual(200, togMcpOn.StatusCode, "T78: POST /api/cockpit/toggle mcp (IDE stopped) returns 200");
+                    Dictionary<string, object> togMcpOnDict = UnifiedJson.AsDict(UnifiedJson.Parse(togMcpOn.BodyText));
+                    AssertTrue(!UnifiedJson.GetBool(togMcpOnDict, "ideRunning", true), "T78: mcp toggle ideRunning=false when IDE stopped");
+                    AssertEqual(string.Empty, UnifiedJson.GetString(togMcpOnDict, "ideRunningWarning", "NON_EMPTY"),
+                        "T78: mcp toggle ideRunningWarning empty when IDE stopped");
+
+                    host.IdeRunningOverride = null;
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T79_ACC05_ACC09_StartupRollbackAndHardenedDefaults()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t79_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                Directory.CreateDirectory(Path.Combine(geminiDir, "antigravity"));
+
+                // ACC-09: Direct CompanionSettings constructor, NormalizeSettings, and FromDictionary defaults
+                CompanionSettings defCtor = new CompanionSettings();
+                AssertEqual(false, defCtor.MinimizeToTray, "T79: ACC-09 default MinimizeToTray=false");
+                AssertEqual(string.Empty, defCtor.GlobalHotkey, "T79: ACC-09 default GlobalHotkey=\"\"");
+                AssertEqual(false, defCtor.Enabled, "T79: ACC-09 default Enabled=false");
+                AssertEqual(false, defCtor.StartWithWindows, "T79: ACC-09 default StartWithWindows=false");
+                AssertEqual(0, defCtor.RuleTokenReferenceThreshold, "T79: ACC-09 default RuleTokenReferenceThreshold=0");
+
+                CompanionSettings defNorm = ScheduledSnapshotService.NormalizeSettings(null, geminiDir);
+                AssertEqual(false, defNorm.MinimizeToTray, "T79: NormalizeSettings(null) MinimizeToTray=false");
+                AssertEqual(string.Empty, defNorm.GlobalHotkey, "T79: NormalizeSettings(null) GlobalHotkey=\"\"");
+                AssertEqual(false, defNorm.Enabled, "T79: NormalizeSettings(null) Enabled=false");
+                AssertEqual(false, defNorm.StartWithWindows, "T79: NormalizeSettings(null) StartWithWindows=false");
+                AssertEqual(0, defNorm.RuleTokenReferenceThreshold, "T79: NormalizeSettings(null) RuleTokenReferenceThreshold=0");
+
+                CompanionSettings defDict = ScheduledSnapshotService.FromDictionary(new Dictionary<string, object>(), geminiDir);
+                AssertEqual(false, defDict.MinimizeToTray, "T79: FromDictionary({}) MinimizeToTray=false");
+                AssertEqual(string.Empty, defDict.GlobalHotkey, "T79: FromDictionary({}) GlobalHotkey=\"\"");
+                AssertEqual(false, defDict.Enabled, "T79: FromDictionary({}) Enabled=false");
+                AssertEqual(false, defDict.StartWithWindows, "T79: FromDictionary({}) StartWithWindows=false");
+                AssertEqual(0, defDict.RuleTokenReferenceThreshold, "T79: FromDictionary({}) RuleTokenReferenceThreshold=0");
+
+                Dictionary<string, object> defToDict = ScheduledSnapshotService.ToDictionary(defCtor);
+                AssertEqual(false, UnifiedJson.GetBool(defToDict, "minimizeToTray", true), "T79: ToDictionary default minimizeToTray=false");
+                AssertEqual(string.Empty, UnifiedJson.GetString(defToDict, "globalHotkey", "x"), "T79: ToDictionary default globalHotkey=\"\"");
+                AssertEqual(false, UnifiedJson.GetBool(defToDict, "enabled", true), "T79: ToDictionary default enabled=false");
+                AssertEqual(false, UnifiedJson.GetBool(defToDict, "startWithWindows", true), "T79: ToDictionary default startWithWindows=false");
+                AssertEqual(0, UnifiedJson.GetInt(defToDict, "ruleTokenReferenceThreshold", -1), "T79: ToDictionary default ruleTokenReferenceThreshold=0");
+
+                // Invalid key inputs to SetStartWithWindowsInKey fail gracefully, and isolated HKCU test subkey roundtrips cleanly
+                AssertTrue(!ScheduledSnapshotService.SetStartWithWindowsInKey(null, "sub", "val", true, @"C:\app.exe"),
+                    "T79: SetStartWithWindowsInKey handles null rootKey safely");
+                AssertTrue(!ScheduledSnapshotService.SetStartWithWindowsInKey(Microsoft.Win32.Registry.CurrentUser, "", "val", true, @"C:\app.exe"),
+                    "T79: SetStartWithWindowsInKey handles empty subKey safely");
+                string testRegSubKey = @"Software\AntigravityCompanion_T79_" + Guid.NewGuid().ToString("N");
+                try
+                {
+                    AssertTrue(ScheduledSnapshotService.SetStartWithWindowsInKey(Microsoft.Win32.Registry.CurrentUser, testRegSubKey, "TestVal", true, @"C:\Test\AntigravityCompanion.exe"),
+                        "T79: SetStartWithWindowsInKey wrote isolated HKCU test key");
+                    AssertTrue(ScheduledSnapshotService.IsStartWithWindowsEnabledInKey(Microsoft.Win32.Registry.CurrentUser, testRegSubKey, "TestVal"),
+                        "T79: IsStartWithWindowsEnabledInKey detected written value");
+                    AssertTrue(ScheduledSnapshotService.SetStartWithWindowsInKey(Microsoft.Win32.Registry.CurrentUser, testRegSubKey, "TestVal", false, @"C:\Test\AntigravityCompanion.exe"),
+                        "T79: SetStartWithWindowsInKey removed isolated HKCU test value");
+                    AssertTrue(!ScheduledSnapshotService.IsStartWithWindowsEnabledInKey(Microsoft.Win32.Registry.CurrentUser, testRegSubKey, "TestVal"),
+                        "T79: IsStartWithWindowsEnabledInKey returned false after removal");
+                }
+                finally
+                {
+                    try { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(testRegSubKey, false); } catch { }
+                }
+
+                string token = "t79_tok";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "Vault"), 0, token))
+                {
+                    host.Start();
+
+                    // ACC-09 via HTTP GET /api/settings/companion
+                    RawHttpTestResponse getDef = SendRawTcpHttp(host.Port, null, "GET", "/api/settings/companion", apiHdr, null);
+                    AssertEqual(200, getDef.StatusCode, "T79: GET /api/settings/companion returns 200");
+                    Dictionary<string, object> defPayload = UnifiedJson.AsDict(UnifiedJson.Parse(getDef.BodyText));
+                    AssertEqual(false, UnifiedJson.GetBool(defPayload, "minimizeToTray", true), "T79: HTTP default minimizeToTray=false");
+                    AssertEqual(string.Empty, UnifiedJson.GetString(defPayload, "globalHotkey", "x"), "T79: HTTP default globalHotkey=\"\"");
+                    AssertEqual(false, UnifiedJson.GetBool(defPayload, "enabled", true), "T79: HTTP default enabled=false");
+                    AssertEqual(false, UnifiedJson.GetBool(defPayload, "startWithWindows", true), "T79: HTTP default startWithWindows=false");
+                    AssertEqual(0, UnifiedJson.GetInt(defPayload, "ruleTokenReferenceThreshold", -1), "T79: HTTP default ruleTokenReferenceThreshold=0");
+                    AssertEqual(false, UnifiedJson.GetBool(defPayload, "hotkeyRegistered", true), "T79: HTTP default hotkeyRegistered=false");
+
+                    // ACC-05 Direction 1: false -> true fails, rolls back to false while preserving other fields
+                    int hookCalls = 0;
+                    host.SetStartWithWindowsOverride = delegate(bool en, string exe) { hookCalls++; return false; };
+                    RawHttpTestResponse failOn = SendRawTcpHttp(host.Port, null, "POST", "/api/settings/companion", apiHdr,
+                        "{\"startWithWindows\":true,\"retainCount\":7}");
+                    AssertEqual(200, failOn.StatusCode, "T79: POST /api/settings/companion rollback (false->true) returns 200");
+                    Dictionary<string, object> failOnDict = UnifiedJson.AsDict(UnifiedJson.Parse(failOn.BodyText));
+                    AssertEqual(1, hookCalls, "T79: SetStartWithWindowsOverride invoked");
+                    AssertTrue(UnifiedJson.GetBool(failOnDict, "startupRollback", false), "T79: startupRollback=true on false->true failure");
+                    AssertTrue(!string.IsNullOrEmpty(UnifiedJson.GetString(failOnDict, "startupError", "")), "T79: startupError populated");
+                    AssertEqual(false, UnifiedJson.GetBool(failOnDict, "startWithWindows", true), "T79: startWithWindows rolled back to false");
+                    AssertEqual(7, UnifiedJson.GetInt(failOnDict, "retainCount", 0), "T79: non-startup field retainCount=7 persisted");
+
+                    string diskSettings = File.ReadAllText(host.SnapshotService.SettingsFilePath, Encoding.UTF8);
+                    Dictionary<string, object> diskDict = UnifiedJson.AsDict(UnifiedJson.Parse(diskSettings));
+                    AssertEqual(false, UnifiedJson.GetBool(diskDict, "startWithWindows", true), "T79: Disk settings file persisted rolled-back startWithWindows=false");
+
+                    // ACC-05 Direction 2: enable succeeds (false -> true), then disabling (true -> false) fails and rolls back to true
+                    host.SetStartWithWindowsOverride = delegate(bool en, string exe) { return true; };
+                    RawHttpTestResponse okOn = SendRawTcpHttp(host.Port, null, "POST", "/api/settings/companion", apiHdr,
+                        "{\"startWithWindows\":true}");
+                    AssertEqual(200, okOn.StatusCode, "T79: Enabling startWithWindows succeeds when registry call succeeds");
+                    Dictionary<string, object> okOnDict = UnifiedJson.AsDict(UnifiedJson.Parse(okOn.BodyText));
+                    AssertEqual(true, UnifiedJson.GetBool(okOnDict, "startWithWindows", false), "T79: startWithWindows=true persisted");
+                    AssertEqual(false, UnifiedJson.GetBool(okOnDict, "startupRollback", false), "T79: No rollback when registry call succeeds");
+
+                    host.SetStartWithWindowsOverride = delegate(bool en, string exe) { return false; };
+                    RawHttpTestResponse failOff = SendRawTcpHttp(host.Port, null, "POST", "/api/settings/companion", apiHdr,
+                        "{\"startWithWindows\":false}");
+                    AssertEqual(200, failOff.StatusCode, "T79: POST /api/settings/companion rollback (true->false) returns 200");
+                    Dictionary<string, object> failOffDict = UnifiedJson.AsDict(UnifiedJson.Parse(failOff.BodyText));
+                    AssertTrue(UnifiedJson.GetBool(failOffDict, "startupRollback", false), "T79: startupRollback=true on true->false failure");
+                    AssertTrue(!string.IsNullOrEmpty(UnifiedJson.GetString(failOffDict, "startupError", "")), "T79: startupError populated on true->false failure");
+                    AssertEqual(true, UnifiedJson.GetBool(failOffDict, "startWithWindows", false), "T79: startWithWindows rolled back to previous true");
+
+                    string diskSettings2 = File.ReadAllText(host.SnapshotService.SettingsFilePath, Encoding.UTF8);
+                    Dictionary<string, object> diskDict2 = UnifiedJson.AsDict(UnifiedJson.Parse(diskSettings2));
+                    AssertEqual(true, UnifiedJson.GetBool(diskDict2, "startWithWindows", false), "T79: Disk settings file persisted rolled-back startWithWindows=true");
+
+                    host.SetStartWithWindowsOverride = null;
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T80_ACC06_ACC10_SecurityNormalizationAndTokenBudget()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t80_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string cfgDir = Path.Combine(geminiDir, "config");
+                string projDir = Path.Combine(cfgDir, "projects");
+                string vaultDir = Path.Combine(sb, "Vault");
+
+                string someRandomInHome = Path.Combine(homeDir, "SomeRandomFolder");
+                string someRandomOutside = Path.Combine(sb, "OutsideRandomFolder");
+                string regWsDir = Path.Combine(sb, "RegWs80");
+                string varWsDir = Path.Combine(sb, "Proj%VAR%80");
+                string ampWsDir = Path.Combine(sb, "Proj&80");
+                string emptyLocalApp = Path.Combine(sb, "EmptyLocalApp");
+
+                Directory.CreateDirectory(Path.Combine(geminiDir, "antigravity"));
+                Directory.CreateDirectory(projDir);
+                Directory.CreateDirectory(vaultDir);
+                Directory.CreateDirectory(someRandomInHome);
+                Directory.CreateDirectory(someRandomOutside);
+                Directory.CreateDirectory(regWsDir);
+                Directory.CreateDirectory(varWsDir);
+                Directory.CreateDirectory(ampWsDir);
+                Directory.CreateDirectory(emptyLocalApp);
+
+                File.WriteAllText(Path.Combine(projDir, "p80reg.json"),
+                    WorkspaceService.GenerateStandardProjectJson("p80reg", "RegWs80", regWsDir), Encoding.UTF8);
+                File.WriteAllText(Path.Combine(projDir, "p80var.json"),
+                    WorkspaceService.GenerateStandardProjectJson("p80var", "Proj%VAR%80", varWsDir), Encoding.UTF8);
+                File.WriteAllText(Path.Combine(projDir, "p80amp.json"),
+                    WorkspaceService.GenerateStandardProjectJson("p80amp", "Proj&80", ampWsDir), Encoding.UTF8);
+
+                string ideBinDir = Path.Combine(geminiDir, "antigravity-ide", "bin");
+                Directory.CreateDirectory(ideBinDir);
+                File.WriteAllText(Path.Combine(ideBinDir, "antigravity-ide.cmd"), "@echo off\r\n", Encoding.UTF8);
+
+                // ACC-06: Drive root normalization & explorer drive root handling
+                AssertEqual(@"D:\", WorkspaceLauncherService.NormalizeDirArg(@"D:\"), "T80: NormalizeDirArg preserves D:\\");
+                AssertEqual(@"D:\", WorkspaceLauncherService.NormalizeDirArg(@"D:/"), "T80: NormalizeDirArg converts D:/ to D:\\");
+                AssertEqual(@"d:\", WorkspaceLauncherService.NormalizeDirArg(@"d:\"), "T80: NormalizeDirArg preserves lowercase drive root d:\\");
+                AssertEqual(@"D:\Sub\Dir", WorkspaceLauncherService.NormalizeDirArg(@"D:\Sub\Dir\"), "T80: NormalizeDirArg strips trailing slash on non-root");
+
+                string exCanon, exArgs, exErr;
+                int exCode;
+                AssertTrue(ApiRouter.TryValidateExplorerTarget(@"D:\", new string[] { @"D:\" }, out exCanon, out exArgs, out exCode, out exErr),
+                    "T80: TryValidateExplorerTarget allows registered drive root");
+                AssertEqual(@"D:\", exArgs, "T80: TryValidateExplorerTarget preserves drive root backslash in explorerArgs");
+                AssertTrue(ApiRouter.TryValidateExplorerTarget(@"D:/", new string[] { @"D:\" }, out exCanon, out exArgs, out exCode, out exErr),
+                    "T80: TryValidateExplorerTarget allows D:/ normalized against D:\\");
+                AssertEqual(@"D:\", exArgs, "T80: TryValidateExplorerTarget normalizes D:/ to D:\\");
+
+                // ACC-06: .cmd %VAR% and & metacharacter detection & rejection (400)
+                AssertTrue(WorkspaceLauncherService.ContainsUnsafeCmdMetacharacters(@"C:\Work\Proj%VAR%"),
+                    "T80: Detects %VAR% metacharacter");
+                AssertTrue(WorkspaceLauncherService.ContainsUnsafeCmdMetacharacters(@"C:\Work\Proj&80"),
+                    "T80: Detects & metacharacter");
+
+                WorkspaceLaunchResult varCliRes = WorkspaceLauncherService.LaunchWorkspace(geminiDir, homeDir, vaultDir, varWsDir, "cli");
+                AssertTrue(!varCliRes.Ok && varCliRes.HttpStatusCode == 400, "T80: Rejects %VAR% in .cmd CLI launch with HTTP 400");
+
+                WorkspaceLaunchResult varIdeCmdRes = WorkspaceLauncherService.LaunchWorkspace(geminiDir, homeDir, vaultDir, varWsDir, "ide", emptyLocalApp, "");
+                AssertTrue(!varIdeCmdRes.Ok && varIdeCmdRes.HttpStatusCode == 400, "T80: Rejects %VAR% in IDE .cmd fallback with HTTP 400");
+
+                WorkspaceLaunchResult ampCliRes = WorkspaceLauncherService.LaunchWorkspace(geminiDir, homeDir, vaultDir, ampWsDir, "cli");
+                AssertTrue(!ampCliRes.Ok && ampCliRes.HttpStatusCode == 400, "T80: Rejects & in .cmd CLI launch with HTTP 400");
+
+                WorkspaceLaunchResult ampIdeCmdRes = WorkspaceLauncherService.LaunchWorkspace(geminiDir, homeDir, vaultDir, ampWsDir, "ide", emptyLocalApp, "");
+                AssertTrue(!ampIdeCmdRes.Ok && ampIdeCmdRes.HttpStatusCode == 400, "T80: Rejects & in IDE .cmd fallback with HTTP 400");
+
+                // ACC-10: CJK & ASCII EstimateTokenCount unit tests + threshold=0 vs exact boundary vs custom threshold
+                AssertEqual(0, AntigravityConfigService.EstimateTokenCount(null), "T80: EstimateTokenCount(null) == 0");
+                AssertEqual(0, AntigravityConfigService.EstimateTokenCount(""), "T80: EstimateTokenCount(\"\") == 0");
+                AssertEqual(1, AntigravityConfigService.EstimateTokenCount("a"), "T80: EstimateTokenCount 1 ASCII char == 1");
+                AssertEqual(1, AntigravityConfigService.EstimateTokenCount("中"), "T80: EstimateTokenCount 1 CJK char == 1");
+                AssertEqual(100, AntigravityConfigService.EstimateTokenCount(new string('a', 400)), "T80: EstimateTokenCount 400 ASCII chars == 100");
+                AssertEqual(100, AntigravityConfigService.EstimateTokenCount(new string('中', 150)), "T80: EstimateTokenCount 150 CJK chars == 100");
+                AssertEqual(30, AntigravityConfigService.EstimateTokenCount(new string('中', 30) + new string('a', 40)),
+                    "T80: EstimateTokenCount mixed 30 CJK + 40 ASCII == 30");
+
+                string geminiMdPath = Path.Combine(geminiDir, "GEMINI.md");
+                File.WriteAllText(geminiMdPath, new string('中', 300), Encoding.UTF8); // 300 CJK chars => 200 tokens
+
+                CockpitSnapshot snapZero = AntigravityConfigService.ScanCockpit(geminiDir, homeDir, vaultDir, 0);
+                AssertEqual(0, snapZero.OverBudgetCount, "T80: ScanCockpit threshold=0 yields OverBudgetCount=0");
+                AssertTrue(snapZero.Rules.Count == 1 && !snapZero.Rules[0].OverBudget && snapZero.Rules[0].EstimatedTokens == 200,
+                    "T80: ScanCockpit threshold=0 rule OverBudget=false with EstimatedTokens=200");
+
+                CockpitSnapshot snapEqual = AntigravityConfigService.ScanCockpit(geminiDir, homeDir, vaultDir, 200);
+                AssertEqual(0, snapEqual.OverBudgetCount, "T80: ScanCockpit exact threshold==tokens (200==200) is NOT OverBudget");
+
+                CockpitSnapshot snapOver1 = AntigravityConfigService.ScanCockpit(geminiDir, homeDir, vaultDir, 199);
+                AssertEqual(1, snapOver1.OverBudgetCount, "T80: ScanCockpit threshold=199 flags 200 tokens as OverBudget");
+
+                CockpitSnapshot snapCustom = AntigravityConfigService.ScanCockpit(geminiDir, homeDir, vaultDir, 150);
+                AssertEqual(1, snapCustom.OverBudgetCount, "T80: ScanCockpit threshold=150 yields OverBudgetCount=1");
+                AssertTrue(snapCustom.Rules.Count == 1 && snapCustom.Rules[0].OverBudget,
+                    "T80: ScanCockpit threshold=150 rule OverBudget=true");
+
+                EditorFileResult efZero = AntigravityConfigService.ReadAllowedCustomizationFile(geminiDir, homeDir, vaultDir, geminiMdPath, 0);
+                AssertTrue(efZero.Ok && !efZero.OverBudget && efZero.EstimatedTokens == 200,
+                    "T80: ReadAllowedCustomizationFile threshold=0 OverBudget=false");
+                EditorFileResult efEqual = AntigravityConfigService.ReadAllowedCustomizationFile(geminiDir, homeDir, vaultDir, geminiMdPath, 200);
+                AssertTrue(efEqual.Ok && !efEqual.OverBudget && efEqual.EstimatedTokens == 200,
+                    "T80: ReadAllowedCustomizationFile exact threshold==tokens (200==200) OverBudget=false");
+                EditorFileResult efCustom = AntigravityConfigService.ReadAllowedCustomizationFile(geminiDir, homeDir, vaultDir, geminiMdPath, 150);
+                AssertTrue(efCustom.Ok && efCustom.OverBudget && efCustom.EstimatedTokens == 200,
+                    "T80: ReadAllowedCustomizationFile threshold=150 OverBudget=true");
+
+                // HTTP E2E for ACC-06 (403 on unregistered SomeRandomFolder & 400 on %VAR%/&) + ACC-10 (HTTP threshold toggling)
+                string token = "t80_tok";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, vaultDir, 0, token))
+                {
+                    host.Start();
+
+                    // Unregistered %USERPROFILE%\SomeRandomFolder (and homeDir itself) -> 403 on BOTH /api/workspace/launch & /api/native/open-in-explorer
+                    RawHttpTestResponse launchHomeRoot = SendRawTcpHttp(host.Port, null, "POST", "/api/workspace/launch", apiHdr,
+                        "{\"path\":\"" + UnifiedJson.EscapeString(homeDir) + "\",\"tool\":\"explorer\"}");
+                    AssertEqual(403, launchHomeRoot.StatusCode, "T80: POST /api/workspace/launch rejects HomePath itself with 403");
+
+                    RawHttpTestResponse launchHomeRand = SendRawTcpHttp(host.Port, null, "POST", "/api/workspace/launch", apiHdr,
+                        "{\"path\":\"" + UnifiedJson.EscapeString(someRandomInHome) + "\",\"tool\":\"explorer\"}");
+                    AssertEqual(403, launchHomeRand.StatusCode, "T80: POST /api/workspace/launch rejects Home\\SomeRandomFolder with 403");
+
+                    RawHttpTestResponse launchOutRand = SendRawTcpHttp(host.Port, null, "POST", "/api/workspace/launch", apiHdr,
+                        "{\"path\":\"" + UnifiedJson.EscapeString(someRandomOutside) + "\",\"tool\":\"explorer\"}");
+                    AssertEqual(403, launchOutRand.StatusCode, "T80: POST /api/workspace/launch rejects OutsideRandomFolder with 403");
+
+                    RawHttpTestResponse expHomeRand = SendRawTcpHttp(host.Port, null, "POST", "/api/native/open-in-explorer", apiHdr,
+                        "{\"path\":\"" + UnifiedJson.EscapeString(someRandomInHome) + "\"}");
+                    AssertEqual(403, expHomeRand.StatusCode, "T80: POST /api/native/open-in-explorer rejects Home\\SomeRandomFolder with 403");
+
+                    RawHttpTestResponse expOutRand = SendRawTcpHttp(host.Port, null, "POST", "/api/native/open-in-explorer", apiHdr,
+                        "{\"path\":\"" + UnifiedJson.EscapeString(someRandomOutside) + "\"}");
+                    AssertEqual(403, expOutRand.StatusCode, "T80: POST /api/native/open-in-explorer rejects OutsideRandomFolder with 403");
+
+                    // Registered .cmd %VAR% / & metacharacter rejection via HTTP
+                    RawHttpTestResponse launchVarHttp = SendRawTcpHttp(host.Port, null, "POST", "/api/workspace/launch", apiHdr,
+                        "{\"path\":\"" + UnifiedJson.EscapeString(varWsDir) + "\",\"tool\":\"cli\"}");
+                    AssertEqual(400, launchVarHttp.StatusCode, "T80: HTTP POST /api/workspace/launch rejects %VAR% in .cmd path with 400");
+
+                    RawHttpTestResponse launchAmpHttp = SendRawTcpHttp(host.Port, null, "POST", "/api/workspace/launch", apiHdr,
+                        "{\"path\":\"" + UnifiedJson.EscapeString(ampWsDir) + "\",\"tool\":\"cli\"}");
+                    AssertEqual(400, launchAmpHttp.StatusCode, "T80: HTTP POST /api/workspace/launch rejects & in .cmd path with 400");
+
+                    // ACC-10 via HTTP: threshold=0 -> overBudget=false; custom threshold=150 -> overBudget=true
+                    RawHttpTestResponse sum0 = SendRawTcpHttp(host.Port, null, "GET", "/api/cockpit/summary", apiHdr, null);
+                    AssertEqual(200, sum0.StatusCode, "T80: GET /api/cockpit/summary (threshold=0) returns 200");
+                    Dictionary<string, object> sum0Dict = UnifiedJson.AsDict(UnifiedJson.Parse(sum0.BodyText));
+                    Dictionary<string, object> tb0 = UnifiedJson.AsDict(sum0Dict["tokenBudget"]);
+                    AssertEqual(0, UnifiedJson.GetInt(tb0, "threshold", -1), "T80: HTTP summary default threshold=0");
+                    AssertEqual(0, UnifiedJson.GetInt(tb0, "overBudgetCount", -1), "T80: HTTP summary threshold=0 overBudgetCount=0");
+
+                    RawHttpTestResponse updThresh = SendRawTcpHttp(host.Port, null, "POST", "/api/settings/companion", apiHdr,
+                        "{\"ruleTokenReferenceThreshold\":150}");
+                    AssertEqual(200, updThresh.StatusCode, "T80: Set ruleTokenReferenceThreshold=150 returns 200");
+
+                    RawHttpTestResponse sum150 = SendRawTcpHttp(host.Port, null, "GET", "/api/cockpit/summary", apiHdr, null);
+                    AssertEqual(200, sum150.StatusCode, "T80: GET /api/cockpit/summary (threshold=150) returns 200");
+                    Dictionary<string, object> sum150Dict = UnifiedJson.AsDict(UnifiedJson.Parse(sum150.BodyText));
+                    Dictionary<string, object> tb150 = UnifiedJson.AsDict(sum150Dict["tokenBudget"]);
+                    AssertEqual(150, UnifiedJson.GetInt(tb150, "threshold", -1), "T80: HTTP summary custom threshold=150");
+                    AssertEqual(1, UnifiedJson.GetInt(tb150, "overBudgetCount", -1), "T80: HTTP summary threshold=150 overBudgetCount=1");
+
+                    RawHttpTestResponse ed150 = SendRawTcpHttp(host.Port, null, "GET",
+                        "/api/editor/file?path=" + Uri.EscapeDataString(geminiMdPath), apiHdr, null);
+                    AssertEqual(200, ed150.StatusCode, "T80: GET /api/editor/file returns 200");
+                    Dictionary<string, object> ed150Dict = UnifiedJson.AsDict(UnifiedJson.Parse(ed150.BodyText));
+                    AssertEqual(200, UnifiedJson.GetInt(ed150Dict, "estimatedTokens", 0), "T80: HTTP editor/file estimatedTokens=200");
+                    AssertEqual(true, UnifiedJson.GetBool(ed150Dict, "overBudget", false), "T80: HTTP editor/file overBudget=true at threshold=150");
+
+                    RawHttpTestResponse edSave150 = SendRawTcpHttp(host.Port, null, "POST", "/api/editor/save", apiHdr,
+                        "{\"path\":\"" + UnifiedJson.EscapeString(geminiMdPath) + "\",\"content\":\"" + new string('中', 300) + "\"}");
+                    AssertEqual(200, edSave150.StatusCode, "T80: POST /api/editor/save (threshold=150) returns 200");
+                    Dictionary<string, object> edSave150Dict = UnifiedJson.AsDict(UnifiedJson.Parse(edSave150.BodyText));
+                    AssertEqual(true, UnifiedJson.GetBool(edSave150Dict, "overBudget", false), "T80: HTTP editor/save overBudget=true at threshold=150");
+
+                    RawHttpTestResponse resetThresh = SendRawTcpHttp(host.Port, null, "POST", "/api/settings/companion", apiHdr,
+                        "{\"ruleTokenReferenceThreshold\":0}");
+                    AssertEqual(200, resetThresh.StatusCode, "T80: Reset ruleTokenReferenceThreshold=0 returns 200");
+                    RawHttpTestResponse edSave0 = SendRawTcpHttp(host.Port, null, "POST", "/api/editor/save", apiHdr,
+                        "{\"path\":\"" + UnifiedJson.EscapeString(geminiMdPath) + "\",\"content\":\"" + new string('中', 300) + "\"}");
+                    AssertEqual(200, edSave0.StatusCode, "T80: POST /api/editor/save (threshold=0) returns 200");
+                    Dictionary<string, object> edSave0Dict = UnifiedJson.AsDict(UnifiedJson.Parse(edSave0.BodyText));
+                    AssertEqual(false, UnifiedJson.GetBool(edSave0Dict, "overBudget", true), "T80: HTTP editor/save overBudget=false when threshold=0");
 
                     host.Stop();
                 }

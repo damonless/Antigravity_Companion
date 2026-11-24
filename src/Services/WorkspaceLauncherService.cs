@@ -224,10 +224,34 @@ namespace AntigravityCompanion
             return true;
         }
 
+        private static readonly char[] UnsafeCmdArgChars = new char[] { '%', '&', '|', '<', '>', '^', '"', '\r', '\n' };
+
+        internal static string NormalizeDirArg(string canonicalDir)
+        {
+            if (string.IsNullOrWhiteSpace(canonicalDir)) return string.Empty;
+            string clean = canonicalDir.Trim().TrimEnd('\\', '/');
+            if (clean.Length == 2 && clean[1] == ':')
+                clean += "\\";
+            return clean;
+        }
+
+        private static string FormatDirectoryArgForCmdLine(string normalizedDir)
+        {
+            if (string.IsNullOrEmpty(normalizedDir)) return "\"\"";
+            if (normalizedDir.Length == 3 && normalizedDir[1] == ':' && normalizedDir[2] == '\\')
+                return normalizedDir;
+            return "\"" + normalizedDir + "\"";
+        }
+
+        internal static bool ContainsUnsafeCmdMetacharacters(string dir)
+        {
+            if (string.IsNullOrEmpty(dir)) return false;
+            return dir.IndexOfAny(UnsafeCmdArgChars) >= 0;
+        }
+
         private static List<string> CollectAllowedWorkspaceRoots(string geminiPath, string homePath, string repoPath)
         {
             List<string> roots = new List<string>();
-            if (!string.IsNullOrWhiteSpace(homePath)) roots.Add(homePath);
             if (!string.IsNullOrWhiteSpace(geminiPath)) roots.Add(geminiPath);
             if (!string.IsNullOrWhiteSpace(repoPath)) roots.Add(repoPath);
 
@@ -266,6 +290,18 @@ namespace AntigravityCompanion
             string rawTargetDir,
             string toolMode)
         {
+            return LaunchWorkspace(geminiPath, homePath, repoPath, rawTargetDir, toolMode, null, null);
+        }
+
+        internal static WorkspaceLaunchResult LaunchWorkspace(
+            string geminiPath,
+            string homePath,
+            string repoPath,
+            string rawTargetDir,
+            string toolMode,
+            string localAppDataOverride,
+            string pathEnvOverride)
+        {
             WorkspaceLaunchResult res = new WorkspaceLaunchResult();
             string mode = string.IsNullOrWhiteSpace(toolMode) ? "ide" : toolMode.Trim().ToLowerInvariant();
             res.Tool = mode;
@@ -281,9 +317,10 @@ namespace AntigravityCompanion
                 return res;
             }
 
-            ResolvedLaunchTools tools = ResolveLaunchTools(geminiPath);
+            ResolvedLaunchTools tools = ResolveLaunchTools(geminiPath, localAppDataOverride, pathEnvOverride);
+            string normDir = NormalizeDirArg(canonicalDir);
             ProcessStartInfo psi = new ProcessStartInfo();
-            psi.WorkingDirectory = canonicalDir;
+            psi.WorkingDirectory = normDir;
 
             if (mode == "explorer")
             {
@@ -294,10 +331,8 @@ namespace AntigravityCompanion
                     res.Error = "未找到 explorer.exe。";
                     return res;
                 }
-                string cleanDir = canonicalDir.TrimEnd('\\', '/');
-                if (cleanDir.Length == 2 && cleanDir[1] == ':') cleanDir += "\\";
                 psi.FileName = tools.ExplorerExe;
-                psi.Arguments = "\"" + cleanDir + "\"";
+                psi.Arguments = FormatDirectoryArgForCmdLine(normDir);
                 psi.UseShellExecute = false;
             }
             else if (mode == "powershell" || mode == "terminal")
@@ -309,7 +344,7 @@ namespace AntigravityCompanion
                     res.Error = "未找到 powershell.exe。";
                     return res;
                 }
-                string cleanDir = canonicalDir.Replace("'", "''");
+                string cleanDir = normDir.Replace("'", "''");
                 psi.FileName = tools.PowerShellExe;
                 psi.Arguments = "-NoExit -Command \"Set-Location -LiteralPath '" + cleanDir + "'\"";
                 psi.UseShellExecute = true;
@@ -323,8 +358,15 @@ namespace AntigravityCompanion
                     res.Error = "未找到 antigravity-ide.cmd，无法启动 CLI 工作区。";
                     return res;
                 }
+                if (ContainsUnsafeCmdMetacharacters(normDir))
+                {
+                    res.Ok = false;
+                    res.HttpStatusCode = 400;
+                    res.Error = "工作区路径包含不安全的命令解释器元字符，已拒绝通过 .cmd 启动。";
+                    return res;
+                }
                 psi.FileName = tools.AntigravityIdeCmd;
-                psi.Arguments = "\"" + canonicalDir.TrimEnd('\\', '/') + "\"";
+                psi.Arguments = FormatDirectoryArgForCmdLine(normDir);
                 psi.UseShellExecute = true;
             }
             else if (mode == "ide")
@@ -337,9 +379,18 @@ namespace AntigravityCompanion
                     res.Error = "未找到 Antigravity.exe 或 antigravity-ide.cmd。";
                     return res;
                 }
+                bool isCmdTarget = exe.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) ||
+                                   exe.EndsWith(".bat", StringComparison.OrdinalIgnoreCase);
+                if (isCmdTarget && ContainsUnsafeCmdMetacharacters(normDir))
+                {
+                    res.Ok = false;
+                    res.HttpStatusCode = 400;
+                    res.Error = "工作区路径包含不安全的命令解释器元字符，已拒绝通过 .cmd 启动。";
+                    return res;
+                }
                 psi.FileName = exe;
-                psi.Arguments = "\"" + canonicalDir.TrimEnd('\\', '/') + "\"";
-                psi.UseShellExecute = exe.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase);
+                psi.Arguments = FormatDirectoryArgForCmdLine(normDir);
+                psi.UseShellExecute = isCmdTarget;
             }
             else
             {

@@ -239,7 +239,15 @@ namespace AntigravityCompanion
             _lastActivityTicksUtc = DateTime.UtcNow.Ticks;
 
             _sseHub = new SseHub(TouchActivityTimestampOnly);
-            _snapshotService = new ScheduledSnapshotService(_homePath, _geminiPath, snapshotSettingsPath, TryAcquireJob, ReleaseJob, AppendLog);
+            _snapshotService = new ScheduledSnapshotService(
+                _homePath,
+                _geminiPath,
+                snapshotSettingsPath,
+                TryAcquireJob,
+                ReleaseJob,
+                AppendLog,
+                _mutationLock,
+                delegate() { return IsIdeRunning(); });
             _apiRouter = new ApiRouter(this);
         }
 
@@ -263,6 +271,22 @@ namespace AntigravityCompanion
         internal object StateLock { get { return _stateLock; } }
         internal object MutationLock { get { return _mutationLock; } }
         internal CompanionCommandDispatcher Dispatcher { get { return _apiRouter.Dispatcher; } }
+        internal Func<bool> IdeRunningOverride { get; set; }
+        internal Func<bool, string, bool> SetStartWithWindowsOverride { get; set; }
+
+        internal bool IsIdeRunning()
+        {
+            Func<bool> ov = IdeRunningOverride;
+            return ov != null ? ov() : ProcessGuardService.IsAntigravityRunning();
+        }
+
+        internal bool TryApplyStartWithWindows(bool enable, string exePath)
+        {
+            Func<bool, string, bool> ov = SetStartWithWindowsOverride;
+            if (ov != null) return ov(enable, exePath);
+            if (!_isDefaultHome) return true;
+            return ScheduledSnapshotService.SetStartWithWindows(enable, exePath);
+        }
 
         internal Dictionary<string, ProjectMetadata> LocalProjectsUnsafe { get { return _localProjects; } }
         internal List<ConversationSummaryInfo> LocalSummariesUnsafe { get { return _localSummaries; } }
@@ -878,9 +902,11 @@ namespace AntigravityCompanion
             map["/js/views/overview.js"] = new string[] { "js/views/overview.js", "application/javascript; charset=utf-8" };
             map["/js/views/cockpit.js"] = new string[] { "js/views/cockpit.js", "application/javascript; charset=utf-8" };
             map["/js/views/sessions.js"] = new string[] { "js/views/sessions.js", "application/javascript; charset=utf-8" };
+            map["/js/views/rename.js"] = new string[] { "js/views/rename.js", "application/javascript; charset=utf-8" };
             map["/js/views/storage.js"] = new string[] { "js/views/storage.js", "application/javascript; charset=utf-8" };
             map["/js/views/vault.js"] = new string[] { "js/views/vault.js", "application/javascript; charset=utf-8" };
             map["/js/views/backup.js"] = new string[] { "js/views/backup.js", "application/javascript; charset=utf-8" };
+            map["/js/views/settings.js"] = new string[] { "js/views/settings.js", "application/javascript; charset=utf-8" };
             return map;
         }
 
