@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "defaultFormat": "【{project}】{topic}",
+  "preserveExistingTag": true,
+  "includeGitBranch": true,
+  "multiRepoRules": [],
+  "projectAliases": {}
+}

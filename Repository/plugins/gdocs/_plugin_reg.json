@@ -1,8 +1,0 @@
-﻿{
-      "enabled": false,
-      "installedFrom": {
-        "id": "antigravity-plugins-official/plugin/gdocs",
-        "marketplace": "antigravity-plugins-official",
-        "version": "0.0.9"
-      }
-    }

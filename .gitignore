@@ -16,6 +16,8 @@
 /*.tar
 /*.gz
 /*.bak
+/Vault/
+/vault/
 
 # Temporary Files & Runtime Logs
 *.log

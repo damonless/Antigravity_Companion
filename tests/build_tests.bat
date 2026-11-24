@@ -1,7 +1,7 @@
 @echo off
 setlocal
 echo ===================================================================
-echo   Compiling Antigravity Companion Production E2E Test Suite
+echo   Compiling Antigravity Companion V1.0 Production E2E Test Suite
 echo ===================================================================
 
 set "CSC=%SystemRoot%\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
@@ -20,7 +20,8 @@ if not exist "%CSC%" (
     exit /b 1
 )
 
-"%CSC%" /codepage:65001 /utf8output /target:exe /platform:anycpu /optimize+ /debug:pdbonly /main:AntigravityCompanion.Tests.TestRunner /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll /res:"%~dp0..\ui\index.html",AntigravityCompanion.ui.index.html /res:"%~dp0..\ui\styles.css",AntigravityCompanion.ui.styles.css /res:"%~dp0..\ui\app.js",AntigravityCompanion.ui.app.js /out:"%~dp0TestRunner.exe" "%~dp0..\AppServices.cs" "%~dp0..\CapabilityRepositoryManager.cs" "%~dp0..\LocalWebHost.cs" "%~dp0..\LocalWorkspaceManager.cs" "%~dp0..\MainForm.cs" "%~dp0..\ProtoAstCodec.cs" "%~dp0..\SessionMetadataExtractor.cs" "%~dp0..\SessionRenameEngine.cs" "%~dp0..\StreamingZipIndexReader.cs" "%~dp0..\TranscriptMarkdownExporter.cs" "%~dp0..\VisualDiffEngine.cs" "%~dp0..\WebShellLauncher.cs" "%~dp0TestRunner.cs"
+rem Includes Stage 4 services (ScheduledSnapshotService.cs, TrayHost.cs) and all 12 modular UI embedded resources
+"%CSC%" /codepage:65001 /utf8output /target:exe /platform:anycpu /optimize+ /debug:pdbonly /main:AntigravityCompanion.Tests.TestRunner /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll /res:"%~dp0..\ui\index.html",AntigravityCompanion.ui.index.html /res:"%~dp0..\ui\styles.css",AntigravityCompanion.ui.styles.css /res:"%~dp0..\ui\app.js",AntigravityCompanion.ui.app.js /res:"%~dp0..\ui\js\api.js",AntigravityCompanion.ui.js.api.js /res:"%~dp0..\ui\js\state.js",AntigravityCompanion.ui.js.state.js /res:"%~dp0..\ui\js\components.js",AntigravityCompanion.ui.js.components.js /res:"%~dp0..\ui\js\views\overview.js",AntigravityCompanion.ui.js.views.overview.js /res:"%~dp0..\ui\js\views\cockpit.js",AntigravityCompanion.ui.js.views.cockpit.js /res:"%~dp0..\ui\js\views\sessions.js",AntigravityCompanion.ui.js.views.sessions.js /res:"%~dp0..\ui\js\views\storage.js",AntigravityCompanion.ui.js.views.storage.js /res:"%~dp0..\ui\js\views\vault.js",AntigravityCompanion.ui.js.views.vault.js /res:"%~dp0..\ui\js\views\backup.js",AntigravityCompanion.ui.js.views.backup.js /out:"%~dp0TestRunner.exe" "%~dp0..\src\Program.cs" "%~dp0..\src\Core\*.cs" "%~dp0..\src\Storage\*.cs" "%~dp0..\src\Services\*.cs" "%~dp0..\src\Host\*.cs" "%~dp0..\AssemblyInfo.cs" "%~dp0TestRunner.cs"
 
 if %ERRORLEVEL% neq 0 goto :build_fail
 

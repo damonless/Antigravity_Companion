@@ -21,7 +21,7 @@ namespace AntigravityCompanion.Tests
         {
             Console.OutputEncoding = Encoding.UTF8;
             Console.WriteLine("===============================================================================");
-            Console.WriteLine("  Antigravity Companion V0.8 - Production Code Verification Suite");
+            Console.WriteLine("  Antigravity Companion V1.0 - Production Code Verification Suite");
             Console.WriteLine("===============================================================================");
 
             Stopwatch sw = Stopwatch.StartNew();
@@ -50,13 +50,13 @@ namespace AntigravityCompanion.Tests
             Run("T22_CapabilityRepo_PlaceholdersJsoncEncodedIdAndHooks", T22_CapabilityRepo_PlaceholdersJsoncEncodedIdAndHooks);
             Run("T23_TranscriptMarkdownExporter_StreamingTagsAndFullJsonl", T23_TranscriptMarkdownExporter_StreamingTagsAndFullJsonl);
             Run("T24_VisualDiffEngine_RenameCrossHostAndSameBasename", T24_VisualDiffEngine_RenameCrossHostAndSameBasename);
-            Run("T25_MainForm_PureHelpers_SelectionMoveAndProjectJson", T25_MainForm_PureHelpers_SelectionMoveAndProjectJson);
+            Run("T25_WorkspaceService_ProjectJsonAndBackupSelectionPolicy", T25_WorkspaceService_ProjectJsonAndBackupSelectionPolicy);
             Run("T26_SessionMetadataExtractor_NanoEpochFixed64AndOutsideUri", T26_SessionMetadataExtractor_NanoEpochFixed64AndOutsideUri);
             Run("T27_VisualDiffEngine_CapMissingPathsLocalOnlyCountAndSig", T27_VisualDiffEngine_CapMissingPathsLocalOnlyCountAndSig);
             Run("T28_CapabilityRepo_EncodingBomMultilineJsonAndYaml", T28_CapabilityRepo_EncodingBomMultilineJsonAndYaml);
-            Run("T29_MainForm_FilteredSetsAndHiddenDeletionGuard", T29_MainForm_FilteredSetsAndHiddenDeletionGuard);
+            Run("T29_SessionLifecycle_ProjectIdIsolationAndSubagentDelete", T29_SessionLifecycle_ProjectIdIsolationAndSubagentDelete);
             Run("T30_CapabilityRepo_ScriptPathRegexQuotedEnvAndSpaces", T30_CapabilityRepo_ScriptPathRegexQuotedEnvAndSpaces);
-            Run("T31_MainForm_RelocateCapPathSelectionState", T31_MainForm_RelocateCapPathSelectionState);
+            Run("T31_CapabilityVault_RelocateCapabilityPath_LocalAndRepo", T31_CapabilityVault_RelocateCapabilityPath_LocalAndRepo);
             Run("T32_PbtxtAnnotationCodec_RoundTripAndCreate", T32_PbtxtAnnotationCodec_RoundTripAndCreate);
             Run("T33_SummarySqliteBridge_ThreeLayerAndHybridFts", T33_SummarySqliteBridge_ThreeLayerAndHybridFts);
             Run("T34_AutoTitleSynthesizer_RulesAndSubagentExclusion", T34_AutoTitleSynthesizer_RulesAndSubagentExclusion);
@@ -68,6 +68,38 @@ namespace AntigravityCompanion.Tests
             Run("T40_DirectionalCapabilityDiff_BaselineAndUtcMtime_LineLcsDiff_ReadOnlyGc", T40_DirectionalCapabilityDiff_BaselineAndUtcMtime_LineLcsDiff_ReadOnlyGc);
             Run("T41_LocalWebHost_TcpFraming_AuthSecurity_StaticResources_AndReadApis", T41_LocalWebHost_TcpFraming_AuthSecurity_StaticResources_AndReadApis);
             Run("T42_LocalWebHost_EndToEndMutationSandbox_RenameRollbackCapabilityAndGc", T42_LocalWebHost_EndToEndMutationSandbox_RenameRollbackCapabilityAndGc);
+            Run("T43_P0_1_RelocateProjectPath_NestedGitFolderFolderUri", T43_P0_1_RelocateProjectPath_NestedGitFolderFolderUri);
+            Run("T44_P0_2_P0_8_CapabilityDiff_ConflictNoBaselineAndArchiveIgnoresBaseline", T44_P0_2_P0_8_CapabilityDiff_ConflictNoBaselineAndArchiveIgnoresBaseline);
+            Run("T45_P0_3_CliArtifactsIncludedAndBinDirectoriesExcluded", T45_P0_3_CliArtifactsIncludedAndBinDirectoriesExcluded);
+            Run("T46_P0_4_WalLiveDbAtomicBackup_IntegrityCheckOk", T46_P0_4_WalLiveDbAtomicBackup_IntegrityCheckOk);
+            Run("T47_P0_5_JsoncCommentsPreservedAndSingleTimestampedBackupPerBatch", T47_P0_5_JsoncCommentsPreservedAndSingleTimestampedBackupPerBatch);
+            Run("T48_P0_6_P0_7_SelectiveImportSubagentClosureAndParentIdInSqlite", T48_P0_6_P0_7_SelectiveImportSubagentClosureAndParentIdInSqlite);
+            Run("T49_P1_1_NotFullyIdleLockedVsActionableSeparation", T49_P1_1_NotFullyIdleLockedVsActionableSeparation);
+            Run("T50_P1_2_SlashCommandStripCustomBracketPreserveAndHyphenDedup", T50_P1_2_SlashCommandStripCustomBracketPreserveAndHyphenDedup);
+            Run("T51_P1_4_CapabilitiesRelocateFailureReturnsHttp400", T51_P1_4_CapabilitiesRelocateFailureReturnsHttp400);
+            Run("T52_P1_6_Fts5ZeroHitLikeFallback", T52_P1_6_Fts5ZeroHitLikeFallback);
+            Run("T53_P1_8_ImportedProjectIdRewriteAndOrphanPbtxtExcluded", T53_P1_8_ImportedProjectIdRewriteAndOrphanPbtxtExcluded);
+            Run("T54_P1_10_SseDoneEventOkFalseOnImportError", T54_P1_10_SseDoneEventOkFalseOnImportError);
+            Run("T55_P1_11_BusyJob409DoesNotKillIde", T55_P1_11_BusyJob409DoesNotKillIde);
+            Run("T56_P2_1_PortScopedCookieIsolation", T56_P2_1_PortScopedCookieIsolation);
+            Run("T57_P2_5_AsciiStatusLineAndExplorerPathTraversalRejected", T57_P2_5_AsciiStatusLineAndExplorerPathTraversalRejected);
+            Run("T58_Stage2_ConfigJsonUserSettingsPreserveUnknownKeysAndEnums", T58_Stage2_ConfigJsonUserSettingsPreserveUnknownKeysAndEnums);
+            Run("T59_Stage2_PluginMcpHookToggleRoundTripAndBackups", T59_Stage2_PluginMcpHookToggleRoundTripAndBackups);
+            Run("T60_Stage2_FullOfficialScannerManifestsHooksWorkspaceAndMcpConflicts", T60_Stage2_FullOfficialScannerManifestsHooksWorkspaceAndMcpConflicts);
+            Run("T61_Stage2_McpHealthDoctorStdioMockMissingAndTimeoutCleanup", T61_Stage2_McpHealthDoctorStdioMockMissingAndTimeoutCleanup);
+            Run("T62_Stage2_InlineEditorStrictAllowlistSymlinkAndTokenBudget", T62_Stage2_InlineEditorStrictAllowlistSymlinkAndTokenBudget);
+            Run("T63_Stage2_CockpitHttpApiEndToEndAndWorkspaceLaunchValidation", T63_Stage2_CockpitHttpApiEndToEndAndWorkspaceLaunchValidation);
+            Run("T64_Stage3_StorageAnalyze_ByteAccountingAndTableBreakdown", T64_Stage3_StorageAnalyze_ByteAccountingAndTableBreakdown);
+            Run("T65_Stage3_StorageSlim_Mode5CLiposuctionAndMode5AColdArchivePrune", T65_Stage3_StorageSlim_Mode5CLiposuctionAndMode5AColdArchivePrune);
+            Run("T66_Stage3_BackupTierFastDailyVsFullForensicAndRestoreUserSettings", T66_Stage3_BackupTierFastDailyVsFullForensicAndRestoreUserSettings);
+            Run("T67_Stage3_AntigravityCliAdapter_DiscoverParseTimeoutAndMissing", T67_Stage3_AntigravityCliAdapter_DiscoverParseTimeoutAndMissing);
+            Run("T68_Stage3_HttpStorageAndCliEndpointsEndToEnd", T68_Stage3_HttpStorageAndCliEndpointsEndToEnd);
+            Run("T69_Stage3_LegacyCliArchivePruneAndCompleteOrphanGc", T69_Stage3_LegacyCliArchivePruneAndCompleteOrphanGc);
+            Run("T70_Stage4_ScheduledSnapshotService_SettingsPersistenceRunAndRollingCleanup", T70_Stage4_ScheduledSnapshotService_SettingsPersistenceRunAndRollingCleanup);
+            Run("T71_Stage4_HttpCompanionSettingsAndSnapshotEndpointsEndToEnd", T71_Stage4_HttpCompanionSettingsAndSnapshotEndpointsEndToEnd);
+            Run("T72_Stage4_HttpEmbeddedUiAssetsServed", T72_Stage4_HttpEmbeddedUiAssetsServed);
+            Run("T73_Stage4_TrayHost_HotkeyParserAndMenuState", T73_Stage4_TrayHost_HotkeyParserAndMenuState);
+            Run("T74_Stage4_CompanionCommandDispatcher_RegistrationParity", T74_Stage4_CompanionCommandDispatcher_RegistrationParity);
 
             sw.Stop();
             Console.WriteLine("-------------------------------------------------------------------------------");
@@ -441,7 +473,7 @@ namespace AntigravityCompanion.Tests
                 AssertEqual(3, res.DeletedBrainDirsCount, "Should delete 3 brain directories");
                 AssertEqual(1, res.DeletedProjectJsonCount, "Should delete proj-invert.json");
                 AssertTrue(res.FreedBytes > 0, "FreedBytes > 0");
-                AssertTrue(File.Exists(pbPath + ".bak"), ".pb.bak backup created");
+                AssertTrue(Directory.GetFiles(Path.GetDirectoryName(pbPath), Path.GetFileName(pbPath) + ".bak.*").Length >= 1, ".pb.bak.* timestamped backup created");
 
                 List<ConversationSummaryInfo> remaining = SessionMetadataExtractor.ExtractSummaries(File.ReadAllBytes(pbPath), localProjects);
                 AssertEqual(1, remaining.Count, "Only 1 session remains in .pb");
@@ -665,8 +697,8 @@ namespace AntigravityCompanion.Tests
                 File.WriteAllText(Path.Combine(projDir, "p-1.json"), "{\"id\":\"p-1\",\"name\":\"Proj1\",\"folderUri\":\"file:///c:/Proj1\"}", Encoding.UTF8);
                 File.WriteAllText(Path.Combine(projDir, "p-2.json"), "{\"id\":\"p-2\",\"name\":\"Proj2\",\"folderUri\":\"file:///c:/Proj2\"}", Encoding.UTF8);
 
-                File.WriteAllText(Path.Combine(convDir, cid1 + ".db"), "DB1", Encoding.UTF8);
-                File.WriteAllText(Path.Combine(convDir, cid2 + ".db"), "DB2", Encoding.UTF8);
+                CreateMinimalValidSqliteDb(Path.Combine(convDir, cid1 + ".db"), cid1);
+                CreateMinimalValidSqliteDb(Path.Combine(convDir, cid2 + ".db"), cid2);
                 Directory.CreateDirectory(Path.Combine(brainDir, cid1));
                 File.WriteAllText(Path.Combine(brainDir, cid1, "plan.md"), "# Plan 1", Encoding.UTF8);
                 Directory.CreateDirectory(Path.Combine(brainDir, cid2));
@@ -890,7 +922,7 @@ namespace AntigravityCompanion.Tests
 
                 // Verify Machine B's mcp_config.json now has BOTH "existing-mcp" AND "evo-kernel" with D:/Users/MachineB path!
                 string mergedMcpB = File.ReadAllText(Path.Combine(geminiB, "config", "mcp_config.json"), Encoding.UTF8);
-                Dictionary<string, string> mcpEntriesB = JsonKeyManipulator.ExtractObjectEntries(mergedMcpB, "mcpServers");
+                Dictionary<string, string> mcpEntriesB = CapabilityVaultService.ExtractObjectEntries(mergedMcpB, "mcpServers");
                 AssertEqual(2, mcpEntriesB.Count, "Key-level JSON merge preserved existing-mcp and added evo-kernel");
                 AssertTrue(mcpEntriesB.ContainsKey("existing-mcp"), "existing-mcp untouched");
                 AssertTrue(mcpEntriesB.ContainsKey("evo-kernel"), "evo-kernel merged in");
@@ -898,7 +930,7 @@ namespace AntigravityCompanion.Tests
 
                 // Verify Machine B's hooks.json has BOTH "existing-hook" AND "evo-hook", plus companion script in config/
                 string mergedHooksB = File.ReadAllText(Path.Combine(geminiB, "config", "hooks.json"), Encoding.UTF8);
-                Dictionary<string, string> hookEntriesB = JsonKeyManipulator.ExtractObjectEntries(mergedHooksB, null);
+                Dictionary<string, string> hookEntriesB = CapabilityVaultService.ExtractObjectEntries(mergedHooksB, null);
                 AssertEqual(2, hookEntriesB.Count, "Key-level JSON merge preserved existing-hook and added evo-hook");
                 AssertTrue(File.Exists(Path.Combine(geminiB, "config", "evo_hook.mjs")), "Companion hook script unpacked to Machine B config/");
 
@@ -911,7 +943,7 @@ namespace AntigravityCompanion.Tests
                 // Delete single MCP "evo-kernel" from Machine B and verify "existing-mcp" remains
                 CapabilityItem toDel = localCapsB.Find(x => x.Kind == CapabilityKind.McpServer && x.Id == "evo-kernel");
                 CapabilityRepositoryManager.DeleteCapabilitiesFromLocal(geminiB, new List<CapabilityItem> { toDel });
-                Dictionary<string, string> afterDelMcp = JsonKeyManipulator.ExtractObjectEntries(
+                Dictionary<string, string> afterDelMcp = CapabilityVaultService.ExtractObjectEntries(
                     File.ReadAllText(Path.Combine(geminiB, "config", "mcp_config.json"), Encoding.UTF8), "mcpServers");
                 AssertEqual(1, afterDelMcp.Count, "Only 1 MCP remains after deleting evo-kernel");
                 AssertTrue(afterDelMcp.ContainsKey("existing-mcp"), "Sibling existing-mcp still intact");
@@ -1242,8 +1274,8 @@ namespace AntigravityCompanion.Tests
                 File.WriteAllBytes(pbPath, ProtoCodec.Encode(new List<ProtoNode> { p1, p2 }));
                 File.WriteAllText(Path.Combine(projDir, "id-disk-a.json"), "{\"id\":\"id-disk-a\",\"name\":\"SharedApp\",\"folderUri\":\"file:///c%3A/DiskA/SharedApp\"}", Encoding.UTF8);
                 File.WriteAllText(Path.Combine(projDir, "id-disk-b.json"), "{\"id\":\"id-disk-b\",\"name\":\"SharedApp\",\"folderUri\":\"file:///d%3A/DiskB/SharedApp\"}", Encoding.UTF8);
-                File.WriteAllText(Path.Combine(convDir, cid1 + ".db"), "DB1", Encoding.UTF8);
-                File.WriteAllText(Path.Combine(convDir, cid2 + ".db"), "DB2", Encoding.UTF8);
+                CreateMinimalValidSqliteDb(Path.Combine(convDir, cid1 + ".db"), cid1);
+                CreateMinimalValidSqliteDb(Path.Combine(convDir, cid2 + ".db"), cid2);
 
                 Dictionary<string, ProjectMetadata> localProjects = new Dictionary<string, ProjectMetadata>(StringComparer.OrdinalIgnoreCase);
                 localProjects["id-disk-a"] = new ProjectMetadata { Id = "id-disk-a", Name = "SharedApp", FolderUri = "file:///c%3A/DiskA/SharedApp" };
@@ -1281,7 +1313,7 @@ namespace AntigravityCompanion.Tests
                 string jsonTpl = "{\"args\": [\"{{HOME}}\\\\scripts\\\\run.py\"]}";
                 string expandedJson = CapabilityPathNormalizer.ExpandHomePlaceholder(jsonTpl, homeWithSpaces, true);
                 AssertTrue(expandedJson.Contains("C:\\\\Users\\\\John Doe\\\\scripts\\\\run.py"), "JSON placeholder expansion keeps double backslashes valid");
-                string parsedVal = JsonKeyManipulator.UpsertObjectEntry("{\"mcpServers\":{}}", "mcpServers", "s1", expandedJson);
+                string parsedVal = UnifiedJson.PatchObjectKeyPreservingComments("{\"mcpServers\":{}}", "mcpServers", "s1", expandedJson);
                 AssertTrue(parsedVal.Contains("John Doe"), "Upserted JSON remains parseable");
 
                 string textExpanded = CapabilityPathNormalizer.ExpandHomePlaceholder("{{HOME}}\\bin\\tool.exe", homeWithSpaces, false);
@@ -1289,19 +1321,19 @@ namespace AntigravityCompanion.Tests
 
                 // 2. JSONC 注释、尾逗号与残缺 JSON 失败封闭保护 (C-13 / C-26)
                 string jsonc = "{\n  // line comment\n  \"plugins\": {\n    \"ok\\u0040plugin\": { \"enabled\": true, /* block */ }\n  },\n}";
-                Dictionary<string, string> plugMap = JsonKeyManipulator.ExtractObjectEntries(jsonc, "plugins");
+                Dictionary<string, string> plugMap = CapabilityVaultService.ExtractObjectEntries(jsonc, "plugins");
                 AssertTrue(plugMap.ContainsKey("ok@plugin"), "JSONC + unicode key unescaped cleanly");
 
                 bool failClosed = false;
                 try
                 {
-                    JsonKeyManipulator.UpsertObjectEntry("{ \"plugins\": { \"broken\": ", "plugins", "k", "{}");
+                    UnifiedJson.PatchObjectKeyPreservingComments("{ \"plugins\": { \"broken\": ", "plugins", "k", "{}");
                 }
                 catch (FormatException)
                 {
                     failClosed = true;
                 }
-                AssertTrue(failClosed, "Corrupted JSON triggers fail-closed FormatException in UpsertObjectEntry");
+                AssertTrue(failClosed, "Corrupted JSON triggers fail-closed FormatException in PatchObjectKeyPreservingComments");
 
                 // 3. @scope/pkg 安全目录编码往返 (C-14) - 含带 ':' 与不带 ':' 的 @scope/pkg 全链路往返
                 string scopedId = "@my-org/super-skill:v1";
@@ -1365,8 +1397,8 @@ namespace AntigravityCompanion.Tests
 
                 string hooksJson = string.Format(
                     "{{\r\n  \"h1\": {{ \"command\": \"python \\\"{0}\\\" && python \\\"{1}\\\"\" }},\r\n  \"h2\": {{ \"command\": \"python \\\"{0}\\\"\" }}\r\n}}",
-                    JsonKeyManipulator.EscapeJsonString(sharedPy),
-                    JsonKeyManipulator.EscapeJsonString(uniquePy));
+                    UnifiedJson.EscapeString(sharedPy),
+                    UnifiedJson.EscapeString(uniquePy));
                 File.WriteAllText(Path.Combine(cfgDir, "hooks.json"), hooksJson, Encoding.UTF8);
 
                 // 同时放置大文件 (>1MB) 技能和 node_modules/.env 排除项
@@ -1550,68 +1582,20 @@ namespace AntigravityCompanion.Tests
             AssertTrue(!evalAligned.ProjectDiff && !evalAligned.IsModified, "Aligned session under merged renamed project is not falsely flagged Modified");
         }
 
-        private static void T25_MainForm_PureHelpers_SelectionMoveAndProjectJson()
+        private static void T25_WorkspaceService_ProjectJsonAndBackupSelectionPolicy()
         {
             // 1. GenerateStandardProjectJson 安全转义 + 最小沙箱策略 (C-09 / C-30)
-            string pj = MainForm.GenerateStandardProjectJson("id\"1", "App\\Name\"2", "C:\\Work\\中文项目");
+            string pj = WorkspaceService.GenerateStandardProjectJson("id\"1", "App\\Name\"2", "C:\\Work\\中文项目");
             AssertTrue(pj.Contains("\"sandboxMode\": true"), "Fallback project JSON defaults to sandboxMode: true");
             AssertTrue(!pj.Contains("AGENT_SETTING_POLICY_ALLOW") && !pj.Contains("CASCADE_COMMANDS_AUTO_EXECUTION_EAGER") && !pj.Contains("ARTIFACT_REVIEW_MODE_TURBO"),
                 "Fallback project JSON omits auto-allow/eager/turbo policies");
-            Dictionary<string, string> pjFields = JsonKeyManipulator.ExtractObjectEntries(pj, null);
+            Dictionary<string, string> pjFields = CapabilityVaultService.ExtractObjectEntries(pj, null);
             AssertEqual("\"App\\\\Name\\\"2\"", pjFields["name"].Trim(), "Project name properly escaped in raw JSON token");
             AssertEqual("App\\Name\"2", TranscriptMarkdownExporter.ExtractJsonStringField(pj, "name"), "Project name roundtrips cleanly through JSON decoder");
+            string decodedUri = DirectStreamArchiver.UnescapeUriString("file:///d%3A/Repo/Exist%20Proj").Substring(8).Replace('/', '\\');
+            AssertTrue(string.Equals("D:\\Repo\\Exist Proj", decodedUri, StringComparison.OrdinalIgnoreCase), "FileUri decodes to Windows path: " + decodedUri);
 
-            // 2. ResolveLocalActionTargets 右键单节点 vs 批量勾选语义与多工程 ID 隔离 (X-02 / C-10)
-            ConversationSummaryInfo cChecked = new ConversationSummaryInfo { ConversationId = "c-checked", ProjectId = "pid-1", ProjectName = "App" };
-            ConversationSummaryInfo cRightClicked = new ConversationSummaryInfo { ConversationId = "c-rclick", ProjectId = "pid-2", ProjectName = "App" };
-            CapabilityItem capChecked = new CapabilityItem { Kind = CapabilityKind.Skill, Id = "sk-checked", DisplayName = "sk-checked" };
-
-            MainForm.LocalSelectionSnapshot snap = new MainForm.LocalSelectionSnapshot();
-            snap.Capabilities.Add(new MainForm.LocalCapEntry { Item = capChecked, Checked = true, Selected = false });
-            snap.Projects.Add(new MainForm.LocalProjectEntry
-            {
-                BucketKey = "ID:pid-1", ProjectId = "pid-1", ProjectName = "App", Checked = true, Selected = false,
-                Sessions = new List<MainForm.LocalSessionEntry>
-                {
-                    new MainForm.LocalSessionEntry { Summary = cChecked, Checked = true, Selected = false }
-                }
-            });
-            snap.Projects.Add(new MainForm.LocalProjectEntry
-            {
-                BucketKey = "ID:pid-2", ProjectId = "pid-2", ProjectName = "App", Checked = false, Selected = true,
-                Sessions = new List<MainForm.LocalSessionEntry>
-                {
-                    new MainForm.LocalSessionEntry { Summary = cRightClicked, Checked = false, Selected = false }
-                }
-            });
-
-            MainForm.LocalActionTargets singleRightClickTargets = MainForm.ResolveLocalActionTargets(snap, true, false, new List<ConversationSummaryInfo> { cChecked, cRightClicked });
-            AssertEqual(0, singleRightClickTargets.Capabilities.Count, "Right-click project ignores checked capability");
-            AssertEqual(1, singleRightClickTargets.ProjectIds.Count, "Right-click targets ONLY selected pid-2 project");
-            AssertTrue(singleRightClickTargets.ProjectIds.Contains("pid-2") && !singleRightClickTargets.ProjectIds.Contains("pid-1"), "Same-name pid-1 excluded on right-click pid-2");
-            AssertEqual(1, singleRightClickTargets.ConversationIds.Count, "Only pid-2 sessions collected");
-            AssertTrue(singleRightClickTargets.ConversationIds.Contains("c-rclick"), "c-rclick collected");
-
-            MainForm.LocalActionTargets batchTargets = MainForm.ResolveLocalActionTargets(snap, false, false, new List<ConversationSummaryInfo> { cChecked, cRightClicked });
-            AssertEqual(1, batchTargets.Capabilities.Count, "Batch mode reads checked capability");
-            AssertTrue(batchTargets.ProjectIds.Contains("pid-1") && !batchTargets.ProjectIds.Contains("pid-2"), "Batch mode targets checked pid-1, ignoring right-clicked pid-2");
-
-            // 3. ComputeMoveDialogProjectState (X-04)
-            Dictionary<string, ProjectMetadata> nameMap = new Dictionary<string, ProjectMetadata>(StringComparer.OrdinalIgnoreCase);
-            nameMap["ExistProj"] = new ProjectMetadata { Id = "p-ex", Name = "ExistProj", FolderUri = "file:///d%3A/Repo/Exist%20Proj" };
-
-            MainForm.MoveDialogProjectState stExist = MainForm.ComputeMoveDialogProjectState("ExistProj", nameMap, "C:\\Users\\Me");
-            AssertEqual("D:\\Repo\\Exist Proj", stExist.FolderDisplayPath, "Existing project FolderUri decoded to readable path");
-            AssertTrue(stExist.FolderEnabled, "Existing project enables folder box");
-
-            MainForm.MoveDialogProjectState stCustom = MainForm.ComputeMoveDialogProjectState("BrandNewProj", nameMap, "C:\\Users\\Me");
-            AssertEqual("C:\\Users\\Me\\BrandNewProj", stCustom.FolderDisplayPath, "Typed new project computes home-based physical path");
-
-            MainForm.MoveDialogProjectState stOutside = MainForm.ComputeMoveDialogProjectState("Outside of Project", nameMap, "C:\\Users\\Me");
-            AssertTrue(stOutside.IsOutsideOfProject && !stOutside.FolderEnabled && stOutside.FolderDisplayPath == string.Empty,
-                "Outside of Project disables folder box and clears path");
-
-            // 4. ShouldAutoSelectBackupSession 防旧备份误覆盖 (X-03)
+            // 2. ShouldAutoSelectBackupSession 防旧备份误覆盖 (X-03)
             DateTime baseTime = new DateTime(2026, 11, 10, 12, 0, 0, DateTimeKind.Local);
             ConversationSummaryInfo locSess = new ConversationSummaryInfo
             {
@@ -1622,7 +1606,7 @@ namespace AntigravityCompanion.Tests
                 UserInteractions = 5,
                 UpdatedTime = baseTime
             };
-            AssertTrue(MainForm.ShouldAutoSelectBackupSession(locSess, null, null), "Missing local session is auto-selected");
+            AssertTrue(BackupSelectionPolicy.ShouldAutoSelectBackupSession(locSess, null, null), "Missing local session is auto-selected");
 
             ConversationSummaryInfo olderFewerBackup = new ConversationSummaryInfo
             {
@@ -1633,7 +1617,7 @@ namespace AntigravityCompanion.Tests
                 UserInteractions = 5,
                 UpdatedTime = baseTime.AddHours(1)
             };
-            AssertTrue(!MainForm.ShouldAutoSelectBackupSession(olderFewerBackup, locSess, null),
+            AssertTrue(!BackupSelectionPolicy.ShouldAutoSelectBackupSession(olderFewerBackup, locSess, null),
                 "Fewer-step backup is NOT auto-selected even with newer timestamp/title change");
 
             ConversationSummaryInfo equalButOlderBackup = new ConversationSummaryInfo
@@ -1645,7 +1629,7 @@ namespace AntigravityCompanion.Tests
                 UserInteractions = 5,
                 UpdatedTime = baseTime.AddSeconds(-10)
             };
-            AssertTrue(!MainForm.ShouldAutoSelectBackupSession(equalButOlderBackup, locSess, null),
+            AssertTrue(!BackupSelectionPolicy.ShouldAutoSelectBackupSession(equalButOlderBackup, locSess, null),
                 "Equal-count older backup with project/title formatting diff is NOT auto-selected");
 
             ConversationSummaryInfo titleOnlyDiffSameTime = new ConversationSummaryInfo
@@ -1657,7 +1641,7 @@ namespace AntigravityCompanion.Tests
                 UserInteractions = 5,
                 UpdatedTime = baseTime.AddSeconds(1)
             };
-            AssertTrue(!MainForm.ShouldAutoSelectBackupSession(titleOnlyDiffSameTime, locSess, null),
+            AssertTrue(!BackupSelectionPolicy.ShouldAutoSelectBackupSession(titleOnlyDiffSameTime, locSess, null),
                 "Equal-count within 2s jitter with only title diff is NOT auto-selected");
 
             ConversationSummaryInfo moreStepsBackup = new ConversationSummaryInfo
@@ -1669,7 +1653,7 @@ namespace AntigravityCompanion.Tests
                 UserInteractions = 4,
                 UpdatedTime = baseTime.AddMinutes(-5)
             };
-            AssertTrue(MainForm.ShouldAutoSelectBackupSession(moreStepsBackup, locSess, null),
+            AssertTrue(BackupSelectionPolicy.ShouldAutoSelectBackupSession(moreStepsBackup, locSess, null),
                 "Strictly more steps in backup IS auto-selected");
 
             ConversationSummaryInfo equalCountsNewerTimeBackup = new ConversationSummaryInfo
@@ -1681,7 +1665,7 @@ namespace AntigravityCompanion.Tests
                 UserInteractions = 5,
                 UpdatedTime = baseTime.AddSeconds(5)
             };
-            AssertTrue(MainForm.ShouldAutoSelectBackupSession(equalCountsNewerTimeBackup, locSess, null),
+            AssertTrue(BackupSelectionPolicy.ShouldAutoSelectBackupSession(equalCountsNewerTimeBackup, locSess, null),
                 "Equal counts with strictly newer timestamp (>2s) IS auto-selected");
 
             // 5. 同名不同路径双工程 ID / URI 隔离重映射 (C-05/C-10/C-25)
@@ -1879,9 +1863,9 @@ namespace AntigravityCompanion.Tests
             // 1. Multiline JSON entry reindentation in FormatObjectEntries
             string baseJson = "{\r\n  \"mcpServers\": {}\r\n}";
             string multiFrag = "{\r\n  \"command\": \"node\",\r\n  \"args\": [\r\n    \"a.js\",\r\n    \"b.js\"\r\n  ]\r\n}";
-            string mergedJson = JsonKeyManipulator.UpsertObjectEntry(baseJson, "mcpServers", "multi-srv", multiFrag);
+            string mergedJson = UnifiedJson.PatchObjectKeyPreservingComments(baseJson, "mcpServers", "multi-srv", multiFrag);
             AssertTrue(mergedJson.Contains("      \"args\": ["), "Nested multiline array reindented to 6 spaces");
-            Dictionary<string, string> parsedMcp = JsonKeyManipulator.ExtractObjectEntries(mergedJson, "mcpServers");
+            Dictionary<string, string> parsedMcp = CapabilityVaultService.ExtractObjectEntries(mergedJson, "mcpServers");
             AssertTrue(parsedMcp.ContainsKey("multi-srv") && parsedMcp["multi-srv"].Contains("\"b.js\""), "Multiline JSON entry roundtrips through ExtractObjectEntries");
 
             // 2. UTF-8 BOM + Raw GBK byte preservation + YAML block/folded/quoted scalars + zero leftover .tmp files
@@ -1972,149 +1956,66 @@ namespace AntigravityCompanion.Tests
             }
         }
 
-        private static void T29_MainForm_FilteredSetsAndHiddenDeletionGuard()
+        private static void T29_SessionLifecycle_ProjectIdIsolationAndSubagentDelete()
         {
-            ConversationSummaryInfo cVis = new ConversationSummaryInfo
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t29_" + Guid.NewGuid().ToString("N"));
+            try
             {
-                ConversationId = "c-vis-001",
-                ProjectId = "proj-alpha",
-                ProjectName = "Alpha"
-            };
-            ConversationSummaryInfo cHid = new ConversationSummaryInfo
+                string geminiDir = Path.Combine(sb, ".gemini");
+                string agDir = Path.Combine(geminiDir, "antigravity");
+                string convDir = Path.Combine(agDir, "conversations");
+                string brainDir = Path.Combine(agDir, "brain");
+                string projDir = Path.Combine(geminiDir, "config", "projects");
+                Directory.CreateDirectory(convDir);
+                Directory.CreateDirectory(brainDir);
+                Directory.CreateDirectory(projDir);
+
+                string cid1 = "a2900001-0000-4000-8000-000000000001";
+                string cid1Sub = "a2900002-0000-4000-8000-000000000002";
+                string cid2 = "b2900003-0000-4000-8000-000000000003";
+                string pid1 = "pid29001";
+                string pid2 = "pid29002";
+
+                // Same project display name "App", two distinct project IDs
+                File.WriteAllText(Path.Combine(projDir, pid1 + ".json"),
+                    WorkspaceService.GenerateStandardProjectJson(pid1, "App", "D:\\WorkA\\App"), Encoding.UTF8);
+                File.WriteAllText(Path.Combine(projDir, pid2 + ".json"),
+                    WorkspaceService.GenerateStandardProjectJson(pid2, "App", "D:\\WorkB\\App"), Encoding.UTF8);
+
+                ProtoNode n1 = BuildRealProtoEntry(cid1, "Root A", null, "file:///d%3A/WorkA/App", "App", pid1, 6, 2, 1);
+                ProtoNode n1Sub = BuildRealProtoEntry(cid1Sub, "Sub A", null, "file:///d%3A/WorkA/App", "App", pid1, 3, 1, 0);
+                n1Sub.GetChild(2).GetChild(17).Children.Add(new ProtoNode(11, 2) { RawBytes = Encoding.UTF8.GetBytes(cid1), IsModified = true });
+                ProtoNode n2 = BuildRealProtoEntry(cid2, "Root B", null, "file:///d%3A/WorkB/App", "App", pid2, 4, 1, 1);
+
+                byte[] pb = ProtoCodec.Encode(new List<ProtoNode> { n1, n1Sub, n2 });
+                File.WriteAllBytes(Path.Combine(agDir, "agyhub_summaries_proto.pb"), pb);
+                CreateMinimalValidSqliteDb(Path.Combine(convDir, cid1 + ".db"), cid1);
+                CreateMinimalValidSqliteDb(Path.Combine(convDir, cid1Sub + ".db"), cid1Sub);
+                CreateMinimalValidSqliteDb(Path.Combine(convDir, cid2 + ".db"), cid2);
+
+                Dictionary<string, ProjectMetadata> projects = WorkspaceService.LoadLocalProjects(geminiDir);
+                List<ConversationSummaryInfo> sums = SessionMetadataExtractor.ExtractSummaries(pb, projects);
+
+                DeletionResult del = SessionLifecycleService.DeleteSessionsAndProjects(
+                    geminiDir,
+                    sums,
+                    projects,
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase) { cid1 },
+                    null,
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase) { pid1 },
+                    null);
+
+                AssertTrue(del.DeletedSessionCount >= 2, "Deleting parent session cid1 cascades to subagent cid1Sub");
+                AssertTrue(!File.Exists(Path.Combine(convDir, cid1 + ".db")) && !File.Exists(Path.Combine(convDir, cid1Sub + ".db")),
+                    "Parent and subagent .db removed");
+                AssertTrue(File.Exists(Path.Combine(convDir, cid2 + ".db")), "Same-name sibling project pid2 conversation untouched");
+                AssertTrue(!File.Exists(Path.Combine(projDir, pid1 + ".json")) && File.Exists(Path.Combine(projDir, pid2 + ".json")),
+                    "Deleted pid1.json while isolating same-name pid2.json");
+            }
+            finally
             {
-                ConversationId = "c-hid-002",
-                ProjectId = "proj-alpha",
-                ProjectName = "Alpha"
-            };
-            List<ConversationSummaryInfo> allLocalSummaries = new List<ConversationSummaryInfo> { cVis, cHid };
-
-            CapabilityItem capVis = new CapabilityItem { Kind = CapabilityKind.Skill, Id = "vis-sk", DisplayName = "vis-sk" };
-            CapabilityItem capHid = new CapabilityItem { Kind = CapabilityKind.Skill, Id = "hid-sk", DisplayName = "hid-sk" };
-
-            // Search filter hides c-hid-002 while Alpha appears checked visibly with only 1 child
-            MainForm.LocalSelectionSnapshot snapFiltered = new MainForm.LocalSelectionSnapshot();
-            snapFiltered.Capabilities.Add(new MainForm.LocalCapEntry { Item = capVis, Checked = true });
-            snapFiltered.Projects.Add(new MainForm.LocalProjectEntry
-            {
-                BucketKey = "ID:proj-alpha",
-                ProjectId = "proj-alpha",
-                ProjectName = "Alpha",
-                Checked = true,
-                Sessions = new List<MainForm.LocalSessionEntry>
-                {
-                    new MainForm.LocalSessionEntry { Summary = cVis, Checked = true }
-                }
-            });
-
-            MainForm.LocalActionTargets filteredTargets = MainForm.ResolveLocalActionTargets(snapFiltered, false, false, allLocalSummaries);
-            AssertEqual(1, filteredTargets.Capabilities.Count, "Visible capability collected");
-            AssertEqual(1, filteredTargets.ConversationIds.Count, "Filtered partial selection collects visible c-vis-001");
-            AssertEqual(0, filteredTargets.ProjectIds.Count, "Refuses to delete whole proj-alpha while c-hid-002 is hidden by search filter");
-
-            // When all sessions in bucket are visible & checked, whole project can be removed
-            MainForm.LocalActionTargets unfilteredTargets = MainForm.ResolveLocalActionTargets(snapFiltered, false, false, new List<ConversationSummaryInfo> { cVis });
-            AssertTrue(unfilteredTargets.ProjectIds.Contains("proj-alpha"), "Unfiltered complete project selection allows deleting proj-alpha");
-
-            // ResolveLocalTargetsFromSets merges hidden checked items and detects hidden counts
-            HashSet<string> checkedLocalCaps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            checkedLocalCaps.Add(capVis.UniqueKey);
-            checkedLocalCaps.Add(capHid.UniqueKey);
-            HashSet<string> checkedLocalSessions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            checkedLocalSessions.Add("c-vis-001");
-            checkedLocalSessions.Add("c-hid-002");
-            HashSet<string> checkedLocalBuckets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            checkedLocalBuckets.Add("ID:proj-alpha");
-
-            int hiddenCaps;
-            int hiddenConvs;
-            MainForm.LocalActionTargets mergedTargets = MainForm.ResolveLocalTargetsFromSets(
-                filteredTargets,
-                new List<CapabilityItem> { capVis, capHid },
-                allLocalSummaries,
-                checkedLocalCaps,
-                checkedLocalSessions,
-                checkedLocalBuckets,
-                out hiddenCaps,
-                out hiddenConvs);
-            AssertEqual(1, hiddenCaps, "Detects 1 hidden checked capability");
-            AssertEqual(1, hiddenConvs, "Detects 1 hidden checked conversation");
-            AssertTrue(mergedTargets.ProjectIds.Contains("proj-alpha"), "Allows project deletion only after confirming all hidden+visible sessions checked");
-
-            HashSet<string> partialSessions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            partialSessions.Add("c-vis-001");
-            int dummyHidCap;
-            int dummyHidConv;
-            MainForm.LocalActionTargets partialMerged = MainForm.ResolveLocalTargetsFromSets(
-                filteredTargets,
-                new List<CapabilityItem> { capVis },
-                allLocalSummaries,
-                checkedLocalCaps,
-                partialSessions,
-                checkedLocalBuckets,
-                out dummyHidCap,
-                out dummyHidConv);
-            // Notice: because checkedLocalBuckets contains "ID:proj-alpha", ResolveLocalTargetsFromSets selects c-hid-002 via whole-bucket check;
-            // when checkedLocalBuckets is empty (partial check), proj-alpha must NOT be marked for whole-project deletion.
-            MainForm.LocalActionTargets noBucketMerged = MainForm.ResolveLocalTargetsFromSets(
-                filteredTargets,
-                new List<CapabilityItem> { capVis },
-                allLocalSummaries,
-                checkedLocalCaps,
-                partialSessions,
-                new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-                out dummyHidCap,
-                out dummyHidConv);
-            AssertEqual(0, dummyHidConv, "Partial session check without bucket flag keeps hidden conv count at 0");
-            AssertEqual(0, noBucketMerged.ProjectIds.Count, "Partial session check keeps proj-alpha intact");
-
-            // ApplyCheckAllOrNone preserves hidden on SelectAll, clears all on DeselectAll
-            HashSet<string> checkSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            checkSet.Add("hidden-k");
-            MainForm.ApplyCheckAllOrNone(checkSet, new string[] { "vis-k1", "vis-k2" }, true);
-            AssertEqual(3, checkSet.Count, "SelectAll keeps hidden selection and adds visible items");
-            MainForm.ApplyCheckAllOrNone(checkSet, new string[] { "vis-k1" }, false);
-            AssertEqual(0, checkSet.Count, "DeselectAll clears both visible and hidden selections");
-
-            // ComputeSelectionStats & ResolveBackupImportSelectionFromSets hidden accounting
-            CapabilityDiffNode cdVis = new CapabilityDiffNode { Kind = CapabilityKind.Rule, Id = "r-vis", UniqueKey = "Rule:r-vis", RemoteItem = capVis };
-            CapabilityDiffNode cdHid = new CapabilityDiffNode { Kind = CapabilityKind.Rule, Id = "r-hid", UniqueKey = "Rule:r-hid", RemoteItem = capHid };
-            ProjectDiffNode pDiff = new ProjectDiffNode("Alpha");
-            pDiff.BackupConversations.Add(cVis);
-            pDiff.BackupConversations.Add(cHid);
-
-            HashSet<string> bakCapSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            bakCapSet.Add("Rule:r-vis");
-            bakCapSet.Add("Rule:r-hid");
-            HashSet<string> bakSessSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            bakSessSet.Add("c-vis-001");
-            bakSessSet.Add("c-hid-002");
-            HashSet<string> bakProjSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            bakProjSet.Add("Alpha");
-
-            MainForm.SelectionStatsSummary stats = MainForm.ComputeSelectionStats(
-                new List<CapabilityDiffNode> { cdVis, cdHid },
-                new List<ProjectDiffNode> { pDiff },
-                bakCapSet, bakSessSet, bakProjSet,
-                1, 1);
-            AssertEqual(2, stats.TotalSelectedCapabilities, "Total selected capabilities == 2");
-            AssertEqual(2, stats.TotalSelectedConversations, "Total selected conversations == 2");
-            AssertEqual(2, stats.VisibleSelectedCount, "Visible selected count == 2");
-            AssertEqual(2, stats.HiddenSelectedCount, "Hidden selected count == 2");
-
-            HashSet<string> visCapKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            visCapKeys.Add("Rule:r-vis");
-            HashSet<string> visSessIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            visSessIds.Add("c-vis-001");
-            HashSet<string> visProjNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            visProjNames.Add("Alpha");
-
-            MainForm.BackupImportSelectionResult importSel = MainForm.ResolveBackupImportSelectionFromSets(
-                new List<CapabilityDiffNode> { cdVis, cdHid },
-                new List<ProjectDiffNode> { pDiff },
-                bakCapSet, bakSessSet, bakProjSet,
-                visCapKeys, visSessIds, visProjNames);
-            AssertEqual(1, importSel.HiddenCapabilitiesCount, "ResolveBackupImportSelectionFromSets reports 1 hidden capability");
-            AssertEqual(1, importSel.HiddenConversationsCount, "ResolveBackupImportSelectionFromSets reports 1 hidden conversation");
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
         }
 
         private static void T30_CapabilityRepo_ScriptPathRegexQuotedEnvAndSpaces()
@@ -2135,7 +2036,7 @@ namespace AntigravityCompanion.Tests
                 string cmdLine = string.Format(
                     "\"{0}\" '{1}' \"~/missing_tilde.py\" \"%AGY_TEST_MISSING_DIR%\\missing_env.py\" --extra=Z:\\NonExistent\\missing_unquoted.py",
                     dQuotedPy, sQuotedPy);
-                string jsonFrag = "{\"command\": \"" + JsonKeyManipulator.EscapeJsonString(cmdLine) + "\"}";
+                string jsonFrag = "{\"command\": \"" + UnifiedJson.EscapeString(cmdLine) + "\"}";
 
                 List<string> referenced;
                 List<string> missing;
@@ -2160,20 +2061,49 @@ namespace AntigravityCompanion.Tests
             }
         }
 
-        private static void T31_MainForm_RelocateCapPathSelectionState()
+        private static void T31_CapabilityVault_RelocateCapabilityPath_LocalAndRepo()
         {
-            AssertEqual(
-                "D:\\Old\\b.py",
-                MainForm.ComputeRelocatePathOnSelectionChanged("C:\\Old\\a.py", "C:\\Old\\a.py", "D:\\Old\\b.py"),
-                "Auto-updates unedited path when user switches referenced script");
-            AssertEqual(
-                "D:\\Old\\b.py",
-                MainForm.ComputeRelocatePathOnSelectionChanged("C:\\Old\\a.py", "   ", "D:\\Old\\b.py"),
-                "Populates empty path box when user switches referenced script");
-            AssertEqual(
-                "E:\\Custom\\edited.py",
-                MainForm.ComputeRelocatePathOnSelectionChanged("C:\\Old\\a.py", "E:\\Custom\\edited.py", "D:\\Old\\b.py"),
-                "Preserves manually edited path instead of overwriting on selection change");
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t31_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string cfgDir = Path.Combine(geminiDir, "config");
+                string repoDir = Path.Combine(sb, "Repo");
+                Directory.CreateDirectory(cfgDir);
+                Directory.CreateDirectory(Path.Combine(repoDir, "mcps"));
+
+                string oldPy = Path.Combine(sb, "old_dir", "tool.py");
+                string newPy = Path.Combine(sb, "new_dir", "tool.py");
+                Directory.CreateDirectory(Path.GetDirectoryName(newPy));
+                File.WriteAllText(newPy, "# tool", Encoding.UTF8);
+
+                string mcpPath = Path.Combine(cfgDir, "mcp_config.json");
+                File.WriteAllText(mcpPath,
+                    "{\r\n  // keep comment\r\n  \"mcpServers\": {\r\n    \"srv-1\": { \"command\": \"python\", \"args\": [\"" + UnifiedJson.EscapeString(oldPy) + "\"] }\r\n  }\r\n}",
+                    Encoding.UTF8);
+
+                List<CapabilityItem> localCaps = CapabilityVaultService.ScanLocalCapabilities(geminiDir, homeDir);
+                CapabilityItem srvLocal = localCaps.Find(x => x.Kind == CapabilityKind.McpServer && x.Id == "srv-1");
+                AssertTrue(srvLocal != null, "Local MCP srv-1 scanned");
+                bool okLocal = CapabilityVaultService.RelocateCapabilityPath(geminiDir, repoDir, true, homeDir, srvLocal, oldPy, newPy);
+                AssertTrue(okLocal, "RelocateCapabilityPath returns true for local MCP");
+                string updatedLocal = File.ReadAllText(mcpPath, Encoding.UTF8);
+                AssertTrue(updatedLocal.Contains("// keep comment") && !updatedLocal.Contains("old_dir"), "Local relocate updates path and preserves JSONC comments");
+
+                CapabilityVaultService.PushCapabilitiesToRepository(repoDir, homeDir, new List<CapabilityItem> { CapabilityVaultService.ScanLocalCapabilities(geminiDir, homeDir).Find(x => x.Id == "srv-1") });
+                List<CapabilityItem> repoCaps = CapabilityVaultService.ScanRepositoryCapabilities(repoDir, homeDir, geminiDir);
+                CapabilityItem srvRepo = repoCaps.Find(x => x.Id == "srv-1");
+                string thirdPy = Path.Combine(sb, "third_dir", "tool.py");
+                Directory.CreateDirectory(Path.GetDirectoryName(thirdPy));
+                File.WriteAllText(thirdPy, "# tool3", Encoding.UTF8);
+                bool okRepo = CapabilityVaultService.RelocateCapabilityPath(geminiDir, repoDir, false, homeDir, srvRepo, newPy, thirdPy);
+                AssertTrue(okRepo, "RelocateCapabilityPath updates repository fragment");
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -2743,13 +2673,35 @@ namespace AntigravityCompanion.Tests
             }
         }
 
+        private static RenameRulesConfig BuildSampleRenameRulesForTests()
+        {
+            RenameRulesConfig cfg = RenameRulesConfig.CreateDefault();
+            cfg.ProjectAliases["INV3K_5K_VMH"] = "3KU";
+            cfg.ProjectAliases["EvoKernel"] = "Evo";
+            cfg.ProjectAliases["Antigravity_Companion"] = "Companion";
+
+            MultiRepoRule inv = new MultiRepoRule();
+            inv.ProjectName = "Inverter";
+            inv.DefaultModel = "Inverter";
+            inv.BranchRegexes.Add("在\\s*(?:[0-9A-Za-z_\\-/.]+\\s*的\\s*)?([A-Za-z][A-Za-z0-9_\\-\\u4e00-\\u9fa5]{1,36})\\s*分支");
+            inv.BranchRegexes.Add("分支\\s*[:：]\\s*([A-Za-z][A-Za-z0-9_\\-\\u4e00-\\u9fa5]{1,36})");
+            inv.ModelMatchers.Add(new ModelMatcherRule { Model = "3/6KU", Keywords = new List<string> { "3/6KU", "3/6k" } });
+            inv.ModelMatchers.Add(new ModelMatcherRule { Model = "3KUbak", Keywords = new List<string> { "3KUbak" } });
+            inv.ModelMatchers.Add(new ModelMatcherRule { Model = "UPS 1-3K", Keywords = new List<string> { "UPS 1-3K", "CT1K" } });
+            inv.ModelMatchers.Add(new ModelMatcherRule { Model = "UPS 6-10K", Keywords = new List<string> { "UPS 6-10K", "6-10k-ups" } });
+            inv.ModelMatchers.Add(new ModelMatcherRule { Model = "6KU", Keywords = new List<string> { "6KU", "vmhct6ku" } });
+            inv.ModelMatchers.Add(new ModelMatcherRule { Model = "3KU", Keywords = new List<string> { "3KU" } });
+            cfg.MultiRepoRules.Add(inv);
+            return cfg;
+        }
+
         private static void T34_AutoTitleSynthesizer_RulesAndSubagentExclusion()
         {
             string sb = Path.Combine(Path.GetTempPath(), "agy_synth_rules_" + Guid.NewGuid().ToString("N"));
             try
             {
                 Directory.CreateDirectory(sb);
-                RenameRulesConfig rules = RenameRulesConfig.CreateDefault();
+                RenameRulesConfig rules = BuildSampleRenameRulesForTests();
                 string prefix, cleaned, title;
 
                 // 1. Multi-repo matcher ordering for Inverter
@@ -2837,7 +2789,10 @@ namespace AntigravityCompanion.Tests
                     "新增批量重命名测试", null, rules, out prefix, out cleaned, out title);
                 AssertEqual("【Companion】", prefix, "Antigravity_Companion maps to 【Companion】 alias");
 
-                // 4. Idempotent re-synthesis stripping existing 【...】
+                // 4. Idempotent re-synthesis stripping existing 【...】 when PreserveExistingTag=false
+                RenameRulesConfig stripRules = BuildSampleRenameRulesForTests();
+                stripRules.PreserveExistingTag = false;
+                stripRules.KeepExistingBracketedPrefix = false;
                 ConversationSummaryInfo reSynthSession = new ConversationSummaryInfo
                 {
                     ConversationId = "s11",
@@ -2845,13 +2800,13 @@ namespace AntigravityCompanion.Tests
                     DisplayTitle = "【旧标签】修复母线过压保护逻辑"
                 };
                 string prefix1, cleaned1, title1;
-                AutoTitleSynthesizer.SynthesizeTitle(reSynthSession, "3KU 修复母线过压保护逻辑", null, rules, out prefix1, out cleaned1, out title1);
+                AutoTitleSynthesizer.SynthesizeTitle(reSynthSession, "3KU 修复母线过压保护逻辑", null, stripRules, out prefix1, out cleaned1, out title1);
                 AssertEqual("【3KU】修复母线过压保护逻辑", title1, "Strips old 【...】 prefix before applying synthesized prefix");
 
                 reSynthSession.DisplayTitle = title1;
                 reSynthSession.CustomTitle = title1;
                 string prefix2, cleaned2, title2;
-                AutoTitleSynthesizer.SynthesizeTitle(reSynthSession, "3KU 修复母线过压保护逻辑", null, rules, out prefix2, out cleaned2, out title2);
+                AutoTitleSynthesizer.SynthesizeTitle(reSynthSession, "3KU 修复母线过压保护逻辑", null, stripRules, out prefix2, out cleaned2, out title2);
                 AssertEqual(title1, title2, "Re-synthesis is idempotent without stacking brackets");
 
                 // 5. Prompt noise stripping
@@ -3201,7 +3156,7 @@ namespace AntigravityCompanion.Tests
                 string projId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 
                 File.WriteAllText(Path.Combine(projDir, projId + ".json"),
-                    MainForm.GenerateStandardProjectJson(projId, "Inverter", "D:\\Work\\Inverter"), Encoding.UTF8);
+                    WorkspaceService.GenerateStandardProjectJson(projId, "Inverter", "D:\\Work\\Inverter"), Encoding.UTF8);
 
                 LocalWorkspaceManager.WriteUtf8TextAtomicWithBackup(
                     Path.Combine(annotDir, cidWithAnnot + ".pbtxt"),
@@ -3319,6 +3274,7 @@ namespace AntigravityCompanion.Tests
         private sealed class RawHttpTestResponse
         {
             public int StatusCode;
+            public string StatusLine = string.Empty;
             public Dictionary<string, string> Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             public string SetCookie = string.Empty;
             public string BodyText = string.Empty;
@@ -3383,6 +3339,7 @@ namespace AntigravityCompanion.Tests
                         string headerText = Encoding.ASCII.GetString(rawAll, 0, sepIdx);
                         string[] lines = headerText.Split(new string[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
                         RawHttpTestResponse resp = new RawHttpTestResponse();
+                        resp.StatusLine = lines.Length > 0 ? lines[0] : string.Empty;
                         string[] statusParts = lines[0].Split(' ');
                         resp.StatusCode = statusParts.Length >= 2 ? int.Parse(statusParts[1]) : 0;
 
@@ -3483,7 +3440,7 @@ namespace AntigravityCompanion.Tests
             try
             {
                 Directory.CreateDirectory(sb);
-                RenameRulesConfig rules = RenameRulesConfig.CreateDefault();
+                RenameRulesConfig rules = BuildSampleRenameRulesForTests();
 
                 // 1. Field 9->4 multi-branch extraction + trailing '分支' stripping + model keyword matching
                 byte[] rawSummary = BuildRawSummaryWithField9To4Branches(
@@ -3680,7 +3637,9 @@ namespace AntigravityCompanion.Tests
                 AssertEqual(CapabilityDiffDirection.LocalNewer, diffs.Find(x => x.Id == "s-loc-new").Direction, "Baseline detects LocalNewer even if remote mtime is newer");
                 AssertEqual(CapabilityDiffDirection.RemoteNewer, diffs.Find(x => x.Id == "r-rem-new").Direction, "Baseline detects RemoteNewer");
                 AssertEqual(CapabilityDiffDirection.BothModified, diffs.Find(x => x.Id == "m-both").Direction, "Baseline detects BothModified");
-                AssertEqual(CapabilityDiffDirection.RemoteNewer, diffs.Find(x => x.Id == "h-utc").Direction, "Falls back to UTC mtime when no baseline exists");
+                CapabilityDiffNode noBaseNode = diffs.Find(x => x.Id == "h-utc");
+                AssertEqual(CapabilityDiffDirection.Conflict, noBaseNode.Direction, "Classifies baseline-less diff as Conflict (no_baseline_review)");
+                AssertEqual("no_baseline_review", noBaseNode.DirectionReason, "Sets DirectionReason to no_baseline_review");
 
                 // 3. Line-level LCS diff + bounded truncation guard
                 bool smallTrunc;
@@ -3758,16 +3717,18 @@ namespace AntigravityCompanion.Tests
                         new Dictionary<string, string> { { "X-AGY-Token", token } }, null);
                     AssertEqual(403, badHost.StatusCode, "Rejects non-loopback Host header (DNS rebinding guard)");
 
+                    string sidName = "agy_sid_" + host.Port;
+
                     // 3. CSRF origin guard on cookie-only POST without X-AGY-Token -> 403
                     RawHttpTestResponse badOrigin = SendRawTcpHttp(host.Port, null, "POST", "/api/refresh",
-                        new Dictionary<string, string> { { "Cookie", "agy_sid=" + token }, { "Origin", "https://attacker.local" } }, "{}");
+                        new Dictionary<string, string> { { "Cookie", sidName + "=" + token }, { "Origin", "https://attacker.local" } }, "{}");
                     AssertEqual(403, badOrigin.StatusCode, "Rejects POST with cookie + cross-origin Origin header");
 
-                    // 4. Bootstrap GET /?t=token sets HttpOnly SameSite=Strict cookie & CSP headers + serves embedded SPA HTML
+                    // 4. Bootstrap GET /?t=token sets HttpOnly SameSite=Strict port-scoped cookie & CSP headers + serves embedded SPA HTML
                     RawHttpTestResponse boot = SendRawTcpHttp(host.Port, null, "GET", "/?t=" + token, null, null);
                     AssertEqual(200, boot.StatusCode, "GET /?t=token succeeds");
-                    AssertTrue(boot.SetCookie.Contains("agy_sid=" + token) && boot.SetCookie.Contains("HttpOnly") && boot.SetCookie.Contains("SameSite=Strict"),
-                        "Sets SameSite=Strict HttpOnly cookie");
+                    AssertTrue(boot.SetCookie.Contains(sidName + "=" + token) && boot.SetCookie.Contains("HttpOnly") && boot.SetCookie.Contains("SameSite=Strict"),
+                        "Sets port-scoped SameSite=Strict HttpOnly cookie");
                     string csp;
                     AssertTrue(boot.Headers.TryGetValue("Content-Security-Policy", out csp) &&
                         csp.Contains("script-src 'self'") && csp.Contains("style-src 'self' 'unsafe-inline'"),
@@ -3775,7 +3736,7 @@ namespace AntigravityCompanion.Tests
                     AssertTrue(boot.BodyText.Contains("Antigravity Companion"), "Serves embedded index.html");
 
                     // 5. Cookie-only reload (F5) + static CSS/JS + /api/auth/session
-                    Dictionary<string, string> cookieHdr = new Dictionary<string, string> { { "Cookie", "agy_sid=" + token } };
+                    Dictionary<string, string> cookieHdr = new Dictionary<string, string> { { "Cookie", sidName + "=" + token } };
                     RawHttpTestResponse reload = SendRawTcpHttp(host.Port, null, "GET", "/", cookieHdr, null);
                     AssertEqual(200, reload.StatusCode, "Cookie-only reload GET / succeeds");
                     AssertEqual(200, SendRawTcpHttp(host.Port, null, "GET", "/styles.css", cookieHdr, null).StatusCode, "Cookie GET /styles.css succeeds");
@@ -3783,8 +3744,8 @@ namespace AntigravityCompanion.Tests
 
                     RawHttpTestResponse sessTok = SendRawTcpHttp(host.Port, null, "GET", "/api/auth/session", cookieHdr, null);
                     AssertEqual(200, sessTok.StatusCode, "GET /api/auth/session succeeds");
-                    IDictionary<string, object> tokJson = MiniJson.Parse(sessTok.BodyText) as IDictionary<string, object>;
-                    AssertEqual(token, MiniJson.GetString(tokJson, "token", ""), "Restores session token for X-AGY-Token header");
+                    IDictionary<string, object> tokJson = UnifiedJson.Parse(sessTok.BodyText) as IDictionary<string, object>;
+                    AssertEqual(token, UnifiedJson.GetString(tokJson, "token", ""), "Restores session token for X-AGY-Token header");
 
                     // 6. Read APIs & UTF-8 Content-Length byte exactness with Chinese characters
                     Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
@@ -3859,33 +3820,33 @@ namespace AntigravityCompanion.Tests
                     string renPayload = "{\"strategy\":\"HotWritePersistentLayers\",\"items\":[{\"cid\":\"" + cid + "\",\"newTitle\":\"【3KU】Renamed Via HTTP\"}]}";
                     RawHttpTestResponse renResp = SendRawTcpHttp(host.Port, null, "POST", "/api/rename/execute", apiHdr, renPayload);
                     AssertEqual(200, renResp.StatusCode, "POST /api/rename/execute returns 200: " + renResp.BodyText);
-                    IDictionary<string, object> renObj = MiniJson.Parse(renResp.BodyText) as IDictionary<string, object>;
-                    AssertEqual(1, MiniJson.GetInt(renObj, "renamedCount", 0), "Renamed 1 session");
+                    IDictionary<string, object> renObj = UnifiedJson.Parse(renResp.BodyText) as IDictionary<string, object>;
+                    AssertEqual(1, UnifiedJson.GetInt(renObj, "renamedCount", 0), "Renamed 1 session");
 
                     RawHttpTestResponse histResp = SendRawTcpHttp(host.Port, null, "GET", "/api/rename/history", apiHdr, null);
                     AssertEqual(200, histResp.StatusCode, "GET /api/rename/history returns 200");
-                    IDictionary<string, object> histObj = MiniJson.Parse(histResp.BodyText) as IDictionary<string, object>;
-                    List<object> snaps = MiniJson.GetList(histObj, "snapshots");
+                    IDictionary<string, object> histObj = UnifiedJson.Parse(histResp.BodyText) as IDictionary<string, object>;
+                    List<object> snaps = histObj != null && histObj.ContainsKey("snapshots") ? UnifiedJson.AsList(histObj["snapshots"]) : null;
                     AssertTrue(snaps != null && snaps.Count == 1, "Snapshot history contains 1 record");
                     Dictionary<string, object> snapDict = snaps[0] as Dictionary<string, object>;
-                    string snapDir = MiniJson.GetString(snapDict, "snapshotDir", "");
-                    AssertTrue(!string.IsNullOrEmpty(snapDir) && MiniJson.GetString(snapDict, "previewSummary", "").Contains("Renamed Via HTTP"),
+                    string snapDir = UnifiedJson.GetString(snapDict, "snapshotDir", "");
+                    AssertTrue(!string.IsNullOrEmpty(snapDir) && UnifiedJson.GetString(snapDict, "previewSummary", "").Contains("Renamed Via HTTP"),
                         "History snapshot preview lists old -> new title");
 
-                    string rbPayload = MiniJson.Serialize(new Dictionary<string, object> { { "strategy", "HotWritePersistentLayers" }, { "snapshotDir", snapDir } }, false);
+                    string rbPayload = UnifiedJson.Serialize(new Dictionary<string, object> { { "strategy", "HotWritePersistentLayers" }, { "snapshotDir", snapDir } }, false);
                     RawHttpTestResponse rbResp = SendRawTcpHttp(host.Port, null, "POST", "/api/rename/rollback", apiHdr, rbPayload);
                     AssertEqual(200, rbResp.StatusCode, "POST /api/rename/rollback returns 200: " + rbResp.BodyText);
 
                     // 2. AI file prompt export & JSON load endpoints
                     string promptOut = Path.Combine(sb, "ai_prompt.txt");
-                    string savePromptPayload = MiniJson.Serialize(new Dictionary<string, object> { { "cids", new List<object> { cid } }, { "outputPath", promptOut } }, false);
+                    string savePromptPayload = UnifiedJson.Serialize(new Dictionary<string, object> { { "cids", new List<object> { cid } }, { "outputPath", promptOut } }, false);
                     RawHttpTestResponse spResp = SendRawTcpHttp(host.Port, null, "POST", "/api/rename/ai-save-prompt", apiHdr, savePromptPayload);
                     AssertEqual(200, spResp.StatusCode, "POST /api/rename/ai-save-prompt returns 200");
                     AssertTrue(File.Exists(promptOut) && File.ReadAllText(promptOut, Encoding.UTF8).Contains(cid), "Saved AI prompt file contains cid");
 
                     string aiJsonIn = Path.Combine(sb, "ai_result.json");
                     File.WriteAllText(aiJsonIn, "{\"items\":[{\"id\":\"" + cid + "\",\"new_title\":\"【3KU】AI 文件回填标题\"}]}", Encoding.UTF8);
-                    string loadJsonPayload = MiniJson.Serialize(new Dictionary<string, object> { { "cids", new List<object> { cid } }, { "inputPath", aiJsonIn } }, false);
+                    string loadJsonPayload = UnifiedJson.Serialize(new Dictionary<string, object> { { "cids", new List<object> { cid } }, { "inputPath", aiJsonIn } }, false);
                     RawHttpTestResponse ljResp = SendRawTcpHttp(host.Port, null, "POST", "/api/rename/ai-load-json", apiHdr, loadJsonPayload);
                     AssertEqual(200, ljResp.StatusCode, "POST /api/rename/ai-load-json returns 200: " + ljResp.BodyText);
                     AssertTrue(ljResp.BodyText.Contains("AI 文件回填标题"), "Parsed AI JSON file returns mapped title");
@@ -3907,8 +3868,8 @@ namespace AntigravityCompanion.Tests
                     // 4. GC Scan (+ conditional Clean if IDE not running on test host)
                     RawHttpTestResponse gcScanResp = SendRawTcpHttp(host.Port, null, "POST", "/api/gc/scan", apiHdr, "{}");
                     AssertEqual(200, gcScanResp.StatusCode, "POST /api/gc/scan returns 200");
-                    IDictionary<string, object> gcScanObj = MiniJson.Parse(gcScanResp.BodyText) as IDictionary<string, object>;
-                    AssertEqual(1, MiniJson.GetInt(gcScanObj, "totalItems", 0), "GC scan detects 1 orphan annotation");
+                    IDictionary<string, object> gcScanObj = UnifiedJson.Parse(gcScanResp.BodyText) as IDictionary<string, object>;
+                    AssertEqual(1, UnifiedJson.GetInt(gcScanObj, "totalItems", 0), "GC scan detects 1 orphan annotation");
 
                     RawHttpTestResponse gcCleanResp = SendRawTcpHttp(host.Port, null, "POST", "/api/gc/clean", apiHdr, "{\"closeIdeIfRunning\":false}");
                     if (ProcessGuardService.IsAntigravityRunning())
@@ -3917,12 +3878,2873 @@ namespace AntigravityCompanion.Tests
                         AssertEqual(200, gcCleanResp.StatusCode, "Cleans orphan annotation cleanly when IDE not running");
 
                     // 5. Open .agy backup archive & read current backup index
-                    string openBkPayload = MiniJson.Serialize(new Dictionary<string, object> { { "archivePath", zipPath } }, false);
+                    string openBkPayload = UnifiedJson.Serialize(new Dictionary<string, object> { { "archivePath", zipPath } }, false);
                     RawHttpTestResponse bkOpenResp = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/open", apiHdr, openBkPayload);
                     AssertEqual(200, bkOpenResp.StatusCode, "POST /api/backup/open returns 200: " + bkOpenResp.BodyText);
                     RawHttpTestResponse bkCurResp = SendRawTcpHttp(host.Port, null, "GET", "/api/backup/current", apiHdr, null);
                     AssertTrue(bkCurResp.BodyText.Contains("\"loaded\":true") && bkCurResp.BodyText.Contains("Original Sandbox Session"),
                         "GET /api/backup/current serves opened .agy summary");
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // V1.0 P0/P1/P2 Regression Helpers & Suite (T43 ~ T57)
+        // ══════════════════════════════════════════════════════════════════════
+
+        private static void CreateMinimalValidSqliteDb(string dbPath, string markerValue)
+        {
+            string dir = Path.GetDirectoryName(dbPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+            IntPtr db = IntPtr.Zero;
+            try
+            {
+                AssertEqual(0, t_sqlite3_open_v2(Utf8Z(dbPath), out db, 0x00000002 | 0x00000004, IntPtr.Zero),
+                    "CreateMinimalValidSqliteDb open: " + dbPath);
+                AssertEqual(0, t_sqlite3_exec(db, Utf8Z("CREATE TABLE IF NOT EXISTS trajectory_metadata_blob (k TEXT PRIMARY KEY, v TEXT);"), IntPtr.Zero, IntPtr.Zero, IntPtr.Zero),
+                    "CreateMinimalValidSqliteDb DDL: " + T_GetSqliteErr(db));
+                IntPtr stmt = IntPtr.Zero;
+                AssertEqual(0, t_sqlite3_prepare_v2(db, Utf8Z("INSERT OR REPLACE INTO trajectory_metadata_blob (k, v) VALUES ('id', ?);"), -1, out stmt, IntPtr.Zero),
+                    "CreateMinimalValidSqliteDb prepare");
+                try
+                {
+                    AssertEqual(0, T_BindUtf8Text(stmt, 1, markerValue ?? string.Empty), "CreateMinimalValidSqliteDb bind");
+                    AssertEqual(101, t_sqlite3_step(stmt), "CreateMinimalValidSqliteDb insert");
+                }
+                finally
+                {
+                    if (stmt != IntPtr.Zero) t_sqlite3_finalize(stmt);
+                }
+            }
+            finally
+            {
+                if (db != IntPtr.Zero) t_sqlite3_close(db);
+            }
+        }
+
+        private static string ReadSseUntilEvent(NetworkStream stream, string targetEvent, int timeoutMs)
+        {
+            byte[] buf = new byte[4096];
+            StringBuilder acc = new StringBuilder();
+            Stopwatch sw = Stopwatch.StartNew();
+            stream.ReadTimeout = 500;
+            while (sw.ElapsedMilliseconds < timeoutMs)
+            {
+                int n = 0;
+                try
+                {
+                    n = stream.Read(buf, 0, buf.Length);
+                }
+                catch (IOException)
+                {
+                    continue;
+                }
+                if (n <= 0) break;
+                acc.Append(Encoding.UTF8.GetString(buf, 0, n));
+                string cur = acc.ToString();
+                if (cur.IndexOf("event: " + targetEvent, StringComparison.Ordinal) >= 0)
+                {
+                    int idx = cur.IndexOf("event: " + targetEvent, StringComparison.Ordinal);
+                    if (cur.IndexOf("\n\n", idx, StringComparison.Ordinal) >= 0)
+                        return cur;
+                }
+            }
+            return acc.ToString();
+        }
+
+        private static void T43_P0_1_RelocateProjectPath_NestedGitFolderFolderUri()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t43_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string geminiDir = Path.Combine(sb, ".gemini");
+                string agDir = Path.Combine(geminiDir, "antigravity");
+                string projDir = Path.Combine(geminiDir, "config", "projects");
+                Directory.CreateDirectory(agDir);
+                Directory.CreateDirectory(projDir);
+
+                string pidA = "proj-nested-a";
+                string pidB = "proj-nested-b";
+                string cid = "c4300001-1111-4111-8111-111111111111";
+                string oldUriA = "file:///d%3A/OldRoot/AlphaProj";
+                string newPhysicalA = "E:\\NewRoot\\AlphaProj";
+                string expectedUriA = SessionLifecycleService.ToFileUri(newPhysicalA);
+                string uriB = "file:///e%3A/NewRoot/BetaProj";
+
+                string nestedProjA =
+                    "{\r\n  \"id\": \"" + pidA + "\",\r\n  \"name\": \"AlphaProj\",\r\n" +
+                    "  \"projectResources\": {\r\n    \"resources\": [\r\n      {\r\n        \"gitFolder\": {\r\n          \"folderUri\": \"" + oldUriA + "\"\r\n        }\r\n      }\r\n    ]\r\n  }\r\n}";
+                string nestedProjB =
+                    "{\r\n  \"id\": \"" + pidB + "\",\r\n  \"name\": \"BetaProj\",\r\n" +
+                    "  \"projectResources\": {\r\n    \"resources\": [\r\n      {\r\n        \"gitFolder\": {\r\n          \"folderUri\": \"" + uriB + "\"\r\n        }\r\n      }\r\n    ]\r\n  }\r\n}";
+
+                string projAFile = Path.Combine(projDir, pidA + ".json");
+                string projBFile = Path.Combine(projDir, pidB + ".json");
+                File.WriteAllText(projAFile, nestedProjA, Encoding.UTF8);
+                File.WriteAllText(projBFile, nestedProjB, Encoding.UTF8);
+
+                ProtoNode pNode = BuildRealProtoEntry(cid, "P0-1 Session", null, oldUriA, "AlphaProj", pidA, 5, 2, 1);
+                File.WriteAllBytes(Path.Combine(agDir, "agyhub_summaries_proto.pb"), ProtoCodec.Encode(new List<ProtoNode> { pNode }));
+
+                string summaryDb = Path.Combine(agDir, "conversation_summaries.db");
+                IntPtr db = OpenAndCreateSummaryWalDb(summaryDb);
+                try
+                {
+                    InsertSummaryDbRow(db, cid, "P0-1 Session", "preview", 5, "[\"" + oldUriA + "\"]", "DONE", pidA, "", "", 0, 0, ProtoCodec.Encode(pNode.Children));
+                }
+                finally
+                {
+                    t_sqlite3_close(db);
+                }
+
+                string annotDir = Path.Combine(agDir, "annotations");
+                Directory.CreateDirectory(annotDir);
+                File.WriteAllText(Path.Combine(annotDir, cid + ".pbtxt"), PbtxtAnnotationCodec.UpsertTitle(string.Empty, "P0-1 Session"), Encoding.UTF8);
+
+                List<ConversationSummaryInfo> sums = SessionMetadataExtractor.ExtractSummaries(
+                    File.ReadAllBytes(Path.Combine(agDir, "agyhub_summaries_proto.pb")),
+                    WorkspaceService.LoadLocalProjects(geminiDir));
+
+                int relocCount = SessionLifecycleService.RelocateProjectPath(geminiDir, pidA, "AlphaProj", newPhysicalA, sums);
+                AssertEqual(1, relocCount, "RelocateProjectPath updated 1 session");
+
+                string updatedJsonA = File.ReadAllText(projAFile, Encoding.UTF8);
+                List<string> urisA = DirectStreamArchiver.ExtractAllProjectFolderUris(updatedJsonA);
+                AssertEqual(1, urisA.Count, "RelocateProjectPath keeps exactly 1 folderUri in nested projectResources.resources[0].gitFolder.folderUri");
+                AssertEqual(expectedUriA.ToLowerInvariant(), urisA[0].ToLowerInvariant(), "Nested gitFolder.folderUri updated to new path");
+                AssertTrue(updatedJsonA.Contains("\"gitFolder\"") && !updatedJsonA.Contains("OldRoot"), "Preserved gitFolder nesting and removed OldRoot URI");
+
+                string sqlUrisAfterReloc = QuerySingleText(summaryDb, "SELECT workspace_uris FROM conversation_summaries WHERE conversation_id = ?;", cid);
+                AssertTrue(sqlUrisAfterReloc != null && sqlUrisAfterReloc.IndexOf("NewRoot", StringComparison.OrdinalIgnoreCase) >= 0,
+                    "SQLite workspace_uris updated after RelocateProjectPath");
+
+                List<ConversationSummaryInfo> afterReloc = SessionMetadataExtractor.ExtractSummaries(
+                    File.ReadAllBytes(Path.Combine(agDir, "agyhub_summaries_proto.pb")),
+                    WorkspaceService.LoadLocalProjects(geminiDir));
+                AssertEqual("AlphaProj", afterReloc[0].ProjectName, "ProjectName remains AlphaProj after relocate");
+
+                int moved = SessionLifecycleService.MoveSessionsToProject(geminiDir, new List<string> { cid }, "BetaProj", pidB, uriB);
+                AssertEqual(1, moved, "MoveSessionsToProject moved 1 session to BetaProj");
+
+                string afterMoveJsonB = File.ReadAllText(projBFile, Encoding.UTF8);
+                List<string> urisB = DirectStreamArchiver.ExtractAllProjectFolderUris(afterMoveJsonB);
+                AssertEqual(1, urisB.Count, "Target BetaProj retains single nested folderUri");
+
+                List<ConversationSummaryInfo> afterMove = SessionMetadataExtractor.ExtractSummaries(
+                    File.ReadAllBytes(Path.Combine(agDir, "agyhub_summaries_proto.pb")),
+                    WorkspaceService.LoadLocalProjects(geminiDir));
+                AssertEqual(pidB, afterMove[0].ProjectId, "Proto entry projectId updated to BetaProj");
+                AssertEqual(uriB.ToLowerInvariant(), (afterMove[0].FolderUri ?? string.Empty).ToLowerInvariant(), "Proto workspace URI updated to BetaProj nested folderUri");
+                AssertEqual(pidB, QuerySingleText(summaryDb, "SELECT project_id FROM conversation_summaries WHERE conversation_id = ?;", cid),
+                    "SQLite project_id updated to BetaProj after MoveSessionsToProject");
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T44_P0_2_P0_8_CapabilityDiff_ConflictNoBaselineAndArchiveIgnoresBaseline()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t44_" + Guid.NewGuid().ToString("N"));
+            string zipPath = Path.Combine(sb, "cap_nobase.agy");
+            try
+            {
+                DateTime t1 = new DateTime(2026, 11, 20, 10, 0, 0, DateTimeKind.Utc);
+                CapabilityItem loc = new CapabilityItem { Kind = CapabilityKind.Rule, Id = "GEMINI.md", DisplayName = "GEMINI.md", ContentSignature = "SIG_LOC", RawJsonFragment = "# Local", LastModified = t1 };
+                CapabilityItem rem = new CapabilityItem { Kind = CapabilityKind.Rule, Id = "GEMINI.md", DisplayName = "GEMINI.md", ContentSignature = "SIG_REM", RawJsonFragment = "# Remote", LastModified = t1.AddHours(2) };
+
+                // P0-2: Null baseline => Conflict (no_baseline_review) regardless of mtime skew
+                List<CapabilityDiffNode> noBaseDiff = VisualDiffEngine.ComputeCapabilityDiff(new List<CapabilityItem> { loc }, new List<CapabilityItem> { rem }, null);
+                AssertEqual(1, noBaseDiff.Count, "1 diff node");
+                AssertEqual(CapabilityDiffDirection.Conflict, noBaseDiff[0].Direction, "P0-2: Baseline-less diff yields Conflict");
+                AssertEqual("no_baseline_review", noBaseDiff[0].DirectionReason, "P0-2: DirectionReason is no_baseline_review");
+
+                // P0-8: Host with a vault baseline must still ignore _capBaseline when loading a .agy archive
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string repoDir = Path.Combine(sb, "Repo");
+                string archHome = Path.Combine(sb, "ArchHome");
+                string archGemini = Path.Combine(archHome, ".gemini");
+                Directory.CreateDirectory(geminiDir);
+                Directory.CreateDirectory(repoDir);
+                Directory.CreateDirectory(archGemini);
+
+                File.WriteAllText(Path.Combine(geminiDir, "GEMINI.md"), "# Local Seed\n", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(archGemini, "GEMINI.md"), "# Archive Modified\n", Encoding.UTF8);
+
+                List<CapabilityItem> archCaps = CapabilityVaultService.ScanLocalCapabilities(archGemini, archHome);
+                LocalWorkspaceManager.ExportSelectiveBackup(archGemini, archHome, zipPath, null, null, false, archCaps);
+
+                // Seed a baseline entry claiming GEMINI.md matches archive's signature (would wrongly flag LocalNewer if vault baseline leaked into archive diff)
+                Dictionary<string, string> fakeBaseline = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                fakeBaseline["Rule:GEMINI.md"] = archCaps[0].ContentSignature;
+                CapabilitySyncBaselineStore.Save(Path.Combine(geminiDir, ".companion_cap_sync_state.json"), fakeBaseline);
+
+                string token = "t44_token_1234";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, repoDir, 0, token))
+                {
+                    host.Start();
+                    string openPayload = UnifiedJson.Serialize(new Dictionary<string, object> { { "archivePath", zipPath } }, false);
+                    RawHttpTestResponse openResp = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/open", apiHdr, openPayload);
+                    AssertEqual(200, openResp.StatusCode, "Open .agy returns 200");
+
+                    RawHttpTestResponse bkCur = SendRawTcpHttp(host.Port, null, "GET", "/api/backup/current", apiHdr, null);
+                    AssertEqual(200, bkCur.StatusCode, "GET /api/backup/current returns 200");
+                    AssertTrue(bkCur.BodyText.Contains("\"direction\":\"Conflict\"") && bkCur.BodyText.Contains("no_baseline_review"),
+                        "P0-8: Loaded .agy archive capability diff ignores vault baseline and classifies diff as Conflict/no_baseline_review");
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T45_P0_3_CliArtifactsIncludedAndBinDirectoriesExcluded()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t45_" + Guid.NewGuid().ToString("N"));
+            string fullZip = Path.Combine(sb, "full.agy");
+            string selZip = Path.Combine(sb, "sel.agy");
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string cliDir = Path.Combine(geminiDir, "antigravity-cli");
+                string agDir = Path.Combine(geminiDir, "antigravity");
+                string cliBrainCid = "b4500001-0000-4000-8000-000000000001";
+                Directory.CreateDirectory(Path.Combine(cliDir, "conversations"));
+                Directory.CreateDirectory(Path.Combine(cliDir, "brain", cliBrainCid));
+                Directory.CreateDirectory(Path.Combine(cliDir, "bin"));
+                Directory.CreateDirectory(Path.Combine(agDir, "bin"));
+                Directory.CreateDirectory(Path.Combine(agDir, "conversations"));
+
+                CreateMinimalValidSqliteDb(Path.Combine(cliDir, "conversations", cliBrainCid + ".db"), cliBrainCid);
+                File.WriteAllText(Path.Combine(cliDir, "settings.json"), "{\"cliMode\":true}", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(cliDir, "brain", cliBrainCid, "notes.md"), "# CLI Brain Note", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(cliDir, "bin", "antigravity-cli.exe"), "BIN1", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(agDir, "bin", "rg.exe"), "BIN2", Encoding.UTF8);
+
+                string cid = "c4500001-0000-4000-8000-000000000001";
+                byte[] pb = ProtoCodec.Encode(new List<ProtoNode> { BuildRealProtoEntry(cid, "S45", null, "file:///c%3A/P", "P", "p1", 2, 1, 1) });
+                File.WriteAllBytes(Path.Combine(agDir, "agyhub_summaries_proto.pb"), pb);
+                CreateMinimalValidSqliteDb(Path.Combine(agDir, "conversations", cid + ".db"), cid);
+
+                int fileCount;
+                List<string> warnings;
+                ArchiveTransferService.CreateFullBackup(geminiDir, homeDir, new List<ConversationSummaryInfo>(), fullZip, null, out fileCount, out warnings);
+
+                using (ZipArchive zFull = ZipFile.OpenRead(fullZip))
+                {
+                    bool hasCliDb = false;
+                    bool hasCliBrain = false;
+                    bool hasCliSettings = false;
+                    bool hasBinFile = false;
+                    for (int i = 0; i < zFull.Entries.Count; i++)
+                    {
+                        string fn = zFull.Entries[i].FullName.Replace('\\', '/');
+                        if (fn == "data/antigravity-cli/conversations/" + cliBrainCid + ".db") hasCliDb = true;
+                        if (fn.StartsWith("data/antigravity-cli/brain/", StringComparison.OrdinalIgnoreCase)) hasCliBrain = true;
+                        if (fn == "data/antigravity-cli/settings.json") hasCliSettings = true;
+                        if (fn.IndexOf("antigravity-cli/bin/", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            fn.IndexOf("antigravity/bin/", StringComparison.OrdinalIgnoreCase) >= 0) hasBinFile = true;
+                    }
+                    AssertTrue(hasCliDb, "Full backup includes data/antigravity-cli/conversations/<cid>.db");
+                    AssertTrue(hasCliBrain, "Full backup includes data/antigravity-cli/brain/");
+                    AssertTrue(hasCliSettings, "Full backup includes data/antigravity-cli/settings.json");
+                    AssertTrue(!hasBinFile, "Full backup strictly excludes antigravity-cli/bin/ and antigravity/bin/");
+                }
+
+                // Selective backup also excludes bin/ and can include CLI settings when requested
+                LocalWorkspaceManager.ExportSelectiveBackup(geminiDir, homeDir, selZip, new List<ConversationSummaryInfo>(), null, true, null);
+                using (ZipArchive zSel = ZipFile.OpenRead(selZip))
+                {
+                    bool selHasBin = false;
+                    for (int i = 0; i < zSel.Entries.Count; i++)
+                    {
+                        string fn = zSel.Entries[i].FullName.Replace('\\', '/');
+                        if (fn.Contains("/bin/")) selHasBin = true;
+                    }
+                    AssertTrue(!selHasBin, "Selective backup also excludes bin/");
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T46_P0_4_WalLiveDbAtomicBackup_IntegrityCheckOk()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t46_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(sb);
+                string liveDb = Path.Combine(sb, "live.db");
+                string backupDb = Path.Combine(sb, "backup.db");
+
+                IntPtr db = IntPtr.Zero;
+                try
+                {
+                    AssertEqual(0, t_sqlite3_open_v2(Utf8Z(liveDb), out db, 0x00000002 | 0x00000004, IntPtr.Zero), "Open live DB");
+                    AssertEqual(0, t_sqlite3_exec(db, Utf8Z("PRAGMA journal_mode=WAL; CREATE TABLE items (id INTEGER PRIMARY KEY, val TEXT);"), IntPtr.Zero, IntPtr.Zero, IntPtr.Zero),
+                        "Enable WAL & create table");
+                    AssertEqual(0, t_sqlite3_exec(db, Utf8Z("INSERT INTO items (id, val) VALUES (1, 'committed'), (2, 'wal_uncheckpointed_row');"), IntPtr.Zero, IntPtr.Zero, IntPtr.Zero),
+                        "Insert WAL rows without checkpoint while keeping connection open");
+
+                    string err;
+                    bool ok = SqliteOnlineBackup.BackupDatabaseAtomic(liveDb, backupDb, out err);
+                    AssertTrue(ok, "SqliteOnlineBackup.BackupDatabaseAtomic succeeds on open WAL DB: " + err);
+                }
+                finally
+                {
+                    if (db != IntPtr.Zero) t_sqlite3_close(db);
+                }
+
+                string detail;
+                bool integrityOk = SqliteOnlineBackup.RunIntegrityCheck(backupDb, out detail);
+                AssertTrue(integrityOk && string.Equals(detail, "ok", StringComparison.OrdinalIgnoreCase),
+                    "PRAGMA integrity_check == ok on backed up WAL DB (got: " + detail + ")");
+
+                string val2 = QuerySingleText(backupDb, "SELECT val FROM items WHERE id = 2;", null);
+                AssertEqual("wal_uncheckpointed_row", val2, "Uncheckpointed -wal row preserved in atomic backup DB");
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T47_P0_5_JsoncCommentsPreservedAndSingleTimestampedBackupPerBatch()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t47_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string cfgDir = Path.Combine(geminiDir, "config");
+                Directory.CreateDirectory(cfgDir);
+
+                string mcpFile = Path.Combine(cfgDir, "mcp_config.json");
+                File.WriteAllText(mcpFile,
+                    "{\r\n  // Header JSONC comment must stay\r\n  \"mcpServers\": {\r\n    \"keep-me\": { /* inline comment */ \"command\": \"node\", \"args\": [\"a.js\"] }\r\n  }\r\n}\r\n",
+                    Encoding.UTF8);
+
+                List<CapabilityItem> batchCaps = new List<CapabilityItem>
+                {
+                    new CapabilityItem { Kind = CapabilityKind.McpServer, Id = "srv-a", DisplayName = "srv-a", RawJsonFragment = "{\"command\":\"python\",\"args\":[\"s1.py\"]}" },
+                    new CapabilityItem { Kind = CapabilityKind.McpServer, Id = "srv-b", DisplayName = "srv-b", RawJsonFragment = "{\"command\":\"python\",\"args\":[\"s2.py\"]}" }
+                };
+
+                int count = CapabilityVaultService.ImportCapabilitiesToLocal(geminiDir, homeDir, batchCaps);
+                AssertEqual(2, count, "Imported 2 MCP capabilities in one batch");
+
+                string after = File.ReadAllText(mcpFile, Encoding.UTF8);
+                AssertTrue(after.Contains("// Header JSONC comment must stay"), "Line JSONC comment preserved");
+                AssertTrue(after.Contains("/* inline comment */"), "Block JSONC comment preserved");
+                Dictionary<string, string> entries = CapabilityVaultService.ExtractObjectEntries(after, "mcpServers");
+                AssertEqual(3, entries.Count, "Existing keep-me + srv-a + srv-b all present");
+
+                string[] bakFiles = Directory.GetFiles(cfgDir, "mcp_config.json.bak.*", SearchOption.TopDirectoryOnly);
+                AssertEqual(1, bakFiles.Length, "P0-5: Exactly ONE timestamped .bak.* file created for batch mutation");
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T48_P0_6_P0_7_SelectiveImportSubagentClosureAndParentIdInSqlite()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t48_" + Guid.NewGuid().ToString("N"));
+            string zipPath = Path.Combine(sb, "closure.agy");
+            try
+            {
+                string srcHome = Path.Combine(sb, "SrcHome");
+                string srcGemini = Path.Combine(srcHome, ".gemini");
+                string srcAg = Path.Combine(srcGemini, "antigravity");
+                Directory.CreateDirectory(Path.Combine(srcAg, "conversations"));
+                Directory.CreateDirectory(Path.Combine(srcAg, "brain"));
+
+                string dstHome = Path.Combine(sb, "DstHome");
+                string dstGemini = Path.Combine(dstHome, ".gemini");
+                string dstAg = Path.Combine(dstGemini, "antigravity");
+                Directory.CreateDirectory(Path.Combine(dstAg, "conversations"));
+
+                string cidParent = "p4800001-0000-4000-8000-000000000001";
+                string cidSub = "s4800002-0000-4000-8000-000000000002";
+
+                ProtoNode nPar = BuildRealProtoEntry(cidParent, "Parent Session", null, "file:///c%3A/Work/P48", "P48", "pid-48", 10, 3, 1);
+                ProtoNode nSub = BuildRealProtoEntry(cidSub, "Subagent Task", null, "file:///c%3A/Work/P48", "P48", "pid-48", 4, 1, 0);
+                nSub.GetChild(2).GetChild(17).Children.Add(new ProtoNode(11, 2) { RawBytes = Encoding.UTF8.GetBytes(cidParent), IsModified = true });
+                byte[] srcPb = ProtoCodec.Encode(new List<ProtoNode> { nPar, nSub });
+                File.WriteAllBytes(Path.Combine(srcAg, "agyhub_summaries_proto.pb"), srcPb);
+                CreateMinimalValidSqliteDb(Path.Combine(srcAg, "conversations", cidParent + ".db"), cidParent);
+                CreateMinimalValidSqliteDb(Path.Combine(srcAg, "conversations", cidSub + ".db"), cidSub);
+
+                List<ConversationSummaryInfo> srcSums = SessionMetadataExtractor.ExtractSummariesFromProto(srcPb);
+                LocalWorkspaceManager.ExportSelectiveBackup(srcGemini, srcHome, zipPath, srcSums, null, false, null);
+
+                // Seed target SQLite DB at antigravity/conversation_summaries.db
+                string targetSummaryDb = Path.Combine(dstAg, "conversation_summaries.db");
+                IntPtr db = OpenAndCreateSummaryWalDb(targetSummaryDb);
+                t_sqlite3_close(db);
+
+                BackupArchiveIndex idx = StreamingZipIndexReader.ReadIndex(zipPath, dstHome, dstGemini);
+                ConversationSummaryInfo parentOnly = idx.Conversations.Find(x => x.ConversationId == cidParent);
+                AssertTrue(parentOnly != null, "Parent session indexed from .agy");
+
+                SelectiveImportRequest req = new SelectiveImportRequest
+                {
+                    GeminiPath = dstGemini,
+                    HomePath = dstHome,
+                    SourceMode = RightPaneSourceMode.BackupArchive,
+                    LoadedBackupPath = zipPath,
+                    BackupIndex = idx,
+                    SelectedConversations = new List<ConversationSummaryInfo> { parentOnly }
+                };
+                OperationResult<SelectiveImportResult> impRes = ArchiveTransferService.PerformSelectiveImportResult(req, null);
+                AssertTrue(impRes.Ok, "Selective import succeeded: " + impRes.ErrorMessage);
+                AssertTrue(impRes.Data.ImportedConvIds.Contains(cidParent) && impRes.Data.ImportedConvIds.Contains(cidSub),
+                    "P0-7: Importing parent auto-expanded subagent closure");
+
+                string gotParentInSql = QuerySingleText(targetSummaryDb, "SELECT parent_conversation_id FROM conversation_summaries WHERE conversation_id = ?;", cidSub);
+                AssertEqual(cidParent, gotParentInSql, "P0-6: Subagent parent_conversation_id persisted in SQLite conversation_summaries");
+
+                // Also verify LocalWebHost /api/backup/current groups subagent under parent
+                string token = "t48_tok_9876";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(dstHome, dstGemini, Path.Combine(sb, "Repo"), 0, token))
+                {
+                    host.Start();
+                    SendRawTcpHttp(host.Port, null, "POST", "/api/backup/open", apiHdr,
+                        UnifiedJson.Serialize(new Dictionary<string, object> { { "archivePath", zipPath } }, false));
+                    RawHttpTestResponse curResp = SendRawTcpHttp(host.Port, null, "GET", "/api/backup/current", apiHdr, null);
+                    AssertEqual(200, curResp.StatusCode, "GET /api/backup/current returns 200");
+                    AssertTrue(curResp.BodyText.Contains("\"childCount\":1"), "P0-7: Backup session grouping reports childCount:1 on parent");
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T49_P1_1_NotFullyIdleLockedVsActionableSeparation()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t49_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string agDir = Path.Combine(geminiDir, "antigravity");
+                Directory.CreateDirectory(agDir);
+
+                string cidIdle = "i4900001-0000-4000-8000-000000000001";
+                string cidLocked = "l4900002-0000-4000-8000-000000000002";
+
+                ProtoNode nIdle = BuildRealProtoEntry(cidIdle, "Idle Untagged Session", null, "file:///c%3A/P", "Proj", "p49", 5, 1, 1);
+                ProtoNode nLocked = BuildRealProtoEntry(cidLocked, "Active Locked Session", null, "file:///c%3A/P", "Proj", "p49", 8, 2, 1);
+                File.WriteAllBytes(Path.Combine(agDir, "agyhub_summaries_proto.pb"), ProtoCodec.Encode(new List<ProtoNode> { nIdle, nLocked }));
+
+                string summaryDb = Path.Combine(agDir, "conversation_summaries.db");
+                IntPtr db = OpenAndCreateSummaryWalDb(summaryDb);
+                try
+                {
+                    InsertSummaryDbRow(db, cidIdle, "Idle Untagged Session", "p", 5, "file:///c%3A/P", "DONE", "p49", "", "", 0, 0, ProtoCodec.Encode(nIdle.Children));
+                    InsertSummaryDbRow(db, cidLocked, "Active Locked Session", "p", 8, "file:///c%3A/P", "RUNNING", "p49", "", "", 0, 1, ProtoCodec.Encode(nLocked.Children));
+                }
+                finally
+                {
+                    t_sqlite3_close(db);
+                }
+
+                string token = "t49_tok_1122";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "Repo"), 0, token))
+                {
+                    host.Start();
+                    RawHttpTestResponse ov = SendRawTcpHttp(host.Port, null, "GET", "/api/overview", apiHdr, null);
+                    AssertEqual(200, ov.StatusCode, "GET /api/overview returns 200");
+                    IDictionary<string, object> ovObj = UnifiedJson.Parse(ov.BodyText) as IDictionary<string, object>;
+                    IDictionary<string, object> countsObj = ovObj != null && ovObj.ContainsKey("counts") ? UnifiedJson.AsDict(ovObj["counts"]) : null;
+                    AssertTrue(countsObj != null, "Overview contains counts dictionary");
+                    AssertEqual(1, UnifiedJson.GetInt(countsObj, "untaggedActionableCount", -1), "P1-1: Overview counts.untaggedActionableCount == 1");
+                    AssertEqual(1, UnifiedJson.GetInt(countsObj, "untaggedLockedActiveCount", -1), "P1-1: Overview counts.untaggedLockedActiveCount == 1");
+                    List<object> lockedOv = ovObj.ContainsKey("lockedSessions") ? UnifiedJson.AsList(ovObj["lockedSessions"]) : null;
+                    AssertTrue(lockedOv != null && lockedOv.Count == 1 && ov.BodyText.Contains(cidLocked), "P1-1: Overview exposes lockedSessions with cidLocked");
+
+                    RawHttpTestResponse cands = SendRawTcpHttp(host.Port, null, "GET", "/api/rename/candidates", apiHdr, null);
+                    AssertEqual(200, cands.StatusCode, "GET /api/rename/candidates returns 200");
+                    IDictionary<string, object> cObj = UnifiedJson.Parse(cands.BodyText) as IDictionary<string, object>;
+                    AssertEqual(1, UnifiedJson.GetInt(cObj, "actionableCount", -1), "P1-1: Candidates actionableCount == 1");
+                    AssertEqual(1, UnifiedJson.GetInt(cObj, "lockedActiveCount", -1), "P1-1: Candidates lockedActiveCount == 1");
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T50_P1_2_SlashCommandStripCustomBracketPreserveAndHyphenDedup()
+        {
+            RenameRulesConfig rules = new RenameRulesConfig();
+            rules.PreserveExistingTag = true;
+            rules.KeepExistingBracketedPrefix = true;
+
+            string pref1, cleaned1, title1;
+            AutoTitleSynthesizer.SynthesizeTitle(
+                new ConversationSummaryInfo { ConversationId = "s50-1", ProjectName = "my-app", DisplayTitle = "" },
+                "/custom-audit Check memory leaks in worker",
+                null,
+                rules,
+                out pref1,
+                out cleaned1,
+                out title1);
+            AssertTrue(!cleaned1.Contains("/custom-audit") && cleaned1.Contains("Check memory leaks"),
+                "P1-2: Arbitrary slash command stripped from first prompt");
+
+            string pref2, cleaned2, title2;
+            AutoTitleSynthesizer.SynthesizeTitle(
+                new ConversationSummaryInfo { ConversationId = "s50-2", ProjectName = "my-app", DisplayTitle = "【CustomTag】Important Handcrafted Title" },
+                "Some later prompt",
+                null,
+                rules,
+                out pref2,
+                out cleaned2,
+                out title2);
+            AssertEqual("【CustomTag】Important Handcrafted Title", title2,
+                "P1-2: Meaningful custom 【...】 title preserved intact");
+
+            string pref3, cleaned3, title3;
+            AutoTitleSynthesizer.SynthesizeTitle(
+                new ConversationSummaryInfo { ConversationId = "s50-3", ProjectName = "my-app", DisplayTitle = "my-app: Fix build failure" },
+                "my-app: Fix build failure",
+                null,
+                rules,
+                out pref3,
+                out cleaned3,
+                out title3);
+            AssertEqual("【my-app】Fix build failure", title3,
+                "P1-2: Hyphenated project prefix deduplicated before prefixing");
+        }
+
+        private static void T51_P1_4_CapabilitiesRelocateFailureReturnsHttp400()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t51_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string cfgDir = Path.Combine(geminiDir, "config");
+                Directory.CreateDirectory(cfgDir);
+                File.WriteAllText(Path.Combine(cfgDir, "mcp_config.json"),
+                    "{\"mcpServers\":{\"srv-existing\":{\"command\":\"python\",\"args\":[\"C:\\\\existing_tool.py\"]}}}",
+                    Encoding.UTF8);
+
+                string token = "t51_tok_400";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "Repo"), 0, token))
+                {
+                    host.Start();
+                    string payload = "{\"key\":\"McpServer:srv-existing\",\"target\":\"local\",\"oldPath\":\"C:\\\\wrong_mismatch.py\",\"newPath\":\"C:\\\\new.py\"}";
+                    RawHttpTestResponse resp = SendRawTcpHttp(host.Port, null, "POST", "/api/capabilities/relocate", apiHdr, payload);
+                    AssertEqual(400, resp.StatusCode, "P1-4: Failed capability relocate returns HTTP 400");
+                    AssertTrue(resp.BodyText.Contains("\"ok\":false") && resp.BodyText.Contains("\"error\""),
+                        "P1-4: 400 response contains {ok:false, error:...}");
+
+                    // Also verify "target":"repo" fallback honors repo scope (not silently routed to local)
+                    string repoPayload = "{\"key\":\"McpServer:srv-existing\",\"target\":\"repo\",\"oldPath\":\"C:\\\\wrong.py\",\"newPath\":\"C:\\\\new.py\"}";
+                    RawHttpTestResponse repoResp = SendRawTcpHttp(host.Port, null, "POST", "/api/capabilities/relocate", apiHdr, repoPayload);
+                    AssertEqual(404, repoResp.StatusCode, "Relocate with target=repo checks repo pool rather than local");
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T52_P1_6_Fts5ZeroHitLikeFallback()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t52_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(sb);
+                string dbPath = Path.Combine(sb, "state.vscdb");
+                string cid = "f5200001-0000-4000-8000-000000000001";
+                IntPtr db = OpenAndCreateSummaryWalDb(dbPath);
+                try
+                {
+                    ProtoNode n = BuildRealProtoEntry(cid, "AlphaBeta99Token Gamma", null, "file:///c%3A/P", "Proj", "p52", 3, 1, 1);
+                    InsertSummaryDbRow(db, cid, "AlphaBeta99Token Gamma", "preview", 3, "file:///c%3A/P", "DONE", "p52", "", "", 0, 0, ProtoCodec.Encode(n.Children));
+                    InsertFtsDbRow(db, cid, 0, "AlphaBeta99Token Gamma", "C:/P", "Proj", "AlphaBeta99Token", "Gamma");
+                }
+                finally
+                {
+                    t_sqlite3_close(db);
+                }
+
+                // FTS5 unicode61 tokenizes "AlphaBeta99Token" as one token -> searching substring "Beta99" gives 0 FTS5 hits -> triggers LIKE fallback!
+                string err;
+                HashSet<string> hits = SummarySqliteBridge.SearchConversationsFullText(dbPath, "Beta99", out err);
+                AssertTrue(hits != null && hits.Contains(cid), "P1-6: FTS5 0-hit query falls back to LIKE and finds cid (err=" + err + ")");
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T53_P1_8_ImportedProjectIdRewriteAndOrphanPbtxtExcluded()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t53_" + Guid.NewGuid().ToString("N"));
+            string zipPath = Path.Combine(sb, "p1_8.agy");
+            try
+            {
+                string srcHome = Path.Combine(sb, "SrcHome");
+                string srcGemini = Path.Combine(srcHome, ".gemini");
+                string srcAg = Path.Combine(srcGemini, "antigravity");
+                string srcAnnot = Path.Combine(srcAg, "annotations");
+                string srcProjDir = Path.Combine(srcGemini, "config", "projects");
+                Directory.CreateDirectory(Path.Combine(srcAg, "conversations"));
+                Directory.CreateDirectory(srcAnnot);
+                Directory.CreateDirectory(srcProjDir);
+
+                string dstHome = Path.Combine(sb, "DstHome");
+                string dstGemini = Path.Combine(dstHome, ".gemini");
+                string dstAg = Path.Combine(dstGemini, "antigravity");
+                string dstProjDir = Path.Combine(dstGemini, "config", "projects");
+                Directory.CreateDirectory(Path.Combine(dstAg, "conversations"));
+                Directory.CreateDirectory(dstProjDir);
+
+                string cidKeep = "k5300001-0000-4000-8000-000000000001";
+                string cidOrphan = "o5300002-0000-4000-8000-000000000002";
+                string bakPid = "bak-pid-53";
+                string targetPid = "local-target-pid-53";
+
+                File.WriteAllText(Path.Combine(srcProjDir, bakPid + ".json"),
+                    WorkspaceService.GenerateStandardProjectJson(bakPid, "SameProj", "D:\\MachineA\\SameProj"), Encoding.UTF8);
+
+                // Seed local project with the SAME project name on different local path & different local ID so import maps bakPid -> targetPid
+                File.WriteAllText(Path.Combine(dstProjDir, targetPid + ".json"),
+                    WorkspaceService.GenerateStandardProjectJson(targetPid, "SameProj", "D:\\MachineB\\SameProj"), Encoding.UTF8);
+
+                ProtoNode nKeep = BuildRealProtoEntry(cidKeep, "Kept Session", null, "file:///d%3A/MachineA/SameProj", "SameProj", bakPid, 3, 1, 1);
+                byte[] pb = ProtoCodec.Encode(new List<ProtoNode> { nKeep });
+                File.WriteAllBytes(Path.Combine(srcAg, "agyhub_summaries_proto.pb"), pb);
+                CreateMinimalValidSqliteDb(Path.Combine(srcAg, "conversations", cidKeep + ".db"), cidKeep);
+                File.WriteAllText(Path.Combine(srcAnnot, cidKeep + ".pbtxt"), PbtxtAnnotationCodec.UpsertTitle(string.Empty, "Kept Session"), Encoding.UTF8);
+                File.WriteAllText(Path.Combine(srcAnnot, cidOrphan + ".pbtxt"), PbtxtAnnotationCodec.UpsertTitle(string.Empty, "Orphan Annotation"), Encoding.UTF8);
+
+                // Pack full backup so zip contains both the project JSON and the orphan .pbtxt
+                int fc;
+                List<string> warns;
+                ArchiveTransferService.CreateFullBackup(srcGemini, srcHome, new List<ConversationSummaryInfo> { SessionMetadataExtractor.ExtractSummariesFromProto(pb)[0] }, zipPath, null, out fc, out warns);
+
+                BackupArchiveIndex idx = StreamingZipIndexReader.ReadIndex(zipPath, dstHome, dstGemini);
+                Dictionary<string, ProjectMetadata> locProjs = WorkspaceService.LoadLocalProjects(dstGemini);
+                SelectiveImportRequest req = new SelectiveImportRequest
+                {
+                    GeminiPath = dstGemini,
+                    HomePath = dstHome,
+                    SourceMode = RightPaneSourceMode.BackupArchive,
+                    LoadedBackupPath = zipPath,
+                    BackupIndex = idx,
+                    LocalProjects = locProjs,
+                    SelectedConversations = new List<ConversationSummaryInfo>(idx.Conversations)
+                };
+                OperationResult<SelectiveImportResult> imp = ArchiveTransferService.PerformSelectiveImportResult(req, null);
+                AssertTrue(imp.Ok, "P1-8 Selective import ok: " + imp.ErrorMessage);
+
+                AssertTrue(!File.Exists(Path.Combine(dstGemini, "antigravity", "annotations", cidOrphan + ".pbtxt")),
+                    "P1-8: Unselected orphan .pbtxt excluded from selective import");
+                AssertTrue(File.Exists(Path.Combine(dstGemini, "antigravity", "annotations", cidKeep + ".pbtxt")),
+                    "Selected session .pbtxt imported");
+
+                string[] projFiles = Directory.GetFiles(dstProjDir, "*.json");
+                for (int i = 0; i < projFiles.Length; i++)
+                {
+                    string expectedId = Path.GetFileNameWithoutExtension(projFiles[i]);
+                    Dictionary<string, object> pDict = UnifiedJson.Parse(File.ReadAllText(projFiles[i], Encoding.UTF8)) as Dictionary<string, object>;
+                    AssertEqual(expectedId, UnifiedJson.GetString(pDict, "id", ""), "P1-8: Project JSON internal id matches filename/targetId");
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T54_P1_10_SseDoneEventOkFalseOnImportError()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t54_" + Guid.NewGuid().ToString("N"));
+            string zipPath = Path.Combine(sb, "p1_10.agy");
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string srcHome = Path.Combine(sb, "SrcHome");
+                string srcGemini = Path.Combine(srcHome, ".gemini");
+                Directory.CreateDirectory(geminiDir);
+                Directory.CreateDirectory(srcGemini);
+                File.WriteAllText(Path.Combine(srcGemini, "GEMINI.md"), "# Seed Rule\n", Encoding.UTF8);
+
+                List<CapabilityItem> caps = CapabilityVaultService.ScanLocalCapabilities(srcGemini, srcHome);
+                LocalWorkspaceManager.ExportSelectiveBackup(srcGemini, srcHome, zipPath, null, null, false, caps);
+
+                string token = "t54_tok_sse";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "Repo"), 0, token))
+                {
+                    host.Start();
+
+                    RawHttpTestResponse openResp = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/open", apiHdr,
+                        UnifiedJson.Serialize(new Dictionary<string, object> { { "archivePath", zipPath } }, false));
+                    AssertEqual(200, openResp.StatusCode, "Open backup succeeded");
+
+                    // Connect SSE listener before deleting archive & starting failing import
+                    using (TcpClient sseClient = new TcpClient("127.0.0.1", host.Port))
+                    {
+                        sseClient.ReceiveTimeout = 5000;
+                        NetworkStream sseStream = sseClient.GetStream();
+                        byte[] reqBytes = Encoding.ASCII.GetBytes(
+                            "GET /api/events HTTP/1.1\r\nHost: 127.0.0.1:" + host.Port + "\r\nX-AGY-Token: " + token + "\r\nConnection: keep-alive\r\n\r\n");
+                        sseStream.Write(reqBytes, 0, reqBytes.Length);
+                        sseStream.Flush();
+
+                        string hello = ReadSseUntilEvent(sseStream, "connected", 3000);
+                        AssertTrue(hello.Contains("event: connected"), "SSE connected handshake received");
+
+                        // Pass capKey absent from loaded index so PerformSelectiveImportResult fails with ErrorMessage inside background job
+                        RawHttpTestResponse impStart = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/import", apiHdr,
+                            "{\"capKeys\":[\"Rule:NonExistentCap\"],\"cids\":[],\"closeIdeIfRunning\":false}");
+                        AssertEqual(202, impStart.StatusCode, "Background import job accepted (202 Accepted)");
+
+                        string doneText = ReadSseUntilEvent(sseStream, "job_done", 5000);
+                        AssertTrue(doneText.Contains("event: job_done"), "P1-10: Received SSE job_done event");
+
+                        int evIdx = doneText.LastIndexOf("event: job_done", StringComparison.Ordinal);
+                        int dataIdx = doneText.IndexOf("data:", evIdx, StringComparison.Ordinal);
+                        int lineEnd = doneText.IndexOf('\n', dataIdx);
+                        string jsonLine = (lineEnd > dataIdx ? doneText.Substring(dataIdx + 5, lineEnd - dataIdx - 5) : doneText.Substring(dataIdx + 5)).Trim();
+                        IDictionary<string, object> envObj = UnifiedJson.Parse(jsonLine) as IDictionary<string, object>;
+                        IDictionary<string, object> payloadObj = (envObj != null && envObj.ContainsKey("payload")) ? UnifiedJson.AsDict(envObj["payload"]) : envObj;
+                        AssertTrue(payloadObj != null && !UnifiedJson.GetBool(payloadObj, "ok", true), "P1-10: job_done ok == false on error");
+                        AssertTrue(!string.IsNullOrEmpty(UnifiedJson.GetString(payloadObj, "errorMessage", "")), "P1-10: job_done includes errorMessage");
+                    }
+                    host.Stop();
+                }
+
+                // P2-2: Verify SseHub ClientQueueState bounded capacity (128) drops oldest on overflow
+                SseHub.ClientQueueState qState = new SseHub.ClientQueueState(null, null);
+                for (int i = 0; i < SseHub.MaxClientQueueCapacity + 15; i++)
+                {
+                    qState.EnqueueBounded(Encoding.UTF8.GetBytes("event: ping\ndata: " + i + "\n\n"));
+                }
+                List<byte[]> drained = qState.DrainPending();
+                AssertEqual(SseHub.MaxClientQueueCapacity, drained.Count, "P2-2: SSE queue stays bounded at 128 frames");
+                AssertEqual(15L, qState.DroppedFrames, "P2-2: DroppedFrames tracks 15 evicted oldest frames");
+                AssertTrue(Encoding.UTF8.GetString(drained[0]).Contains("data: 15"), "P2-2: Oldest 0..14 frames dropped, frame 15 retained first");
+                qState.CloseQuietly();
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T55_P1_11_BusyJob409DoesNotKillIde()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t55_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                Directory.CreateDirectory(geminiDir);
+
+                string token = "t55_tok_busy";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "Repo"), 0, token))
+                {
+                    host.Start();
+                    AssertTrue(host.TryAcquireJob("simulated_job", "Busy test"), "Acquired active job lock");
+                    try
+                    {
+                        // Even with closeIdeIfRunning=true & forceKill=true, busy job returns 409 immediately BEFORE EnsureIdeClosedIfNeeded
+                        RawHttpTestResponse busyFull = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/full", apiHdr,
+                            "{\"outputPath\":\"" + UnifiedJson.EscapeString(Path.Combine(sb, "out.agy")) + "\",\"closeIdeIfRunning\":true,\"forceKill\":true}");
+                        AssertEqual(409, busyFull.StatusCode, "P1-11: Busy job returns HTTP 409 immediately without attempting IDE kill");
+
+                        RawHttpTestResponse busyDel = SendRawTcpHttp(host.Port, null, "POST", "/api/sessions/delete", apiHdr,
+                            "{\"cids\":[\"c5500001-0000-4000-8000-000000000001\"],\"closeIdeIfRunning\":true,\"forceKill\":true}");
+                        AssertEqual(409, busyDel.StatusCode, "P1-11: Write endpoint checks TryAcquireJob before IDE close");
+                    }
+                    finally
+                    {
+                        host.ReleaseJob();
+                    }
+                    host.Stop();
+                }
+
+                // P2-2: Verify SseHub ClientQueueState bounded capacity (128) drops oldest on overflow
+                SseHub.ClientQueueState qState = new SseHub.ClientQueueState(null, null);
+                for (int i = 0; i < SseHub.MaxClientQueueCapacity + 15; i++)
+                {
+                    qState.EnqueueBounded(Encoding.UTF8.GetBytes("event: ping\ndata: " + i + "\n\n"));
+                }
+                List<byte[]> drained = qState.DrainPending();
+                AssertEqual(SseHub.MaxClientQueueCapacity, drained.Count, "P2-2: SSE queue stays bounded at 128 frames");
+                AssertEqual(15L, qState.DroppedFrames, "P2-2: DroppedFrames tracks 15 evicted oldest frames");
+                AssertTrue(Encoding.UTF8.GetString(drained[0]).Contains("data: 15"), "P2-2: Oldest 0..14 frames dropped, frame 15 retained first");
+                qState.CloseQuietly();
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T56_P2_1_PortScopedCookieIsolation()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t56_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                Directory.CreateDirectory(geminiDir);
+
+                string tokA = "token_host_A_1111";
+                string tokB = "token_host_B_2222";
+                using (LocalWebHost hostA = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "RepoA"), 0, tokA))
+                using (LocalWebHost hostB = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "RepoB"), 0, tokB))
+                {
+                    hostA.Start();
+                    hostB.Start();
+
+                    RawHttpTestResponse bootA = SendRawTcpHttp(hostA.Port, null, "GET", "/?t=" + tokA, null, null);
+                    RawHttpTestResponse bootB = SendRawTcpHttp(hostB.Port, null, "GET", "/?t=" + tokB, null, null);
+                    AssertTrue(bootA.SetCookie.Contains("agy_sid_" + hostA.Port + "=" + tokA), "Host A sets port-scoped cookie");
+                    AssertTrue(bootB.SetCookie.Contains("agy_sid_" + hostB.Port + "=" + tokB), "Host B sets distinct port-scoped cookie");
+
+                    // Browser shares cookies across localhost ports in one Cookie header -> both hosts extract only their own port cookie
+                    string combinedCookie = "agy_sid_" + hostA.Port + "=" + tokA + "; agy_sid_" + hostB.Port + "=" + tokB;
+                    RawHttpTestResponse sessA = SendRawTcpHttp(hostA.Port, null, "GET", "/api/auth/session",
+                        new Dictionary<string, string> { { "Cookie", combinedCookie } }, null);
+                    RawHttpTestResponse sessB = SendRawTcpHttp(hostB.Port, null, "GET", "/api/auth/session",
+                        new Dictionary<string, string> { { "Cookie", combinedCookie } }, null);
+                    AssertEqual(200, sessA.StatusCode, "Host A accepts combined cookie header");
+                    AssertEqual(200, sessB.StatusCode, "Host B accepts combined cookie header");
+                    AssertTrue(sessA.BodyText.Contains(tokA) && !sessA.BodyText.Contains(tokB), "Host A resolves tokA");
+                    AssertTrue(sessB.BodyText.Contains(tokB) && !sessB.BodyText.Contains(tokA), "Host B resolves tokB");
+
+                    // Host A cookie alone is rejected by Host B
+                    RawHttpTestResponse crossHost = SendRawTcpHttp(hostB.Port, null, "GET", "/api/overview",
+                        new Dictionary<string, string> { { "Cookie", "agy_sid_" + hostA.Port + "=" + tokA } }, null);
+                    AssertEqual(403, crossHost.StatusCode, "P2-1: Host A cookie is rejected by Host B (403 Forbidden)");
+
+                    hostA.Stop();
+                    hostB.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T57_P2_5_AsciiStatusLineAndExplorerPathTraversalRejected()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t57_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                Directory.CreateDirectory(geminiDir);
+
+                string token = "t57_tok_sec";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "Repo"), 0, token))
+                {
+                    host.Start();
+
+                    // Check strict ASCII status reason phrases
+                    RawHttpTestResponse err400 = SendRawTcpHttp(host.Port, null, "POST", "/api/capabilities/relocate", apiHdr,
+                        "{\"key\":\"McpServer:x\",\"oldPath\":\"\",\"newPath\":\"y\"}");
+                    AssertEqual(400, err400.StatusCode, "Invalid relocate returns 400");
+                    AssertEqual("HTTP/1.1 400 Bad Request", err400.StatusLine, "P2-5: ASCII status line 400 Bad Request");
+
+                    RawHttpTestResponse trav1 = SendRawTcpHttp(host.Port, null, "POST", "/api/native/open-in-explorer", apiHdr,
+                        "{\"path\":\"..\\\\..\\\\Windows\\\\System32\\\\cmd.exe\"}");
+                    AssertTrue(trav1.StatusCode == 400 || trav1.StatusCode == 403, "P2-5: Relative path traversal rejected (400/403)");
+                    AssertTrue(trav1.BodyText.Contains("\"ok\":false"), "P2-5: Rejection body has ok:false");
+
+                    RawHttpTestResponse outsideRoot = SendRawTcpHttp(host.Port, null, "POST", "/api/native/open-in-explorer", apiHdr,
+                        "{\"path\":\"C:\\\\Windows\\\\System32\\\\notepad.exe\"}");
+                    AssertTrue(outsideRoot.StatusCode == 400 || outsideRoot.StatusCode == 403, "P2-5: Out-of-root system path rejected by explorer endpoint");
+
+                    // Verify directory trailing backslash does not produce \" quote-escape in explorer arguments, and file uses /select,
+                    string testFile = Path.Combine(geminiDir, "probe_target.txt");
+                    File.WriteAllText(testFile, "ok", Encoding.UTF8);
+                    string canOut, expArgs, expErr;
+                    int expCode;
+                    AssertTrue(ApiRouter.TryValidateExplorerTarget(geminiDir + "\\", new string[] { homeDir }, out canOut, out expArgs, out expCode, out expErr),
+                        "Allowed directory with trailing backslash validates");
+                    AssertTrue(!expArgs.EndsWith("\\\""), "P2-5: Directory explorer args strip trailing backslash before closing quote");
+                    AssertTrue(ApiRouter.TryValidateExplorerTarget(testFile, new string[] { homeDir }, out canOut, out expArgs, out expCode, out expErr),
+                        "Allowed file validates for explorer /select");
+                    AssertTrue(expArgs.StartsWith("/select,\"", StringComparison.Ordinal) && expArgs.EndsWith("\"", StringComparison.Ordinal),
+                        "P2-5: File explorer args properly quote /select, target");
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T58_Stage2_ConfigJsonUserSettingsPreserveUnknownKeysAndEnums()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t58_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string cfgDir = Path.Combine(geminiDir, "config");
+                Directory.CreateDirectory(cfgDir);
+
+                string configPath = Path.Combine(cfgDir, "config.json");
+                string origJson =
+                    "{\r\n" +
+                    "  // Preserve header JSONC comment\r\n" +
+                    "  \"userSettings\": {\r\n" +
+                    "    \"autoExecutionPolicy\": \"CASCADE_COMMANDS_AUTO_EXECUTION_OFF\",\r\n" +
+                    "    \"artifactReviewMode\": \"ARTIFACT_REVIEW_MODE_EXPERIMENTAL_CUSTOM\",\r\n" +
+                    "    \"enableTerminalSandbox\": false,\r\n" +
+                    "    \"customThemeSeedsLight\": { \"primary\": \"#CB4B16\", \"background\": \"#FAF4E5\" },\r\n" +
+                    "    \"voiceName\": \"Fola\",\r\n" +
+                    "    \"orchestratorExecutorModel\": \"MODEL_PLACEHOLDER_M526\"\r\n" +
+                    "  },\r\n" +
+                    "  \"sidecars\": {\r\n" +
+                    "    \"swarm/swarm_board\": { \"projectId\": \"p-58\", \"schemaVersion\": 1 }\r\n" +
+                    "  }\r\n" +
+                    "}\r\n";
+                File.WriteAllText(configPath, origJson, Encoding.UTF8);
+
+                Dictionary<string, object> updates = new Dictionary<string, object>();
+                updates["autoExecutionPolicy"] = "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER";
+                updates["enableTerminalSandbox"] = true;
+                updates["themeMode"] = "THEME_MODE_DARK";
+
+                string bakPath;
+                string err;
+                bool ok = AntigravityConfigService.PatchUserSettings(geminiDir, updates, out bakPath, out err);
+                AssertTrue(ok, "T58: PatchUserSettings succeeded: " + err);
+                AssertTrue(!string.IsNullOrEmpty(bakPath) && File.Exists(bakPath), "T58: Created timestamped backup file");
+
+                string[] bakFiles = Directory.GetFiles(cfgDir, "config.json.bak.*", SearchOption.TopDirectoryOnly);
+                AssertEqual(1, bakFiles.Length, "T58: Exactly 1 timestamped config.json.bak.* created per batch");
+
+                string afterText = File.ReadAllText(configPath, Encoding.UTF8);
+                AssertTrue(afterText.Contains("// Preserve header JSONC comment"), "T58: JSONC comment preserved");
+
+                CockpitSnapshot snap = AntigravityConfigService.ScanCockpit(geminiDir, homeDir, null);
+                AssertEqual("CASCADE_COMMANDS_AUTO_EXECUTION_EAGER", snap.UserSettings.AutoExecutionPolicy, "T58: autoExecutionPolicy updated");
+                AssertEqual("ARTIFACT_REVIEW_MODE_EXPERIMENTAL_CUSTOM", snap.UserSettings.ArtifactReviewMode, "T58: Unrecognized enum preserved untouched");
+                AssertTrue(snap.UserSettings.EnableTerminalSandbox, "T58: enableTerminalSandbox updated to true");
+                AssertEqual("THEME_MODE_DARK", snap.UserSettings.ThemeMode, "T58: themeMode inserted");
+                AssertEqual("Fola", UnifiedJson.GetString(snap.UserSettings.RawSettings, "voiceName", ""), "T58: Unknown string key voiceName preserved");
+                AssertEqual("MODEL_PLACEHOLDER_M526", UnifiedJson.GetString(snap.UserSettings.RawSettings, "orchestratorExecutorModel", ""), "T58: Unknown key orchestratorExecutorModel preserved");
+                Dictionary<string, object> themeObj = UnifiedJson.AsDict(snap.UserSettings.RawSettings["customThemeSeedsLight"]);
+                AssertTrue(themeObj != null && UnifiedJson.GetString(themeObj, "primary", "") == "#CB4B16", "T58: Unknown nested object customThemeSeedsLight preserved");
+                AssertEqual(1, snap.Sidecars.Count, "T58: Sidecars section visible after settings patch");
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T59_Stage2_PluginMcpHookToggleRoundTripAndBackups()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t59_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string cfgDir = Path.Combine(geminiDir, "config");
+                Directory.CreateDirectory(cfgDir);
+
+                string cfgPath = Path.Combine(cfgDir, "config.json");
+                File.WriteAllText(cfgPath,
+                    "{\r\n  // Config comment\r\n  \"plugins\": {\r\n    \"gdocs\": {\r\n      \"enabled\": false,\r\n      \"installedFrom\": { \"version\": \"0.0.9\" }\r\n    }\r\n  }\r\n}\r\n",
+                    Encoding.UTF8);
+
+                string mcpPath = Path.Combine(cfgDir, "mcp_config.json");
+                File.WriteAllText(mcpPath,
+                    "{\r\n  // MCP comment\r\n  \"mcpServers\": {\r\n    \"srv-59\": { \"command\": \"node\", \"args\": [\"a.js\"], \"disabled\": false }\r\n  }\r\n}\r\n",
+                    Encoding.UTF8);
+
+                string hooksPath = Path.Combine(cfgDir, "hooks.json");
+                File.WriteAllText(hooksPath,
+                    "{\r\n  \"guard-hook\": {\r\n    \"enabled\": true,\r\n    \"PreToolUse\": [\r\n      { \"matcher\": \"Edit|Write\", \"hooks\": [ { \"type\": \"command\", \"command\": \"node check.js\", \"timeout\": 5 } ] }\r\n    ]\r\n  }\r\n}\r\n",
+                    Encoding.UTF8);
+
+                bool resEnabled;
+                string targetFile, bakPath, err;
+                int httpCode;
+
+                // 1. Plugin toggle (config.json-only gdocs: false -> true -> false)
+                AssertTrue(AntigravityConfigService.ToggleCapability(geminiDir, "plugin", "gdocs", true, null, out resEnabled, out targetFile, out bakPath, out httpCode, out err),
+                    "T59: Enable config-only plugin gdocs: " + err);
+                AssertTrue(resEnabled, "T59: gdocs enabled == true");
+                CockpitSnapshot s1 = AntigravityConfigService.ScanCockpit(geminiDir, homeDir, null);
+                ScannedPluginInfo gdocs1 = s1.Plugins.Find(delegate(ScannedPluginInfo p) { return p.Id == "gdocs"; });
+                AssertTrue(gdocs1 != null && gdocs1.Enabled && !gdocs1.HasFolder && gdocs1.InConfigJson, "T59: gdocs reflected as enabled without folder");
+                AssertTrue(File.ReadAllText(cfgPath, Encoding.UTF8).Contains("// Config comment"), "T59: config.json comment preserved");
+
+                AssertTrue(AntigravityConfigService.ToggleCapability(geminiDir, "plugin", "gdocs", false, null, out resEnabled, out targetFile, out bakPath, out httpCode, out err),
+                    "T59: Disable gdocs roundtrip");
+                AssertTrue(!resEnabled, "T59: gdocs enabled == false");
+
+                // 2. MCP toggle (disabled: false -> true -> false)
+                AssertTrue(AntigravityConfigService.ToggleCapability(geminiDir, "mcp", "srv-59", false, null, out resEnabled, out targetFile, out bakPath, out httpCode, out err),
+                    "T59: Disable MCP srv-59: " + err);
+                AssertTrue(!resEnabled, "T59: srv-59 enabled == false");
+                CockpitSnapshot s2 = AntigravityConfigService.ScanCockpit(geminiDir, homeDir, null);
+                ScannedMcpServerInfo mcp2 = s2.McpServers.Find(delegate(ScannedMcpServerInfo m) { return m.Id == "srv-59"; });
+                AssertTrue(mcp2 != null && mcp2.Disabled && !mcp2.Enabled, "T59: mcpServers.srv-59.disabled == true");
+                AssertTrue(File.ReadAllText(mcpPath, Encoding.UTF8).Contains("// MCP comment"), "T59: mcp_config.json comment preserved");
+
+                AssertTrue(AntigravityConfigService.ToggleCapability(geminiDir, "mcp", "srv-59", true, null, out resEnabled, out targetFile, out bakPath, out httpCode, out err),
+                    "T59: Re-enable MCP srv-59");
+                AssertTrue(resEnabled, "T59: srv-59 re-enabled");
+
+                // 3. Nested Hook toggle (enabled: true -> false -> true)
+                AssertTrue(AntigravityConfigService.ToggleCapability(geminiDir, "hook", "guard-hook", false, null, out resEnabled, out targetFile, out bakPath, out httpCode, out err),
+                    "T59: Disable nested hook guard-hook: " + err);
+                AssertTrue(!resEnabled, "T59: guard-hook enabled == false");
+                CockpitSnapshot s3 = AntigravityConfigService.ScanCockpit(geminiDir, homeDir, null);
+                ScannedHookInfo hk3 = s3.Hooks.Find(delegate(ScannedHookInfo h) { return h.Id == "guard-hook"; });
+                AssertTrue(hk3 != null && !hk3.Enabled && hk3.Events.Count == 1 && hk3.Events[0].Matcher == "Edit|Write",
+                    "T59: Nested hook disabled while preserving PreToolUse matcher & hooks[]");
+
+                AssertTrue(AntigravityConfigService.ToggleCapability(geminiDir, "hook", "guard-hook", true, null, out resEnabled, out targetFile, out bakPath, out httpCode, out err),
+                    "T59: Re-enable nested hook guard-hook");
+                AssertTrue(resEnabled, "T59: guard-hook re-enabled");
+
+                // 4. Plugin-scoped root hooks.json (without named group) + wrapper hooks.json with >2 root keys + plugins.json-only plugin toggle
+                string plugHookDir = Path.Combine(cfgDir, "plugins", "root-hook-plug");
+                Directory.CreateDirectory(plugHookDir);
+                string plugHookPath = Path.Combine(plugHookDir, "hooks.json");
+                File.WriteAllText(plugHookPath, "{\"PreToolUse\":[{\"matcher\":\"Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"echo hi\"}]}]}", Encoding.UTF8);
+                CockpitSnapshot s4 = AntigravityConfigService.ScanCockpit(geminiDir, homeDir, null);
+                ScannedHookInfo phk = s4.Hooks.Find(delegate(ScannedHookInfo h) { return h.SourcePath == plugHookPath; });
+                AssertTrue(phk != null && phk.Id == "root-hook-plug" && phk.Enabled, "T59: Plugin root hooks.json scanned with pluginId");
+                AssertTrue(AntigravityConfigService.ToggleCapability(geminiDir, "hook", "root-hook-plug", false, plugHookPath, out resEnabled, out targetFile, out bakPath, out httpCode, out err),
+                    "T59: Toggle plugin root hooks.json succeeded: " + err);
+                AssertTrue(!resEnabled, "T59: Plugin root hooks.json toggled to false");
+
+                string wrapHookPath = Path.Combine(cfgDir, "wrap_hooks.json");
+                File.WriteAllText(wrapHookPath, "{\"description\":\"3 keys\",\"enabled\":true,\"hooks\":{\"enabled\":true,\"PreToolUse\":[{\"matcher\":\"Read\",\"hooks\":[{\"type\":\"command\",\"command\":\"echo r\"}]}]}}", Encoding.UTF8);
+                AssertTrue(AntigravityConfigService.ToggleCapability(geminiDir, "hook", "_root", false, wrapHookPath, out resEnabled, out targetFile, out bakPath, out httpCode, out err),
+                    "T59: Toggle wrapper hooks.json (>2 root keys) succeeded: " + err);
+                AssertTrue(!resEnabled, "T59: Wrapper hooks.json toggled to false");
+
+                File.WriteAllText(Path.Combine(cfgDir, "plugins.json"), "{\"entries\":{\"manifest-only-plug\":{\"enabled\":true}}}", Encoding.UTF8);
+                AssertTrue(AntigravityConfigService.ToggleCapability(geminiDir, "plugin", "manifest-only-plug", false, null, out resEnabled, out targetFile, out bakPath, out httpCode, out err),
+                    "T59: Toggle plugins.json-only plugin succeeded: " + err);
+                AssertTrue(!resEnabled, "T59: manifest-only-plug toggled to false");
+
+                AssertTrue(Directory.GetFiles(cfgDir, "config.json.bak.*").Length >= 1, "T59: config.json .bak.* created");
+                AssertTrue(Directory.GetFiles(cfgDir, "mcp_config.json.bak.*").Length >= 1, "T59: mcp_config.json .bak.* created");
+                AssertTrue(Directory.GetFiles(cfgDir, "hooks.json.bak.*").Length >= 1, "T59: hooks.json .bak.* created");
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T60_Stage2_FullOfficialScannerManifestsHooksWorkspaceAndMcpConflicts()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t60_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string cfgDir = Path.Combine(geminiDir, "config");
+                string projDir = Path.Combine(cfgDir, "projects");
+                string wsRoot = Path.Combine(sb, "MyWorkspace");
+                Directory.CreateDirectory(cfgDir);
+                Directory.CreateDirectory(projDir);
+                Directory.CreateDirectory(Path.Combine(geminiDir, "antigravity-cli"));
+                Directory.CreateDirectory(Path.Combine(cfgDir, "rules"));
+                Directory.CreateDirectory(Path.Combine(cfgDir, "skills", "global-skill"));
+                Directory.CreateDirectory(Path.Combine(cfgDir, "skills", "blocked-skill"));
+                Directory.CreateDirectory(Path.Combine(cfgDir, "plugins", "my-plug", "rules"));
+                Directory.CreateDirectory(Path.Combine(cfgDir, "plugins", "my-plug", "skills", "plug-skill"));
+                Directory.CreateDirectory(Path.Combine(cfgDir, "sidecars"));
+                Directory.CreateDirectory(Path.Combine(wsRoot, ".agents", "rules"));
+                Directory.CreateDirectory(Path.Combine(wsRoot, ".agents", "skills", "ws-skill"));
+
+                // config.json with config-only plugin + sidecars
+                File.WriteAllText(Path.Combine(cfgDir, "config.json"),
+                    "{\"plugins\":{\"modern-web-guidance-plugin\":{\"enabled\":false}},\"sidecars\":{\"board\":{\"projectId\":\"p60\",\"schemaVersion\":1}},\"userSettings\":{\"themeMode\":\"THEME_MODE_DARK\"}}",
+                    Encoding.UTF8);
+
+                // skills.json & plugins.json
+                File.WriteAllText(Path.Combine(cfgDir, "skills.json"),
+                    "{\"inherits\":true,\"entries\":{\"global-skill\":{\"enabled\":true},\"manifest-only-skill\":{\"enabled\":true}},\"exclude\":[\"blocked-skill\"]}",
+                    Encoding.UTF8);
+                File.WriteAllText(Path.Combine(cfgDir, "plugins.json"),
+                    "{\"include_only\":[\"my-plug\",\"modern-web-guidance-plugin\"]}",
+                    Encoding.UTF8);
+
+                // Global rules & skills
+                File.WriteAllText(Path.Combine(geminiDir, "GEMINI.md"), "# Global Root Rule\n", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(cfgDir, "rules", "g-extra.md"), "# Extra Rule\n", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(cfgDir, "skills", "global-skill", "SKILL.md"), "---\nname: global-skill\ndescription: Global skill desc\n---\nBody", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(cfgDir, "skills", "blocked-skill", "SKILL.md"), "---\nname: blocked-skill\n---\nBlocked", Encoding.UTF8);
+
+                // Plugin internals
+                File.WriteAllText(Path.Combine(cfgDir, "plugins", "my-plug", "plugin.json"),
+                    "{\"name\":\"my-plug\",\"displayName\":\"My Plugin\",\"version\":\"1.2.0\",\"description\":\"Desc\"}", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(cfgDir, "plugins", "my-plug", "rules", "p.md"), "# Plugin Rule\n", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(cfgDir, "plugins", "my-plug", "skills", "plug-skill", "SKILL.md"), "# Plug Skill\n", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(cfgDir, "plugins", "my-plug", "mcp_config.json"),
+                    "{\"mcpServers\":{\"shared-mcp\":{\"command\":\"node\",\"args\":[\"p.js\"]}}}", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(cfgDir, "plugins", "my-plug", "hooks.json"),
+                    "{\"plug-hook\":{\"PreInvocation\":[{\"type\":\"command\",\"command\":\"echo pre\",\"timeout\":3}],\"Stop\":[{\"type\":\"command\",\"command\":\"echo stop\"}]}}",
+                    Encoding.UTF8);
+
+                // Global hooks (nested PreToolUse matcher+hooks[] + flat SessionStart)
+                File.WriteAllText(Path.Combine(cfgDir, "hooks.json"),
+                    "{\"enabled\":true,\"PreToolUse\":[{\"matcher\":\"Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"node bash_guard.js\"}]}],\"SessionStart\":[{\"type\":\"command\",\"command\":\"node init.js\"}]}",
+                    Encoding.UTF8);
+
+                // Global mcp_config.json + CLI settings.json (duplicate MCP ID "shared-mcp") + antigravity-cli/settings.json
+                File.WriteAllText(Path.Combine(cfgDir, "mcp_config.json"),
+                    "{\"mcpServers\":{\"shared-mcp\":{\"url\":\"http://127.0.0.1:9999/mcp\"}}}", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(geminiDir, "settings.json"),
+                    "{\"mcpServers\":{\"shared-mcp\":{\"command\":\"shared-mcp\",\"args\":[\"--mcp\"]}}}", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(geminiDir, "antigravity-cli", "settings.json"),
+                    "{\"colorScheme\":\"dark\",\"trustedWorkspaces\":[\"" + UnifiedJson.EscapeString(wsRoot) + "\"]}", Encoding.UTF8);
+
+                // Registered project + workspace .agents/ AND .agent/ + AGENTS.md + GEMINI.md + manifests + hooks
+                Directory.CreateDirectory(Path.Combine(wsRoot, ".agent", "rules"));
+                File.WriteAllText(Path.Combine(projDir, "proj-60.json"),
+                    WorkspaceService.GenerateStandardProjectJson("proj-60", "MyWorkspace", wsRoot), Encoding.UTF8);
+                File.WriteAllText(Path.Combine(wsRoot, "GEMINI.md"), "# WS GEMINI\n", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(wsRoot, "AGENTS.md"), "# WS AGENTS\n", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(wsRoot, ".agents", "rules", "ws.md"), "# WS Rule\n", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(wsRoot, ".agent", "rules", "legacy.md"), "# WS Legacy Rule\n", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(wsRoot, ".agents", "skills", "ws-skill", "SKILL.md"), "# WS Skill\n", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(wsRoot, "skills.json"), "{\"inherits\":false,\"entries\":{\"ws-skill\":{\"enabled\":true}}}", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(wsRoot, "hooks.json"), "{\"description\":\"ws\",\"enabled\":true,\"hooks\":{\"PostToolUse\":[{\"matcher\":\"Write\",\"hooks\":[{\"type\":\"command\",\"command\":\"echo ws\"}]}]}}", Encoding.UTF8);
+
+                CockpitSnapshot snap = AntigravityConfigService.ScanCockpit(geminiDir, homeDir, null);
+
+                // Assertions
+                AssertTrue(snap.Plugins.Exists(delegate(ScannedPluginInfo p) { return p.Id == "modern-web-guidance-plugin" && !p.HasFolder && !p.Enabled; }),
+                    "T60: config.json-only plugin discovered");
+                AssertTrue(snap.Plugins.Exists(delegate(ScannedPluginInfo p) { return p.Id == "my-plug" && p.HasFolder && p.DisplayName == "My Plugin" && p.Enabled; }),
+                    "T60: Folder plugin with plugin.json metadata discovered");
+                AssertTrue(snap.Skills.Exists(delegate(ScannedSkillInfo s) { return s.Id == "blocked-skill" && !s.Enabled && s.ManifestStatus == "excluded"; }),
+                    "T60: skills.json exclude applied to blocked-skill");
+                AssertTrue(snap.Skills.Exists(delegate(ScannedSkillInfo s) { return s.Id == "manifest-only-skill" && s.Enabled; }),
+                    "T60: skills.json entries discovered");
+                AssertTrue(snap.Skills.Exists(delegate(ScannedSkillInfo s) { return s.Id == "ws-skill" && s.Scope == "project:MyWorkspace"; }),
+                    "T60: Workspace .agents/skills/ws-skill discovered");
+                AssertTrue(snap.Rules.Exists(delegate(ScannedRuleInfo r) { return r.SourcePath.EndsWith("AGENTS.md", StringComparison.OrdinalIgnoreCase); }),
+                    "T60: Workspace AGENTS.md discovered");
+                AssertTrue(snap.Rules.Exists(delegate(ScannedRuleInfo r) { return r.SourcePath.EndsWith("legacy.md", StringComparison.OrdinalIgnoreCase); }),
+                    "T60: Workspace .agent/rules/legacy.md discovered alongside .agents/");
+                AssertTrue(snap.Hooks.Exists(delegate(ScannedHookInfo h) { return h.Scope == "global" && h.Events.Count == 2; }),
+                    "T60: Nested PreToolUse + flat SessionStart hooks parsed");
+                AssertTrue(snap.Hooks.Exists(delegate(ScannedHookInfo h) { return h.Scope == "project:MyWorkspace" && h.Events.Count == 1 && h.Events[0].EventName == "PostToolUse"; }),
+                    "T60: Workspace hooks.json wrapper with >2 root keys parsed");
+                AssertTrue(snap.Hooks.Exists(delegate(ScannedHookInfo h) { return h.Id == "plug-hook" && h.Events.Count == 2; }),
+                    "T60: Plugin PreInvocation + Stop hooks parsed");
+                AssertTrue(snap.CliSettings.ContainsKey("settingsJson") && snap.CliSettings.ContainsKey("antigravityCliSettingsJson"),
+                    "T60: Both CLI settings files loaded");
+                AssertTrue(snap.Workspaces.Count == 1 && snap.Workspaces[0].HasAgentsDir && snap.Workspaces[0].HasAgentsMd && snap.Workspaces[0].HasGeminiMd && snap.Workspaces[0].HasHooksJson,
+                    "T60: Workspace .agents/, AGENTS.md, GEMINI.md, hooks.json detected");
+
+                McpConflictInfo conflict = snap.McpConflicts.Find(delegate(McpConflictInfo c) { return c.Id == "shared-mcp"; });
+                AssertTrue(conflict != null && conflict.Count == 3, "T60: Duplicate MCP server ID 'shared-mcp' flagged across global + plugin + CLI");
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T61_Stage2_McpHealthDoctorStdioMockMissingAndTimeoutCleanup()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t61_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string cfgDir = Path.Combine(geminiDir, "config");
+                Directory.CreateDirectory(cfgDir);
+
+                string healthyScript = Path.Combine(sb, "healthy_mcp.ps1");
+                File.WriteAllText(healthyScript,
+                    "$line = [Console]::In.ReadLine()\r\n" +
+                    "if ($line -and $line.Contains('initialize')) {\r\n" +
+                    "  [Console]::Out.WriteLine('{\"jsonrpc\":\"2.0\",\"method\":\"notifications/message\",\"params\":{\"level\":\"info\",\"data\":\"booting\"}}')\r\n" +
+                    "  [Console]::Out.WriteLine('{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"serverInfo\":{\"name\":\"mock-doctor-mcp\",\"version\":\"2.1.0\"}}}')\r\n" +
+                    "  [Console]::Out.Flush()\r\n" +
+                    "  Start-Sleep -Seconds 10\r\n" +
+                    "}\r\n",
+                    Encoding.UTF8);
+
+                string pidFile = Path.Combine(sb, "hang.pid");
+                string hangScript = Path.Combine(sb, "hang_mcp.ps1");
+                File.WriteAllText(hangScript,
+                    "[System.IO.File]::WriteAllText('" + pidFile.Replace("'", "''") + "', $PID.ToString())\r\n" +
+                    "Start-Sleep -Seconds 30\r\n",
+                    Encoding.UTF8);
+
+                // Extensionless POSIX shim + .cmd wrapper in same directory (Windows must prefer .cmd over extensionless shim!)
+                string shimDir = Path.Combine(sb, "shimbin");
+                Directory.CreateDirectory(shimDir);
+                File.WriteAllText(Path.Combine(shimDir, "mockshim"), "#!/bin/sh\necho posix\n", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(shimDir, "mockshim.cmd"),
+                    "@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + healthyScript + "\"\r\n",
+                    Encoding.UTF8);
+
+                // Disabled plugin MCP should be skipped when includeDisabled == false
+                string disPlugDir = Path.Combine(cfgDir, "plugins", "disabled-plug");
+                Directory.CreateDirectory(disPlugDir);
+                File.WriteAllText(Path.Combine(cfgDir, "config.json"),
+                    "{\"plugins\":{\"disabled-plug\":{\"enabled\":false}}}", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(disPlugDir, "mcp_config.json"),
+                    "{\"mcpServers\":{\"disabled-plug-srv\":{\"command\":\"nonexistent_should_not_run\"}}}", Encoding.UTF8);
+
+                string missingScript = Path.Combine(sb, "does_not_exist.ps1");
+
+                // Spin up a local TcpListener to verify ProbeHttpMcpServer (200 healthy + 503 error)
+                TcpListener httpListener = new TcpListener(IPAddress.Loopback, 0);
+                httpListener.Start();
+                int httpPort = ((IPEndPoint)httpListener.LocalEndpoint).Port;
+                System.Threading.Thread httpThread = new System.Threading.Thread(delegate()
+                {
+                    for (int reqIdx = 0; reqIdx < 2; reqIdx++)
+                    {
+                        try
+                        {
+                            using (TcpClient c = httpListener.AcceptTcpClient())
+                            using (NetworkStream ns = c.GetStream())
+                            {
+                                c.ReceiveTimeout = 2000;
+                                byte[] buf = new byte[8192];
+                                MemoryStream reqMs = new MemoryStream();
+                                int headerEnd = -1;
+                                int contentLen = 0;
+                                while (reqMs.Length < 16384)
+                                {
+                                    int r = ns.Read(buf, 0, buf.Length);
+                                    if (r <= 0) break;
+                                    reqMs.Write(buf, 0, r);
+                                    byte[] all = reqMs.ToArray();
+                                    string soFar = Encoding.ASCII.GetString(all);
+                                    headerEnd = soFar.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+                                    if (headerEnd >= 0)
+                                    {
+                                        string[] lines = soFar.Substring(0, headerEnd).Split(new string[] { "\r\n" }, StringSplitOptions.None);
+                                        for (int li = 1; li < lines.Length; li++)
+                                        {
+                                            if (lines[li].StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
+                                                int.TryParse(lines[li].Substring(15).Trim(), out contentLen);
+                                        }
+                                        if (all.Length >= headerEnd + 4 + contentLen) break;
+                                    }
+                                }
+                                string reqTxt = Encoding.ASCII.GetString(reqMs.ToArray());
+                                string body = reqTxt.Contains("/healthy")
+                                    ? "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":\"2024-11-05\",\"serverInfo\":{\"name\":\"http-mock-mcp\",\"version\":\"3.0\"}}}"
+                                    : "{\"error\":\"unavailable\"}";
+                                string status = reqTxt.Contains("/healthy") ? "200 OK" : "503 Service Unavailable";
+                                byte[] bBytes = Encoding.UTF8.GetBytes(body);
+                                string hdr = "HTTP/1.1 " + status + "\r\nContent-Type: application/json\r\nContent-Length: " + bBytes.Length + "\r\nConnection: close\r\n\r\n";
+                                byte[] hBytes = Encoding.ASCII.GetBytes(hdr);
+                                ns.Write(hBytes, 0, hBytes.Length);
+                                ns.Write(bBytes, 0, bBytes.Length);
+                                ns.Flush();
+                            }
+                        }
+                        catch { }
+                    }
+                });
+                httpThread.IsBackground = true;
+                httpThread.Start();
+
+                string mcpJson =
+                    "{\r\n" +
+                    "  \"mcpServers\": {\r\n" +
+                    "    \"healthy-mock\": { \"command\": \"powershell.exe\", \"args\": [\"-NoProfile\", \"-ExecutionPolicy\", \"Bypass\", \"-File\", \"" + UnifiedJson.EscapeString(healthyScript) + "\"] },\r\n" +
+                    "    \"cmd-shim-mock\": { \"command\": \"" + UnifiedJson.EscapeString(Path.Combine(shimDir, "mockshim")) + "\", \"args\": [\"@scope/pkg-arg\"] },\r\n" +
+                    "    \"missing-cmd\": { \"command\": \"nonexistent_mcp_cmd_xyz_61\", \"args\": [] },\r\n" +
+                    "    \"missing-arg\": { \"command\": \"powershell.exe\", \"args\": [\"-File\", \"" + UnifiedJson.EscapeString(missingScript) + "\"] },\r\n" +
+                    "    \"hanging-mock\": { \"command\": \"powershell.exe\", \"args\": [\"-NoProfile\", \"-ExecutionPolicy\", \"Bypass\", \"-File\", \"" + UnifiedJson.EscapeString(hangScript) + "\"] },\r\n" +
+                    "    \"http-healthy\": { \"url\": \"http://127.0.0.1:" + httpPort + "/healthy\" },\r\n" +
+                    "    \"http-503\": { \"url\": \"http://127.0.0.1:" + httpPort + "/fail\" },\r\n" +
+                    "    \"http-bad-url\": { \"type\": \"http\", \"url\": \"ftp://invalid-scheme\" }\r\n" +
+                    "  }\r\n" +
+                    "}\r\n";
+                File.WriteAllText(Path.Combine(cfgDir, "mcp_config.json"), mcpJson, Encoding.UTF8);
+
+                List<McpHealthCheckResult> results = AntigravityConfigService.RunMcpHealthCheck(geminiDir, homeDir, null, null, false, 3000);
+                httpListener.Stop();
+                AssertEqual(9, results.Count, "T61: Doctor returned all 9 MCP entries (8 global + 1 disabled plugin skipped)");
+
+                McpHealthCheckResult rHealthy = results.Find(delegate(McpHealthCheckResult r) { return r.Id == "healthy-mock"; });
+                AssertTrue(rHealthy != null && rHealthy.Healthy && rHealthy.Status == "healthy", "T61: healthy-mock ignored notification & passed initialize handshake (" + (rHealthy != null ? rHealthy.Error : "null") + ")");
+                AssertEqual("mock-doctor-mcp", rHealthy.ServerName, "T61: Captured serverInfo.name");
+                AssertEqual("2.1.0", rHealthy.ServerVersion, "T61: Captured serverInfo.version");
+
+                McpHealthCheckResult rCmdShim = results.Find(delegate(McpHealthCheckResult r) { return r.Id == "cmd-shim-mock"; });
+                AssertTrue(rCmdShim != null && rCmdShim.Healthy && rCmdShim.Status == "healthy", "T61: Resolved .cmd over extensionless POSIX shim and allowed @scope/pkg-arg (" + (rCmdShim != null ? rCmdShim.Error : "null") + ")");
+
+                McpHealthCheckResult rDisPlug = results.Find(delegate(McpHealthCheckResult r) { return r.Id == "disabled-plug-srv"; });
+                AssertTrue(rDisPlug != null && rDisPlug.Disabled && rDisPlug.Status == "disabled", "T61: Disabled plugin MCP skipped cleanly");
+
+                McpHealthCheckResult rHttpOk = results.Find(delegate(McpHealthCheckResult r) { return r.Id == "http-healthy"; });
+                AssertTrue(rHttpOk != null && rHttpOk.Healthy && rHttpOk.Reachable && rHttpOk.HttpStatusCode == 200 && rHttpOk.ServerName == "http-mock-mcp",
+                    "T61: Streamable HTTP 200 probe verified with serverInfo (" + (rHttpOk != null ? (rHttpOk.Status + ": " + rHttpOk.Error) : "null") + ")");
+
+                McpHealthCheckResult rHttp503 = results.Find(delegate(McpHealthCheckResult r) { return r.Id == "http-503"; });
+                AssertTrue(rHttp503 != null && !rHttp503.Healthy && rHttp503.Reachable && rHttp503.HttpStatusCode == 503,
+                    "T61: Streamable HTTP 503 probe reported reachable=true, http_503");
+
+                McpHealthCheckResult rHttpBad = results.Find(delegate(McpHealthCheckResult r) { return r.Id == "http-bad-url"; });
+                AssertTrue(rHttpBad != null && !rHttpBad.Healthy && !rHttpBad.Reachable && rHttpBad.Status == "invalid_url",
+                    "T61: Invalid HTTP URL scheme rejected as invalid_url");
+
+                McpHealthCheckResult rMissCmd = results.Find(delegate(McpHealthCheckResult r) { return r.Id == "missing-cmd"; });
+                AssertTrue(rMissCmd != null && !rMissCmd.Healthy && rMissCmd.Status == "missing_command", "T61: missing-cmd reported missing_command");
+
+                McpHealthCheckResult rMissArg = results.Find(delegate(McpHealthCheckResult r) { return r.Id == "missing-arg"; });
+                AssertTrue(rMissArg != null && !rMissArg.Healthy && rMissArg.Status == "missing_script", "T61: missing-arg reported missing_script");
+
+                McpHealthCheckResult rHang = results.Find(delegate(McpHealthCheckResult r) { return r.Id == "hanging-mock"; });
+                AssertTrue(rHang != null && !rHang.Healthy && rHang.Status == "timeout", "T61: hanging-mock timed out at 3s");
+
+                // Confirm hanging child process was forcefully terminated on timeout
+                if (File.Exists(pidFile))
+                {
+                    int hangPid;
+                    if (int.TryParse(File.ReadAllText(pidFile).Trim(), out hangPid))
+                    {
+                        bool stillAlive = false;
+                        try
+                        {
+                            using (Process p = Process.GetProcessById(hangPid))
+                            {
+                                stillAlive = !p.HasExited;
+                            }
+                        }
+                        catch { stillAlive = false; }
+                        AssertTrue(!stillAlive, "T61: Timed-out MCP child process terminated cleanly");
+                    }
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T62_Stage2_InlineEditorStrictAllowlistSymlinkAndTokenBudget()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t62_" + Guid.NewGuid().ToString("N"));
+            string linkPath = null;
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string cfgDir = Path.Combine(geminiDir, "config");
+                string projDir = Path.Combine(cfgDir, "projects");
+                string vaultDir = Path.Combine(sb, "Vault");
+                string wsRoot = Path.Combine(sb, "Proj62");
+                string outsideDir = Path.Combine(sb, "OutsideSecret");
+                Directory.CreateDirectory(cfgDir);
+                Directory.CreateDirectory(projDir);
+                Directory.CreateDirectory(vaultDir);
+                Directory.CreateDirectory(Path.Combine(wsRoot, ".agents", "rules"));
+                Directory.CreateDirectory(outsideDir);
+
+                File.WriteAllText(Path.Combine(projDir, "p62.json"),
+                    WorkspaceService.GenerateStandardProjectJson("p62", "Proj62", wsRoot), Encoding.UTF8);
+
+                string geminiMd = Path.Combine(geminiDir, "GEMINI.md");
+                File.WriteAllText(geminiMd, "# Initial Global Rule\n", Encoding.UTF8);
+                string wsRuleMd = Path.Combine(wsRoot, ".agents", "rules", "team.md");
+                File.WriteAllText(wsRuleMd, "# Team Rule\n", Encoding.UTF8);
+
+                // Sensitive files inside .gemini that MUST be rejected
+                string oauthFile = Path.Combine(geminiDir, "oauth_creds.json");
+                File.WriteAllText(oauthFile, "{\"secret\":\"nope\"}", Encoding.UTF8);
+                string tokenFile = Path.Combine(cfgDir, "user_token.json");
+                File.WriteAllText(tokenFile, "{\"token\":\"nope\"}", Encoding.UTF8);
+
+                // Outside / non-allowed project files
+                string outsideFile = Path.Combine(outsideDir, "outside.json");
+                File.WriteAllText(outsideFile, "{\"a\":1}", Encoding.UTF8);
+                string pkgJson = Path.Combine(wsRoot, "package.json");
+                File.WriteAllText(pkgJson, "{\"name\":\"app\"}", Encoding.UTF8);
+
+                // 1. Allowed reads & saves
+                EditorFileResult r1 = AntigravityConfigService.ReadAllowedCustomizationFile(geminiDir, homeDir, vaultDir, geminiMd);
+                AssertTrue(r1.Ok && r1.Content.Contains("Initial Global Rule"), "T62: Allowed reading GEMINI.md");
+
+                string bigRule = new string('A', 6000); // ceil(6000 / 3.5) = 1715 > 1500
+                EditorFileResult s1 = AntigravityConfigService.SaveAllowedCustomizationFile(geminiDir, homeDir, vaultDir, wsRuleMd, bigRule);
+                AssertTrue(s1.Ok && s1.EstimatedTokens > 1500 && s1.OverBudget, "T62: Saved project .agents/ .md and flagged > 1500 tokens");
+                AssertTrue(File.Exists(s1.BackupPath), "T62: Created backup on editor save");
+
+                CockpitSnapshot snap = AntigravityConfigService.ScanCockpit(geminiDir, homeDir, vaultDir);
+                AssertTrue(snap.OverBudgetCount >= 1 && snap.OverBudgetFiles.Exists(delegate(ScannedRuleInfo r) { return r.SourcePath == wsRuleMd; }),
+                    "T62: Cockpit token budget audit flagged over-budget rule");
+
+                // 2. Rejections: .. traversal, oauth_creds.json, *token*.json, outside root, non-.agents project file, invalid JSON
+                string travPath = geminiDir + "\\..\\OutsideSecret\\outside.json";
+                EditorFileResult rTrav = AntigravityConfigService.ReadAllowedCustomizationFile(geminiDir, homeDir, vaultDir, travPath);
+                AssertTrue(!rTrav.Ok && rTrav.HttpStatusCode == 400, "T62: Rejected .. path traversal");
+
+                EditorFileResult rOauth = AntigravityConfigService.ReadAllowedCustomizationFile(geminiDir, homeDir, vaultDir, oauthFile);
+                AssertTrue(!rOauth.Ok && rOauth.HttpStatusCode == 403, "T62: Rejected oauth_creds.json (403)");
+
+                EditorFileResult rTok = AntigravityConfigService.ReadAllowedCustomizationFile(geminiDir, homeDir, vaultDir, tokenFile);
+                AssertTrue(!rTok.Ok && rTok.HttpStatusCode == 403, "T62: Rejected *token*.json (403)");
+
+                EditorFileResult rOut = AntigravityConfigService.ReadAllowedCustomizationFile(geminiDir, homeDir, vaultDir, outsideFile);
+                AssertTrue(!rOut.Ok && rOut.HttpStatusCode == 403, "T62: Rejected outside-root file (403)");
+
+                EditorFileResult rPkg = AntigravityConfigService.ReadAllowedCustomizationFile(geminiDir, homeDir, vaultDir, pkgJson);
+                AssertTrue(!rPkg.Ok && rPkg.HttpStatusCode == 403, "T62: Rejected non-customization project package.json (403)");
+
+                EditorFileResult sBadJson = AntigravityConfigService.SaveAllowedCustomizationFile(geminiDir, homeDir, vaultDir, Path.Combine(cfgDir, "config.json"), "{ invalid json");
+                AssertTrue(!sBadJson.Ok && sBadJson.HttpStatusCode == 400, "T62: Invalid JSON rejected before save (400)");
+
+                // 3. Symlink/junction escape check inside .gemini
+                linkPath = Path.Combine(cfgDir, "escape_link");
+                ProcessStartInfo mk = new ProcessStartInfo("cmd.exe", "/c mklink /J \"" + linkPath + "\" \"" + outsideDir + "\"");
+                mk.UseShellExecute = false;
+                mk.CreateNoWindow = true;
+                using (Process p = Process.Start(mk))
+                {
+                    p.WaitForExit(3000);
+                }
+                if (Directory.Exists(linkPath))
+                {
+                    EditorFileResult rLink = AntigravityConfigService.ReadAllowedCustomizationFile(geminiDir, homeDir, vaultDir, Path.Combine(linkPath, "outside.json"));
+                    AssertTrue(!rLink.Ok && rLink.HttpStatusCode == 403, "T62: Rejected directory junction escape inside .gemini (403)");
+                }
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(linkPath) && Directory.Exists(linkPath))
+                {
+                    try { Directory.Delete(linkPath, false); } catch { }
+                }
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T63_Stage2_CockpitHttpApiEndToEndAndWorkspaceLaunchValidation()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t63_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string cfgDir = Path.Combine(geminiDir, "config");
+                string projDir = Path.Combine(cfgDir, "projects");
+                string wsRoot = Path.Combine(sb, "Ws63");
+                Directory.CreateDirectory(cfgDir);
+                Directory.CreateDirectory(projDir);
+                Directory.CreateDirectory(Path.Combine(wsRoot, ".agents", "rules"));
+
+                File.WriteAllText(Path.Combine(wsRoot, "skills.json"), "{\"entries\":{}}", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(wsRoot, ".agents", "rules", "r63.md"), "# Ws Rule\n", Encoding.UTF8);
+
+                File.WriteAllText(Path.Combine(projDir, "p63.json"),
+                    WorkspaceService.GenerateStandardProjectJson("p63", "Ws63", wsRoot), Encoding.UTF8);
+
+                File.WriteAllText(Path.Combine(cfgDir, "config.json"),
+                    "{\"plugins\":{\"gdocs\":{\"enabled\":false}},\"userSettings\":{\"autoExecutionPolicy\":\"CASCADE_COMMANDS_AUTO_EXECUTION_OFF\",\"customKeep\":123}}",
+                    Encoding.UTF8);
+
+                string mockPs = Path.Combine(sb, "mock_http_mcp.ps1");
+                File.WriteAllText(mockPs,
+                    "$l=[Console]::In.ReadLine(); [Console]::Out.WriteLine('{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":\"2024-11-05\",\"serverInfo\":{\"name\":\"http-e2e-mcp\",\"version\":\"1.0\"}}}'); [Console]::Out.Flush()",
+                    Encoding.UTF8);
+                File.WriteAllText(Path.Combine(cfgDir, "mcp_config.json"),
+                    "{\"mcpServers\":{\"e2e-srv\":{\"command\":\"powershell.exe\",\"args\":[\"-NoProfile\",\"-ExecutionPolicy\",\"Bypass\",\"-File\",\"" + UnifiedJson.EscapeString(mockPs) + "\"],\"disabled\":false}}}",
+                    Encoding.UTF8);
+
+                string geminiMd = Path.Combine(geminiDir, "GEMINI.md");
+                File.WriteAllText(geminiMd, "# E2E Rule\n", Encoding.UTF8);
+
+                string token = "t63_tok_e2e";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "Vault"), 0, token))
+                {
+                    host.Start();
+
+                    // 1. GET /api/cockpit/summary
+                    RawHttpTestResponse sumResp = SendRawTcpHttp(host.Port, null, "GET", "/api/cockpit/summary", apiHdr, null);
+                    AssertEqual(200, sumResp.StatusCode, "T63: GET /api/cockpit/summary returns 200");
+                    AssertTrue(sumResp.BodyText.Contains("\"gdocs\"") && sumResp.BodyText.Contains("\"e2e-srv\""), "T63: Summary contains plugin and MCP");
+                    AssertTrue(sumResp.BodyText.Contains("\"skillsJsonPath\"") && sumResp.BodyText.Contains("\"pluginJsonPath\""), "T63: Summary serializes exact manifest paths");
+                    AssertTrue(sumResp.BodyText.Contains(UnifiedJson.EscapeString(Path.Combine(wsRoot, "skills.json"))), "T63: Summary preserves root skills.json path even when .agents exists");
+
+                    // 2. POST /api/cockpit/settings
+                    RawHttpTestResponse setResp = SendRawTcpHttp(host.Port, null, "POST", "/api/cockpit/settings", apiHdr,
+                        "{\"userSettings\":{\"autoExecutionPolicy\":\"CASCADE_COMMANDS_AUTO_EXECUTION_AUTO\",\"useAiCredits\":true}}");
+                    AssertEqual(200, setResp.StatusCode, "T63: POST /api/cockpit/settings returns 200");
+                    AssertTrue(setResp.BodyText.Contains("CASCADE_COMMANDS_AUTO_EXECUTION_AUTO") && setResp.BodyText.Contains("\"customKeep\":123"),
+                        "T63: Settings updated and customKeep preserved");
+
+                    // 3. POST /api/cockpit/toggle
+                    RawHttpTestResponse togResp = SendRawTcpHttp(host.Port, null, "POST", "/api/cockpit/toggle", apiHdr,
+                        "{\"kind\":\"plugin\",\"id\":\"gdocs\",\"enabled\":true}");
+                    AssertEqual(200, togResp.StatusCode, "T63: POST /api/cockpit/toggle returns 200");
+                    AssertTrue(togResp.BodyText.Contains("\"enabled\":true"), "T63: Plugin toggled to enabled=true");
+
+                    // 4. POST /api/mcp/doctor
+                    RawHttpTestResponse docResp = SendRawTcpHttp(host.Port, null, "POST", "/api/mcp/doctor", apiHdr,
+                        "{\"id\":\"e2e-srv\"}");
+                    AssertEqual(200, docResp.StatusCode, "T63: POST /api/mcp/doctor returns 200");
+                    AssertTrue(docResp.BodyText.Contains("\"healthy\":true") && docResp.BodyText.Contains("http-e2e-mcp"),
+                        "T63: MCP doctor verified e2e-srv healthy via HTTP");
+
+                    // 5. GET /api/editor/file & POST /api/editor/save & 403 block
+                    RawHttpTestResponse edGet = SendRawTcpHttp(host.Port, null, "GET", "/api/editor/file?path=" + Uri.EscapeDataString(geminiMd), apiHdr, null);
+                    AssertEqual(200, edGet.StatusCode, "T63: GET /api/editor/file returns 200");
+                    AssertTrue(edGet.BodyText.Contains("# E2E Rule"), "T63: Returned GEMINI.md content");
+
+                    RawHttpTestResponse edSave = SendRawTcpHttp(host.Port, null, "POST", "/api/editor/save", apiHdr,
+                        UnifiedJson.Serialize(new Dictionary<string, object> { { "path", geminiMd }, { "content", "# Updated E2E Rule\n" } }, false));
+                    AssertEqual(200, edSave.StatusCode, "T63: POST /api/editor/save returns 200");
+                    AssertTrue(File.ReadAllText(geminiMd, Encoding.UTF8).Contains("Updated E2E Rule"), "T63: Disk GEMINI.md updated");
+
+                    RawHttpTestResponse edBlock = SendRawTcpHttp(host.Port, null, "GET", "/api/editor/file?path=" + Uri.EscapeDataString(Path.Combine(geminiDir, "oauth_creds.json")), apiHdr, null);
+                    AssertEqual(403, edBlock.StatusCode, "T63: GET /api/editor/file rejects oauth_creds.json with 403");
+
+                    RawHttpTestResponse edNullContent = SendRawTcpHttp(host.Port, null, "POST", "/api/editor/save", apiHdr,
+                        "{\"path\":\"" + UnifiedJson.EscapeString(geminiMd) + "\",\"content\":null}");
+                    AssertEqual(400, edNullContent.StatusCode, "T63: POST /api/editor/save rejects null content with 400");
+
+                    RawHttpTestResponse edAds = SendRawTcpHttp(host.Port, null, "GET", "/api/editor/file?path=" + Uri.EscapeDataString(geminiMd + ":ads.json"), apiHdr, null);
+                    AssertEqual(400, edAds.StatusCode, "T63: GET /api/editor/file rejects NTFS ADS colon with 400");
+
+                    // 6. WorkspaceLauncherService path resolution, directory validation, and launch error paths
+                    string fakeIdeBin = Path.Combine(geminiDir, "antigravity-ide", "bin");
+                    string fakeLocalApp = Path.Combine(sb, "LocalApp");
+                    string fakeExeDir = Path.Combine(fakeLocalApp, "Programs", "antigravity");
+                    Directory.CreateDirectory(fakeIdeBin);
+                    Directory.CreateDirectory(fakeExeDir);
+                    File.WriteAllText(Path.Combine(fakeIdeBin, "antigravity-ide.cmd"), "@echo off\r\n", Encoding.UTF8);
+                    File.WriteAllText(Path.Combine(fakeExeDir, "Antigravity.exe"), "MZ", Encoding.UTF8);
+                    ResolvedLaunchTools resolvedTools = WorkspaceLauncherService.ResolveLaunchTools(geminiDir, fakeLocalApp, "");
+                    AssertTrue(!string.IsNullOrEmpty(resolvedTools.AntigravityIdeCmd) && resolvedTools.AntigravityIdeCmd.EndsWith("antigravity-ide.cmd", StringComparison.OrdinalIgnoreCase),
+                        "T63: Resolved antigravity-ide.cmd via .gemini/antigravity-ide/bin");
+                    AssertTrue(!string.IsNullOrEmpty(resolvedTools.AntigravityExe) && resolvedTools.AntigravityExe.EndsWith("Antigravity.exe", StringComparison.OrdinalIgnoreCase),
+                        "T63: Resolved Antigravity.exe via LOCALAPPDATA\\Programs\\antigravity");
+
+                    string valDir;
+                    int valCode;
+                    string valErr;
+                    AssertTrue(WorkspaceLauncherService.ValidateWorkspaceDirectory(geminiDir, homeDir, Path.Combine(sb, "Vault"), wsRoot, out valDir, out valCode, out valErr),
+                        "T63: Registered workspace directory validated");
+                    AssertTrue(!WorkspaceLauncherService.ValidateWorkspaceDirectory(geminiDir, homeDir, Path.Combine(sb, "Vault"), Path.Combine(wsRoot, "missing_sub"), out valDir, out valCode, out valErr) && valCode == 404,
+                        "T63: Missing workspace directory returns 404");
+
+                    RawHttpTestResponse wsBadTool = SendRawTcpHttp(host.Port, null, "POST", "/api/workspace/launch", apiHdr,
+                        "{\"path\":\"" + UnifiedJson.EscapeString(wsRoot) + "\",\"tool\":\"unknown_tool\"}");
+                    AssertEqual(400, wsBadTool.StatusCode, "T63: POST /api/workspace/launch rejects unknown tool with 400");
+
+                    RawHttpTestResponse wsBlock = SendRawTcpHttp(host.Port, null, "POST", "/api/workspace/launch", apiHdr,
+                        "{\"path\":\"C:\\\\Windows\\\\System32\",\"tool\":\"explorer\"}");
+                    AssertEqual(403, wsBlock.StatusCode, "T63: POST /api/workspace/launch rejects outside-root directory with 403");
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // Stage 3 Regression Tests (T64 ~ T69)
+        // ══════════════════════════════════════════════════════════════════════
+
+        private static void CreateSampleLiposuctionDb(
+            string dbPath,
+            string cid,
+            int execRows,
+            int execBytesPerRow,
+            int stepRows)
+        {
+            string dir = Path.GetDirectoryName(dbPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+
+            IntPtr db = IntPtr.Zero;
+            try
+            {
+                AssertEqual(0, t_sqlite3_open_v2(Utf8Z(dbPath), out db, 0x00000002 | 0x00000004, IntPtr.Zero), "Open sample liposuction DB");
+                string ddl =
+                    "CREATE TABLE trajectory_meta (trajectory_id TEXT PRIMARY KEY, cascade_id TEXT, trajectory_type INTEGER, source INTEGER);" +
+                    "CREATE TABLE steps (idx INTEGER PRIMARY KEY, step_type TEXT, content TEXT, data TEXT, step_payload BLOB);" +
+                    "CREATE TABLE gen_metadata (idx INTEGER PRIMARY KEY, data BLOB, size INTEGER NOT NULL DEFAULT 0);" +
+                    "CREATE TABLE executor_metadata (idx INTEGER PRIMARY KEY, data BLOB);" +
+                    "CREATE TABLE parent_references (idx INTEGER PRIMARY KEY, data BLOB);" +
+                    "CREATE TABLE trajectory_metadata_blob (id TEXT PRIMARY KEY, data BLOB);";
+                AssertEqual(0, t_sqlite3_exec(db, Utf8Z(ddl), IntPtr.Zero, IntPtr.Zero, IntPtr.Zero), "Create sample schema: " + T_GetSqliteErr(db));
+
+                AssertEqual(0, t_sqlite3_exec(db, Utf8Z("INSERT INTO trajectory_meta VALUES ('" + cid + "', '" + cid + "', 1, 1);"), IntPtr.Zero, IntPtr.Zero, IntPtr.Zero), "Insert trajectory_meta");
+                AssertEqual(0, t_sqlite3_exec(db, Utf8Z("INSERT INTO gen_metadata VALUES (0, zeroblob(64), 64);"), IntPtr.Zero, IntPtr.Zero, IntPtr.Zero), "Insert gen_metadata");
+                AssertEqual(0, t_sqlite3_exec(db, Utf8Z("INSERT INTO parent_references VALUES (0, zeroblob(16));"), IntPtr.Zero, IntPtr.Zero, IntPtr.Zero), "Insert parent_references");
+
+                ProtoNode entry = BuildRealProtoEntry(cid, "Subagent Liposuction Sample", null, "file:///c%3A/Work/Sample", "SampleProj", "pid-sample", stepRows, 1, 0);
+                byte[] metaBlob = ProtoCodec.Encode(new List<ProtoNode> { entry });
+                IntPtr mStmt = IntPtr.Zero;
+                byte[] pinMeta = metaBlob.Length > 0 ? metaBlob : new byte[] { 0 };
+                GCHandle hMeta = GCHandle.Alloc(pinMeta, GCHandleType.Pinned);
+                try
+                {
+                    AssertEqual(0, t_sqlite3_prepare_v2(db, Utf8Z("INSERT INTO trajectory_metadata_blob (id, data) VALUES ('main', ?);"), -1, out mStmt, IntPtr.Zero), "Prep meta blob");
+                    AssertEqual(0, t_sqlite3_bind_blob(mStmt, 1, hMeta.AddrOfPinnedObject(), metaBlob.Length, new IntPtr(-1)), "Bind meta blob");
+                    AssertEqual(101, t_sqlite3_step(mStmt), "Step meta blob");
+                }
+                finally
+                {
+                    if (mStmt != IntPtr.Zero) t_sqlite3_finalize(mStmt);
+                    if (hMeta.IsAllocated) hMeta.Free();
+                }
+
+                AssertEqual(0, t_sqlite3_exec(db, Utf8Z("BEGIN TRANSACTION;"), IntPtr.Zero, IntPtr.Zero, IntPtr.Zero), "Begin tx");
+                for (int i = 0; i < stepRows; i++)
+                {
+                    string stType = (i % 2 == 0) ? "USER_INPUT" : "PLANNER_RESPONSE";
+                    string stContent = (i % 2 == 0) ? ("User prompt #" + i) : ("Assistant reply #" + i);
+                    IntPtr sStmt = IntPtr.Zero;
+                    AssertEqual(0, t_sqlite3_prepare_v2(db, Utf8Z("INSERT INTO steps (idx, step_type, content, data, step_payload) VALUES (?, ?, ?, ?, zeroblob(32));"), -1, out sStmt, IntPtr.Zero), "Prep step");
+                    try
+                    {
+                        t_sqlite3_bind_int(sStmt, 1, i);
+                        T_BindUtf8Text(sStmt, 2, stType);
+                        T_BindUtf8Text(sStmt, 3, stContent);
+                        T_BindUtf8Text(sStmt, 4, "{\"content\":\"" + stContent + "\"}");
+                        AssertEqual(101, t_sqlite3_step(sStmt), "Insert step row");
+                    }
+                    finally
+                    {
+                        t_sqlite3_finalize(sStmt);
+                    }
+                }
+
+                byte[] execPayload = new byte[execBytesPerRow];
+                for (int i = 0; i < execPayload.Length; i++) execPayload[i] = (byte)('A' + (i % 26));
+                byte[] pinExec = execPayload.Length > 0 ? execPayload : new byte[] { 0 };
+                GCHandle hExec = GCHandle.Alloc(pinExec, GCHandleType.Pinned);
+                try
+                {
+                    for (int i = 0; i < execRows; i++)
+                    {
+                        IntPtr eStmt = IntPtr.Zero;
+                        AssertEqual(0, t_sqlite3_prepare_v2(db, Utf8Z("INSERT INTO executor_metadata (idx, data) VALUES (?, ?);"), -1, out eStmt, IntPtr.Zero), "Prep exec");
+                        try
+                        {
+                            t_sqlite3_bind_int(eStmt, 1, i);
+                            t_sqlite3_bind_blob(eStmt, 2, hExec.AddrOfPinnedObject(), execPayload.Length, new IntPtr(-1));
+                            AssertEqual(101, t_sqlite3_step(eStmt), "Insert exec row");
+                        }
+                        finally
+                        {
+                            t_sqlite3_finalize(eStmt);
+                        }
+                    }
+                }
+                finally
+                {
+                    if (hExec.IsAllocated) hExec.Free();
+                }
+                AssertEqual(0, t_sqlite3_exec(db, Utf8Z("COMMIT;"), IntPtr.Zero, IntPtr.Zero, IntPtr.Zero), "Commit tx");
+            }
+            finally
+            {
+                if (db != IntPtr.Zero) t_sqlite3_close(db);
+            }
+        }
+
+        private static void T64_Stage3_StorageAnalyze_ByteAccountingAndTableBreakdown()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t64_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string agDir = Path.Combine(geminiDir, "antigravity");
+                string cliDir = Path.Combine(geminiDir, "antigravity-cli");
+                string projDir = Path.Combine(geminiDir, "config", "projects");
+                Directory.CreateDirectory(Path.Combine(agDir, "conversations"));
+                Directory.CreateDirectory(Path.Combine(agDir, "brain"));
+                Directory.CreateDirectory(Path.Combine(agDir, "annotations"));
+                Directory.CreateDirectory(Path.Combine(cliDir, "conversations"));
+                Directory.CreateDirectory(projDir);
+
+                string cidRoot = "a6400001-0000-4000-8000-000000000001";
+                string cidSub = "b6400002-0000-4000-8000-000000000002";
+                string cidOut = "c6400003-0000-4000-8000-000000000003";
+                string cidCli = "d6400004-0000-4000-8000-000000000004";
+                string cidOrphan = "e6400005-0000-4000-8000-000000000005";
+
+                File.WriteAllText(Path.Combine(projDir, "pid-64.json"),
+                    WorkspaceService.GenerateStandardProjectJson("pid-64", "Proj64", "C:\\Work\\Proj64"), Encoding.UTF8);
+
+                ProtoNode nRoot = BuildRealProtoEntry(cidRoot, "Root 64", null, "file:///c%3A/Work/Proj64", "Proj64", "pid-64", 4, 1, 1);
+                ProtoNode nSub = BuildRealProtoEntry(cidSub, "Sub 64", null, "file:///c%3A/Work/Proj64", "Proj64", "pid-64", 6, 1, 0);
+                nSub.GetChild(2).GetChild(17).Children.Add(new ProtoNode(11, 2) { RawBytes = Encoding.UTF8.GetBytes(cidRoot), IsModified = true });
+                ProtoNode nOut = BuildRealProtoEntry(cidOut, "Outside 64", null, null, null, "outside-of-project", 2, 1, 1);
+                File.WriteAllBytes(Path.Combine(agDir, "agyhub_summaries_proto.pb"), ProtoCodec.Encode(new List<ProtoNode> { nRoot, nSub, nOut }));
+
+                ProtoNode nCli = BuildRealProtoEntry(cidCli, "CLI 64", null, null, "default-cli-project", "default-cli-project", 3, 1, 1);
+                File.WriteAllBytes(Path.Combine(cliDir, "agyhub_summaries_proto.pb"), ProtoCodec.Encode(new List<ProtoNode> { nCli }));
+
+                IntPtr sumDb = OpenAndCreateSummaryWalDb(Path.Combine(agDir, "conversation_summaries.db"));
+                try
+                {
+                    InsertSummaryDbRow(sumDb, cidRoot, "Root 64", "p", 4, "[\"file:///c%3A/Work/Proj64\"]", "CASCADE_RUN_STATUS_IDLE", "pid-64", "", "", 0, 0, ProtoCodec.Encode(nRoot.Children));
+                    InsertSummaryDbRow(sumDb, cidSub, "Sub 64", "p", 6, "[\"file:///c%3A/Work/Proj64\"]", "CASCADE_RUN_STATUS_IDLE", "pid-64", "explorer", cidRoot, 1, 0, ProtoCodec.Encode(nSub.Children));
+                    InsertSummaryDbRow(sumDb, cidOut, "Outside 64", "p", 2, "[]", "CASCADE_RUN_STATUS_IDLE", "outside-of-project", "", "", 0, 0, ProtoCodec.Encode(nOut.Children));
+                }
+                finally
+                {
+                    t_sqlite3_close(sumDb);
+                }
+
+                string rootDbPath = Path.Combine(agDir, "conversations", cidRoot + ".db");
+                string subDbPath = Path.Combine(agDir, "conversations", cidSub + ".db");
+                string outDbPath = Path.Combine(agDir, "conversations", cidOut + ".db");
+                string cliDbPath = Path.Combine(cliDir, "conversations", cidCli + ".db");
+
+                CreateSampleLiposuctionDb(rootDbPath, cidRoot, 1, 512, 4);
+                CreateSampleLiposuctionDb(subDbPath, cidSub, 25, 16384, 6);
+                CreateSampleLiposuctionDb(outDbPath, cidOut, 0, 0, 2);
+                CreateSampleLiposuctionDb(cliDbPath, cidCli, 0, 0, 3);
+
+                Directory.CreateDirectory(Path.Combine(agDir, "brain", cidRoot));
+                string notesPath64 = Path.Combine(agDir, "brain", cidRoot, "notes.md");
+                File.WriteAllText(notesPath64, new string('B', 1200), new UTF8Encoding(false));
+                File.WriteAllText(Path.Combine(agDir, "annotations", cidRoot + ".pbtxt"), "title:\"Root 64\"", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(agDir, "annotations", cidOrphan + ".pbtxt"), "title:\"Orphan 64\"", Encoding.UTF8);
+
+                StorageAnalysisReport rep = StorageSlimService.AnalyzeStorage(homeDir, geminiDir, 10, 7.0, 0.1);
+                AssertEqual(new FileInfo(rootDbPath).Length + new FileInfo(outDbPath).Length, rep.RootDbsBytes, "T64: Exact RootDbsBytes");
+                AssertEqual(new FileInfo(subDbPath).Length, rep.SubagentDbsBytes, "T64: Exact SubagentDbsBytes");
+                AssertEqual(new FileInfo(cliDbPath).Length, rep.CliDbsBytes, "T64: Exact CliDbsBytes");
+                AssertEqual(new FileInfo(notesPath64).Length, rep.BrainDirsBytes, "T64: Exact BrainDirsBytes");
+                AssertEqual(new FileInfo(Path.Combine(agDir, "annotations", cidRoot + ".pbtxt")).Length, rep.AnnotationsBytes, "T64: Exact AnnotationsBytes");
+                AssertEqual(new FileInfo(Path.Combine(agDir, "annotations", cidOrphan + ".pbtxt")).Length, rep.OrphansBytes, "T64: Exact OrphansBytes");
+
+                ProjectStorageBreakdown p64 = rep.Projects.Find(delegate(ProjectStorageBreakdown p) { return p.ProjectId == "pid-64"; });
+                ProjectStorageBreakdown pOut = rep.Projects.Find(delegate(ProjectStorageBreakdown p) { return p.ProjectId == "outside-of-project"; });
+                AssertTrue(p64 != null && pOut != null, "T64: Both Proj64 and outside-of-project buckets accounted");
+                AssertEqual(new FileInfo(outDbPath).Length, pOut.RootDbsBytes, "T64: Outside-of-project DB bytes match");
+
+                AssertTrue(rep.TopOffenders.Count >= 4 && rep.TopOffenders[0].ConversationId == cidSub, "T64: Largest offender is subagent DB");
+                AssertTrue(rep.TopOffenders[0].HasTableBreakdown && rep.TopOffenders[0].HasExecutorMetadataTable, "T64: Top offender has SQLite table breakdown");
+                AssertEqual(25L, rep.TopOffenders[0].ExecutorMetadataRows, "T64: executor_metadata row count == 25");
+                AssertEqual(25L * 16384L, rep.TopOffenders[0].ExecutorMetadataBytes, "T64: executor_metadata payload bytes exact");
+                AssertEqual(6L, rep.TopOffenders[0].StepsRows, "T64: steps row count == 6");
+                AssertTrue(rep.TopOffenders[0].StepsBytes > 0, "T64: steps payload bytes > 0");
+                AssertTrue(rep.TopOffenders[0].EligibleForSlim, "T64: Eligible subagent flagged EligibleForSlim");
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T65_Stage3_StorageSlim_Mode5CLiposuctionAndMode5AColdArchivePrune()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t65_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string agDir = Path.Combine(geminiDir, "antigravity");
+                string convDir = Path.Combine(agDir, "conversations");
+                string brainDir = Path.Combine(agDir, "brain");
+                Directory.CreateDirectory(convDir);
+                Directory.CreateDirectory(brainDir);
+
+                string cidParent = "p6500001-0000-4000-8000-000000000001";
+                string cidSub5c = "s6500002-0000-4000-8000-000000000002";
+                string cidSub5a = "a6500003-0000-4000-8000-000000000003";
+                string cidActive = "l6500004-0000-4000-8000-000000000004";
+                string cidRecent = "r6500005-0000-4000-8000-000000000005";
+
+                ProtoNode nPar = BuildRealProtoEntry(cidParent, "Parent 65", null, "file:///c%3A/P65", "P65", "pid-65", 4, 1, 1);
+                ProtoNode nSub5c = BuildRealProtoEntry(cidSub5c, "Sub 5C", null, "file:///c%3A/P65", "P65", "pid-65", 6, 1, 0);
+                nSub5c.GetChild(2).GetChild(17).Children.Add(new ProtoNode(11, 2) { RawBytes = Encoding.UTF8.GetBytes(cidParent), IsModified = true });
+                ProtoNode nSub5a = BuildRealProtoEntry(cidSub5a, "Sub 5A", null, "file:///c%3A/P65", "P65", "pid-65", 4, 1, 0);
+                nSub5a.GetChild(2).GetChild(17).Children.Add(new ProtoNode(11, 2) { RawBytes = Encoding.UTF8.GetBytes(cidParent), IsModified = true });
+                ProtoNode nAct = BuildRealProtoEntry(cidActive, "Active Sub", null, "file:///c%3A/P65", "P65", "pid-65", 4, 1, 0);
+                nAct.GetChild(2).GetChild(17).Children.Add(new ProtoNode(11, 2) { RawBytes = Encoding.UTF8.GetBytes(cidParent), IsModified = true });
+                ProtoNode nRec = BuildRealProtoEntry(cidRecent, "Recent Sub", null, "file:///c%3A/P65", "P65", "pid-65", 4, 1, 0);
+                nRec.GetChild(2).GetChild(17).Children.Add(new ProtoNode(11, 2) { RawBytes = Encoding.UTF8.GetBytes(cidParent), IsModified = true });
+                ulong nowEpoch = (ulong)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
+                nRec.GetChild(2).GetChild(3).GetChild(1).VarintValue = nowEpoch - 3600UL; // 1 hour ago (< 7 days)
+
+                File.WriteAllBytes(Path.Combine(agDir, "agyhub_summaries_proto.pb"),
+                    ProtoCodec.Encode(new List<ProtoNode> { nPar, nSub5c, nSub5a, nAct, nRec }));
+
+                IntPtr sumDb = OpenAndCreateSummaryWalDb(Path.Combine(agDir, "conversation_summaries.db"));
+                try
+                {
+                    InsertSummaryDbRow(sumDb, cidParent, "Parent 65", "p", 4, "[\"file:///c%3A/P65\"]", "CASCADE_RUN_STATUS_IDLE", "pid-65", "", "", 0, 0, ProtoCodec.Encode(nPar.Children));
+                    InsertSummaryDbRow(sumDb, cidSub5c, "Sub 5C", "p", 6, "[\"file:///c%3A/P65\"]", "CASCADE_RUN_STATUS_IDLE", "pid-65", "coder", cidParent, 1, 0, ProtoCodec.Encode(nSub5c.Children));
+                    InsertSummaryDbRow(sumDb, cidSub5a, "Sub 5A", "p", 4, "[\"file:///c%3A/P65\"]", "IDLE", "pid-65", "coder", cidParent, 1, 0, ProtoCodec.Encode(nSub5a.Children));
+                    InsertSummaryDbRow(sumDb, cidActive, "Active Sub", "p", 4, "[\"file:///c%3A/P65\"]", "CASCADE_RUN_STATUS_IDLE", "pid-65", "coder", cidParent, 1, 1, ProtoCodec.Encode(nAct.Children));
+                    InsertSummaryDbRow(sumDb, cidRecent, "Recent Sub", "p", 4, "[\"file:///c%3A/P65\"]", "CASCADE_RUN_STATUS_IDLE", "pid-65", "coder", cidParent, 1, 0, ProtoCodec.Encode(nRec.Children));
+                }
+                finally
+                {
+                    t_sqlite3_close(sumDb);
+                }
+
+                string parDb = Path.Combine(convDir, cidParent + ".db");
+                string sub5cDb = Path.Combine(convDir, cidSub5c + ".db");
+                string sub5aDb = Path.Combine(convDir, cidSub5a + ".db");
+                string actDb = Path.Combine(convDir, cidActive + ".db");
+                string recDb = Path.Combine(convDir, cidRecent + ".db");
+
+                CreateSampleLiposuctionDb(parDb, cidParent, 60, 100 * 1024, 4); // >5 MB root session (must NOT be touched)
+                CreateSampleLiposuctionDb(sub5cDb, cidSub5c, 60, 100 * 1024, 6); // >5 MB aged idle subagent
+                CreateSampleLiposuctionDb(sub5aDb, cidSub5a, 60, 100 * 1024, 4); // >5 MB aged idle subagent
+                CreateSampleLiposuctionDb(actDb, cidActive, 60, 100 * 1024, 4); // >5 MB not_fully_idle=1 (must NOT be touched)
+                CreateSampleLiposuctionDb(recDb, cidRecent, 60, 100 * 1024, 4); // >5 MB <7d (must NOT be touched)
+
+                string sub5aBrain = Path.Combine(brainDir, cidSub5a);
+                Directory.CreateDirectory(sub5aBrain);
+                File.WriteAllText(Path.Combine(sub5aBrain, "notes.md"), "# Keep Brain", Encoding.UTF8);
+
+                long parBeforeSize = new FileInfo(parDb).Length;
+                long actBeforeSize = new FileInfo(actDb).Length;
+                long recBeforeSize = new FileInfo(recDb).Length;
+                long sub5cBeforeSize = new FileInfo(sub5cDb).Length;
+
+                // 1. Pre-flight sandbox compatibility verification on sub5cDb
+                string preReport;
+                AssertTrue(StorageSlimService.VerifyLiposuctionCompatibility(sub5cDb, out preReport), "T65: Pre-flight VerifyLiposuctionCompatibility passes: " + preReport);
+                AssertEqual(sub5cBeforeSize, new FileInfo(sub5cDb).Length, "T65: Pre-flight never mutates original sample DB");
+
+                // Render Markdown BEFORE liposuction
+                ConversationSummaryInfo sub5cSummary = new ConversationSummaryInfo { ConversationId = cidSub5c, DisplayTitle = "Sub 5C", ProjectName = "P65", StepCount = 6 };
+                bool trunc;
+                string mdBefore = TranscriptMarkdownExporter.PreviewLocalSessionMarkdown(sub5cSummary, geminiDir, 4 * 1024 * 1024, out trunc);
+
+                // 2. Execute Mode 5C (Liposuction) targeting cidSub5c (and testing default filter rejects parent/active/recent when TargetCids=null? Target cidSub5c + check skipped)
+                StorageSlimRequest req5c = new StorageSlimRequest();
+                req5c.Mode = StorageSlimMode.Liposuction;
+                req5c.TargetCids = new List<string> { cidSub5c, cidParent, cidActive, cidRecent };
+                req5c.MinAgeDays = 7.0;
+                req5c.MinSizeMb = 5.0;
+                StorageSlimResult res5c = StorageSlimService.ExecuteStorageSlim(homeDir, geminiDir, req5c);
+
+                AssertTrue(res5c.Ok, "T65: Mode 5C succeeded: " + res5c.ErrorMessage);
+                AssertEqual(1, res5c.ProcessedCount, "T65: Mode 5C processed ONLY eligible cidSub5c");
+                AssertEqual(3, res5c.SkippedCount, "T65: Mode 5C skipped parent, active(not_fully_idle=1), and recent");
+                AssertTrue(File.Exists(res5c.ColdArchivePath), "T65: Mandatory cold archive .agy created before liposuction");
+
+                using (ZipArchive coldZip = ZipFile.OpenRead(res5c.ColdArchivePath))
+                {
+                    ZipArchiveEntry archivedSub = coldZip.GetEntry("data/antigravity/conversations/" + cidSub5c + ".db");
+                    AssertTrue(archivedSub != null && archivedSub.Length >= sub5cBeforeSize - 65536, "T65: Cold archive contains full untouched original subagent DB");
+                    AssertTrue(coldZip.GetEntry("manifest.json") != null, "T65: Cold archive contains manifest.json");
+                }
+
+                long sub5cAfterSize = new FileInfo(sub5cDb).Length;
+                AssertTrue(sub5cAfterSize < sub5cBeforeSize / 10, "T65: Liposuction shrank DB dramatically (" + sub5cBeforeSize + " -> " + sub5cAfterSize + ")");
+
+                string intDetail;
+                AssertTrue(SqliteOnlineBackup.RunIntegrityCheck(sub5cDb, out intDetail) && intDetail == "ok", "T65: PRAGMA integrity_check == ok after liposuction");
+                AssertEqual("6", QuerySingleText(sub5cDb, "SELECT COUNT(*) FROM steps;", null), "T65: steps row count 100% preserved");
+                AssertEqual("0", QuerySingleText(sub5cDb, "SELECT COUNT(*) FROM executor_metadata;", null), "T65: executor_metadata cleared");
+
+                string mdAfter = TranscriptMarkdownExporter.PreviewLocalSessionMarkdown(sub5cSummary, geminiDir, 4 * 1024 * 1024, out trunc);
+                AssertEqual(mdBefore, mdAfter, "T65: Markdown export output 100% identical after liposuction");
+
+                // Verify root, active, and recent untouched
+                AssertEqual(parBeforeSize, new FileInfo(parDb).Length, "T65: Root parent DB untouched");
+                AssertEqual(actBeforeSize, new FileInfo(actDb).Length, "T65: Active not_fully_idle=1 DB untouched");
+                AssertEqual(recBeforeSize, new FileInfo(recDb).Length, "T65: Recent (<7d) DB untouched");
+
+                // 3. Execute Mode 5A (ColdArchivePrune) on cidSub5a
+                StorageSlimRequest req5a = new StorageSlimRequest();
+                req5a.Mode = StorageSlimMode.ColdArchivePrune;
+                req5a.TargetCids = new List<string> { cidSub5a };
+                req5a.MinAgeDays = 7.0;
+                req5a.MinSizeMb = 5.0;
+                StorageSlimResult res5a = StorageSlimService.ExecuteStorageSlim(homeDir, geminiDir, req5a);
+                AssertTrue(res5a.Ok && res5a.ProcessedCount == 1, "T65: Mode 5A ColdArchivePrune processed cidSub5a");
+                AssertTrue(File.Exists(res5a.ColdArchivePath), "T65: Mode 5A created cold archive .agy");
+                AssertTrue(!File.Exists(sub5aDb), "T65: Mode 5A deleted local subagent .db");
+                AssertTrue(File.Exists(parDb), "T65: Mode 5A preserved parent session .db");
+                AssertTrue(File.Exists(Path.Combine(sub5aBrain, "notes.md")), "T65: Mode 5A preserved brain/ directory");
+
+                // 4. Regression: NOT_FULLY_IDLE status string must NOT pass IsIdleRunStatus
+                AssertTrue(!StorageSlimService.IsIdleRunStatus("NOT_FULLY_IDLE"), "T65: NOT_FULLY_IDLE rejected as non-idle");
+                AssertTrue(StorageSlimService.IsIdleRunStatus("CASCADE_RUN_STATUS_IDLE"), "T65: CASCADE_RUN_STATUS_IDLE accepted as idle");
+                AssertTrue(StorageSlimService.IsIdleRunStatus("IDLE"), "T65: IDLE accepted as idle");
+
+                // 5. Regression: Trigger referencing executor_metadata blocks liposuction cleanly (no mutation)
+                string trigDb = Path.Combine(sb, "trig_sub.db");
+                CreateSampleLiposuctionDb(trigDb, cidSub5c, 5, 1024, 3);
+                string trigErr;
+                AssertTrue(SqliteOnlineBackup.ExecuteNonQuery(trigDb,
+                    "CREATE TRIGGER tr_exec_guard AFTER DELETE ON executor_metadata BEGIN SELECT 1; END;", out trigErr),
+                    "T65: Created trigger on executor_metadata for negative test: " + trigErr);
+                string trigReport;
+                AssertTrue(!StorageSlimService.VerifyLiposuctionCompatibility(trigDb, out trigReport) &&
+                           trigReport.Contains("Trigger"),
+                    "T65: VerifyLiposuctionCompatibility rejects DB with trigger on executor_metadata");
+                AssertEqual("5", QuerySingleText(trigDb, "SELECT COUNT(*) FROM executor_metadata;", null),
+                    "T65: Trigger-protected original DB remains untouched");
+
+                // 6. Regression: Locked -wal sidecar prevents atomic swap without corrupting DB
+                string lockSubDb = Path.Combine(convDir, cidSub5c + ".db");
+                long lockedBeforeSize = new FileInfo(lockSubDb).Length;
+                string lockWal = lockSubDb + "-wal";
+                File.WriteAllBytes(lockWal, new byte[0]);
+                using (FileStream walLock = new FileStream(lockWal, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    StorageSlimRequest reqLocked = new StorageSlimRequest();
+                    reqLocked.Mode = StorageSlimMode.Liposuction;
+                    reqLocked.TargetCids = new List<string> { cidSub5c };
+                    reqLocked.MinAgeDays = 7.0;
+                    reqLocked.MinSizeMb = 0.001;
+                    reqLocked.RunPreFlight = false;
+                    StorageSlimResult resLocked = StorageSlimService.ExecuteStorageSlim(homeDir, geminiDir, reqLocked);
+                    AssertTrue(resLocked.Ok && resLocked.ProcessedCount == 0 && resLocked.SkippedCount == 1,
+                        "T65: Locked -wal skips swap cleanly without corrupting DB (" + resLocked.ErrorMessage + ")");
+                    AssertEqual(lockedBeforeSize, new FileInfo(lockSubDb).Length, "T65: Original DB unchanged when -wal locked");
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T66_Stage3_BackupTierFastDailyVsFullForensicAndRestoreUserSettings()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t66_" + Guid.NewGuid().ToString("N"));
+            string fastZip = Path.Combine(sb, "fast.agy");
+            string fullZip = Path.Combine(sb, "full.agy");
+            try
+            {
+                string srcHome = Path.Combine(sb, "SrcHome");
+                string srcGemini = Path.Combine(srcHome, ".gemini");
+                string srcAg = Path.Combine(srcGemini, "antigravity");
+                string srcCli = Path.Combine(srcGemini, "antigravity-cli");
+                string srcCfg = Path.Combine(srcGemini, "config");
+                Directory.CreateDirectory(Path.Combine(srcAg, "conversations"));
+                Directory.CreateDirectory(Path.Combine(srcAg, "bin"));
+                Directory.CreateDirectory(Path.Combine(srcCli, "conversations"));
+                Directory.CreateDirectory(Path.Combine(srcCli, "bin"));
+                Directory.CreateDirectory(srcCfg);
+
+                string cidRoot = "r6600001-0000-4000-8000-000000000001";
+                string cidSub = "s6600002-0000-4000-8000-000000000002";
+                string cidCli = "c6600003-0000-4000-8000-000000000003";
+
+                ProtoNode nRoot = BuildRealProtoEntry(cidRoot, "Root 66", null, "file:///c%3A/P66", "P66", "pid-66", 3, 1, 1);
+                ProtoNode nSub = BuildRealProtoEntry(cidSub, "Sub 66", null, "file:///c%3A/P66", "P66", "pid-66", 3, 1, 0);
+                nSub.GetChild(2).GetChild(17).Children.Add(new ProtoNode(11, 2) { RawBytes = Encoding.UTF8.GetBytes(cidRoot), IsModified = true });
+                byte[] idePb = ProtoCodec.Encode(new List<ProtoNode> { nRoot, nSub });
+                File.WriteAllBytes(Path.Combine(srcAg, "agyhub_summaries_proto.pb"), idePb);
+
+                ProtoNode nCli = BuildRealProtoEntry(cidCli, "CLI 66", null, null, "default-cli-project", "default-cli-project", 2, 1, 1);
+                byte[] cliPb = ProtoCodec.Encode(new List<ProtoNode> { nCli });
+                File.WriteAllBytes(Path.Combine(srcCli, "agyhub_summaries_proto.pb"), cliPb);
+
+                CreateMinimalValidSqliteDb(Path.Combine(srcAg, "conversations", cidRoot + ".db"), cidRoot);
+                CreateMinimalValidSqliteDb(Path.Combine(srcAg, "conversations", cidSub + ".db"), cidSub);
+                CreateMinimalValidSqliteDb(Path.Combine(srcCli, "conversations", cidCli + ".db"), cidCli);
+                File.WriteAllText(Path.Combine(srcAg, "bin", "helper.exe"), "BIN", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(srcCli, "bin", "cli.exe"), "BIN", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(srcGemini, "settings.json"), "{\"cliTheme\":\"dark\"}", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(srcCfg, "config.json"),
+                    "{\r\n  \"userSettings\": {\r\n    \"themeMode\": \"THEME_MODE_DARK\",\r\n    \"enableTerminalSandbox\": true\r\n  },\r\n  \"plugins\": {\r\n    \"plug-a\": { \"enabled\": true, \"installedFrom\": { \"version\": \"1.0\" } },\r\n    \"plug-b\": { \"enabled\": false }\r\n  }\r\n}\r\n",
+                    Encoding.UTF8);
+
+                List<ConversationSummaryInfo> sums = new List<ConversationSummaryInfo>();
+                sums.AddRange(SessionMetadataExtractor.ExtractSummariesFromProto(idePb));
+                List<ConversationSummaryInfo> cliSums = SessionMetadataExtractor.ExtractSummariesFromProto(cliPb);
+                cliSums[0].IsCliSession = true;
+                sums.AddRange(cliSums);
+
+                int fcFast, fcFull;
+                List<string> wFast, wFull;
+                ArchiveTransferService.CreateFullBackup(srcGemini, srcHome, sums, fastZip, BackupTier.FastDaily, null, out fcFast, out wFast);
+                ArchiveTransferService.CreateFullBackup(srcGemini, srcHome, sums, fullZip, BackupTier.FullForensic, null, out fcFull, out wFull);
+
+                BackupArchiveIndex fastIdx = StreamingZipIndexReader.ReadIndex(fastZip);
+                AssertEqual("FastDaily", fastIdx.BackupTier, "T66: FastDaily manifest tier recorded");
+                AssertTrue(fastIdx.ExistingConvoDbFiles.Contains(cidRoot), "T66: FastDaily includes root IDE DB");
+                AssertTrue(fastIdx.ExistingConvoDbFiles.Contains(cidCli), "T66: FastDaily includes CLI DB");
+                AssertTrue(!fastIdx.ExistingConvoDbFiles.Contains(cidSub), "T66: FastDaily excludes subagent DB");
+
+                BackupArchiveIndex fullIdx = StreamingZipIndexReader.ReadIndex(fullZip);
+                AssertEqual("FullForensic", fullIdx.BackupTier, "T66: FullForensic manifest tier recorded");
+                AssertTrue(fullIdx.ExistingConvoDbFiles.Contains(cidSub), "T66: FullForensic includes subagent DB");
+
+                using (ZipArchive zFull = ZipFile.OpenRead(fullZip))
+                {
+                    bool hasBin = false;
+                    for (int i = 0; i < zFull.Entries.Count; i++)
+                    {
+                        if (zFull.Entries[i].FullName.IndexOf("/bin/", StringComparison.OrdinalIgnoreCase) >= 0) hasBin = true;
+                    }
+                    AssertTrue(!hasBin, "T66: FullForensic still excludes bin/");
+                }
+
+                // RestoreUserSettings merge into local config.json preserving local unknown keys & JSONC comments
+                string dstHome = Path.Combine(sb, "DstHome");
+                string dstGemini = Path.Combine(dstHome, ".gemini");
+                string dstCfgDir = Path.Combine(dstGemini, "config");
+                Directory.CreateDirectory(dstCfgDir);
+                string dstCfgPath = Path.Combine(dstCfgDir, "config.json");
+                File.WriteAllText(dstCfgPath,
+                    "{\r\n  // Keep local JSONC comment\r\n  \"userSettings\": {\r\n    \"themeMode\": \"THEME_MODE_LIGHT\",\r\n    \"localUnknownKey\": \"keep-intact\"\r\n  },\r\n  \"plugins\": {\r\n    \"plug-a\": { \"enabled\": false, \"installedFrom\": { \"version\": \"2.5.0\" }, \"localFlag\": 99 },\r\n    \"local-only-plug\": { \"enabled\": true }\r\n  }\r\n}\r\n",
+                    Encoding.UTF8);
+
+                SelectiveImportRequest impReq = new SelectiveImportRequest
+                {
+                    GeminiPath = dstGemini,
+                    HomePath = dstHome,
+                    SourceMode = RightPaneSourceMode.BackupArchive,
+                    LoadedBackupPath = fastZip,
+                    BackupIndex = fastIdx,
+                    RestoreUserSettings = true
+                };
+                OperationResult<SelectiveImportResult> impRes = ArchiveTransferService.PerformSelectiveImportResult(impReq, null);
+                AssertTrue(impRes.Ok, "T66: RestoreUserSettings selective import succeeded: " + impRes.ErrorMessage);
+
+                string afterCfgText = File.ReadAllText(dstCfgPath, Encoding.UTF8);
+                AssertTrue(afterCfgText.Contains("// Keep local JSONC comment"), "T66: Local JSONC comment preserved");
+                AssertTrue(Directory.GetFiles(dstCfgDir, "config.json.bak.*").Length == 1, "T66: Timestamped config.json.bak.* created");
+
+                Dictionary<string, object> parsedCfg = UnifiedJson.AsDict(UnifiedJson.Parse(afterCfgText));
+                Dictionary<string, object> us = UnifiedJson.AsDict(parsedCfg["userSettings"]);
+                AssertEqual("THEME_MODE_DARK", UnifiedJson.GetString(us, "themeMode", ""), "T66: userSettings.themeMode restored");
+                AssertTrue(UnifiedJson.GetBool(us, "enableTerminalSandbox", false), "T66: userSettings.enableTerminalSandbox restored");
+                AssertEqual("keep-intact", UnifiedJson.GetString(us, "localUnknownKey", ""), "T66: Local unknown userSettings key preserved");
+
+                Dictionary<string, object> plugs = UnifiedJson.AsDict(parsedCfg["plugins"]);
+                Dictionary<string, object> plugA = UnifiedJson.AsDict(plugs["plug-a"]);
+                Dictionary<string, object> plugB = UnifiedJson.AsDict(plugs["plug-b"]);
+                Dictionary<string, object> plugLocal = UnifiedJson.AsDict(plugs["local-only-plug"]);
+                AssertTrue(UnifiedJson.GetBool(plugA, "enabled", false), "T66: plug-a enabled flag merged");
+                AssertEqual(99, UnifiedJson.GetInt(plugA, "localFlag", 0), "T66: plug-a local fields preserved");
+                AssertTrue(!UnifiedJson.GetBool(plugB, "enabled", true), "T66: plug-b disabled flag merged");
+                AssertTrue(UnifiedJson.GetBool(plugLocal, "enabled", false), "T66: local-only-plug preserved");
+
+                // Null-object resilience: local config.json has userSettings: null & plugins: { plug-a: null }
+                string nullHome = Path.Combine(sb, "NullHome");
+                string nullGemini = Path.Combine(nullHome, ".gemini");
+                string nullCfgDir = Path.Combine(nullGemini, "config");
+                Directory.CreateDirectory(nullCfgDir);
+                File.WriteAllText(Path.Combine(nullCfgDir, "config.json"),
+                    "{\"userSettings\":null,\"plugins\":{\"plug-a\":null}}", Encoding.UTF8);
+                SelectiveImportRequest nullImpReq = new SelectiveImportRequest
+                {
+                    GeminiPath = nullGemini,
+                    HomePath = nullHome,
+                    SourceMode = RightPaneSourceMode.BackupArchive,
+                    LoadedBackupPath = fastZip,
+                    BackupIndex = fastIdx,
+                    RestoreUserSettings = true
+                };
+                OperationResult<SelectiveImportResult> nullImpRes = ArchiveTransferService.PerformSelectiveImportResult(nullImpReq, null);
+                AssertTrue(nullImpRes.Ok, "T66: RestoreUserSettings handles null userSettings/plugin objects cleanly: " + nullImpRes.ErrorMessage);
+                Dictionary<string, object> nullParsed = UnifiedJson.AsDict(UnifiedJson.Parse(File.ReadAllText(Path.Combine(nullCfgDir, "config.json"), Encoding.UTF8)));
+                AssertEqual("THEME_MODE_DARK", UnifiedJson.GetString(UnifiedJson.AsDict(nullParsed["userSettings"]), "themeMode", ""),
+                    "T66: Null userSettings initialized and merged");
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T67_Stage3_AntigravityCliAdapter_DiscoverParseTimeoutAndMissing()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t67_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(sb);
+
+                // 1. Missing CLI returns clean CliNotFound without throwing
+                CliAvailabilityResult missingAvail = AntigravityCliAdapter.CheckCliAvailability(Path.Combine(sb, "missing_agy.cmd"), "", "", "");
+                AssertTrue(!missingAvail.Available && !string.IsNullOrEmpty(missingAvail.VersionOrHint), "T67: Missing CLI availability reports unavailable + hint");
+
+                List<SessionRenameCandidate> batch = new List<SessionRenameCandidate>
+                {
+                    new SessionRenameCandidate
+                    {
+                        ConversationId = "11111111-2222-3333-4444-555555555555",
+                        ProjectName = "Alpha",
+                        OldTitle = "hello",
+                        SuggestedPrefix = "【Alpha】",
+                        CleanedPrompt = "Fix memory leak in worker"
+                    }
+                };
+
+                CliBatchSuggestionResult notFoundRes = AntigravityCliAdapter.GenerateBatchSuggestionsViaCli(batch, Path.Combine(sb, "missing_agy.cmd"), 5, "", "", "");
+                AssertTrue(!notFoundRes.Ok && notFoundRes.Status == CliSuggestStatus.CliNotFound, "T67: Missing CLI returns CliNotFound status cleanly");
+
+                // 2. Mock agy.cmd returning JSON wrapper ({"result": "[...]"})
+                string mockWrapPs = Path.Combine(sb, "mock_wrap.ps1");
+                File.WriteAllText(mockWrapPs,
+                    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\r\n" +
+                    "if ($args -contains '--version') { [Console]::Out.WriteLine('agy 1.2.3-mock'); exit 0 }\r\n" +
+                    "$stdinAll = [Console]::In.ReadToEnd()\r\n" +
+                    "$inner = '[{\"cid\":\"11111111-2222-3333-4444-555555555555\",\"title\":\"【Alpha】修复内存泄漏\",\"summary\":\"排查工作线程内存问题\"}]'\r\n" +
+                    "$wrap = @{ result = $inner } | ConvertTo-Json -Compress\r\n" +
+                    "[Console]::Out.WriteLine($wrap)\r\n",
+                    Encoding.UTF8);
+                string agyWrapCmd = Path.Combine(sb, "agy.cmd");
+                File.WriteAllText(agyWrapCmd,
+                    "@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + mockWrapPs + "\" %*\r\n",
+                    new UTF8Encoding(false));
+
+                CliAvailabilityResult okAvail = AntigravityCliAdapter.CheckCliAvailability(agyWrapCmd);
+                AssertTrue(okAvail.Available && okAvail.ResolvedPath == Path.GetFullPath(agyWrapCmd), "T67: Discovers custom agy.cmd");
+
+                CliBatchSuggestionResult wrapRes = AntigravityCliAdapter.GenerateBatchSuggestionsViaCli(batch, agyWrapCmd, 15);
+                AssertTrue(wrapRes.Ok && wrapRes.Status == CliSuggestStatus.Success && wrapRes.Suggestions.Count == 1,
+                    "T67: Parsed wrapper JSON output: " + wrapRes.ErrorOrHint);
+                AssertEqual("【Alpha】修复内存泄漏", wrapRes.Suggestions[0].Title, "T67: Parsed title matches");
+                AssertEqual("排查工作线程内存问题", wrapRes.Suggestions[0].Summary, "T67: Parsed summary matches");
+
+                // 3. Mock agy.cmd returning fenced ```json block inside wrapper/text
+                string mockFencePs = Path.Combine(sb, "mock_fence.ps1");
+                File.WriteAllText(mockFencePs,
+                    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\r\n" +
+                    "$null = [Console]::In.ReadToEnd()\r\n" +
+                    "[Console]::Out.WriteLine('Here are the suggestions:')\r\n" +
+                    "[Console]::Out.WriteLine('```json')\r\n" +
+                    "[Console]::Out.WriteLine('[{\"cid\":\"11111111-2222-3333-4444-555555555555\",\"title\":\"【Alpha】代码块建议\",\"summary\":\"Fenced JSON summary\"}]')\r\n" +
+                    "[Console]::Out.WriteLine('```')\r\n",
+                    Encoding.UTF8);
+                string agyFenceCmd = Path.Combine(sb, "agy_fence.cmd");
+                File.WriteAllText(agyFenceCmd,
+                    "@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + mockFencePs + "\" %*\r\n",
+                    new UTF8Encoding(false));
+
+                CliBatchSuggestionResult fenceRes = AntigravityCliAdapter.GenerateBatchSuggestionsViaCli(batch, agyFenceCmd, 15);
+                AssertTrue(fenceRes.Ok && fenceRes.Suggestions.Count == 1, "T67: Parsed fenced ```json block output: " + fenceRes.ErrorOrHint);
+                AssertEqual("【Alpha】代码块建议", fenceRes.Suggestions[0].Title, "T67: Fenced JSON title parsed");
+
+                // 3b. NDJSON / multi-object stdout (earlier log JSON object precedes final result JSON object)
+                string mockNdjsonPs = Path.Combine(sb, "mock_ndjson.ps1");
+                File.WriteAllText(mockNdjsonPs,
+                    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\r\n" +
+                    "$null = [Console]::In.ReadToEnd()\r\n" +
+                    "[Console]::Out.WriteLine('{\"type\":\"init\",\"session\":\"abc\"}')\r\n" +
+                    "[Console]::Out.WriteLine('{\"type\":\"result\",\"result\":\"[{\\\"cid\\\":\\\"11111111-2222-3333-4444-555555555555\\\",\\\"title\\\":\\\"【Alpha】NDJSON流解析\\\",\\\"summary\\\":\\\"Multi-object NDJSON\\\"}]\"}')\r\n",
+                    Encoding.UTF8);
+                string agyNdjsonCmd = Path.Combine(sb, "agy_ndjson.cmd");
+                File.WriteAllText(agyNdjsonCmd,
+                    "@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + mockNdjsonPs + "\" %*\r\n",
+                    new UTF8Encoding(false));
+                CliBatchSuggestionResult ndjsonRes = AntigravityCliAdapter.GenerateBatchSuggestionsViaCli(batch, agyNdjsonCmd, 15);
+                AssertTrue(ndjsonRes.Ok && ndjsonRes.Suggestions.Count == 1, "T67: Parsed multi-object NDJSON output: " + ndjsonRes.ErrorOrHint);
+                AssertEqual("【Alpha】NDJSON流解析", ndjsonRes.Suggestions[0].Title, "T67: NDJSON title parsed");
+
+                // 4. Timeout kills spawned child process tree
+                string pidFile = Path.Combine(sb, "agy_hang.pid");
+                string mockHangPs = Path.Combine(sb, "mock_hang.ps1");
+                File.WriteAllText(mockHangPs,
+                    "[System.IO.File]::WriteAllText('" + pidFile.Replace("'", "''") + "', $PID.ToString())\r\n" +
+                    "Start-Sleep -Seconds 30\r\n",
+                    Encoding.UTF8);
+                string agyHangCmd = Path.Combine(sb, "agy_hang.cmd");
+                File.WriteAllText(agyHangCmd,
+                    "@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + mockHangPs + "\" %*\r\n",
+                    new UTF8Encoding(false));
+
+                CliBatchSuggestionResult timeoutRes = AntigravityCliAdapter.GenerateBatchSuggestionsViaCli(batch, agyHangCmd, 2);
+                AssertTrue(!timeoutRes.Ok && timeoutRes.Status == CliSuggestStatus.Timeout, "T67: Hanging CLI returns Timeout status");
+
+                if (File.Exists(pidFile))
+                {
+                    int hangPid;
+                    if (int.TryParse(File.ReadAllText(pidFile).Trim(), out hangPid))
+                    {
+                        bool stillAlive = false;
+                        try
+                        {
+                            using (Process p = Process.GetProcessById(hangPid))
+                            {
+                                stillAlive = !p.HasExited;
+                            }
+                        }
+                        catch { stillAlive = false; }
+                        AssertTrue(!stillAlive, "T67: Timed-out agy CLI child process terminated cleanly");
+                    }
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T68_Stage3_HttpStorageAndCliEndpointsEndToEnd()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t68_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string agDir = Path.Combine(geminiDir, "antigravity");
+                string convDir = Path.Combine(agDir, "conversations");
+                string projDir = Path.Combine(geminiDir, "config", "projects");
+                Directory.CreateDirectory(convDir);
+                Directory.CreateDirectory(projDir);
+
+                string cidRoot = "r6800001-0000-4000-8000-000000000001";
+                string cidSub = "s6800002-0000-4000-8000-000000000002";
+
+                File.WriteAllText(Path.Combine(projDir, "pid-68.json"),
+                    WorkspaceService.GenerateStandardProjectJson("pid-68", "Proj68", "C:\\Work\\Proj68"), Encoding.UTF8);
+
+                ProtoNode nRoot = BuildRealProtoEntry(cidRoot, "new chat", null, "file:///c%3A/Work/Proj68", "Proj68", "pid-68", 4, 1, 1);
+                ProtoNode nSub = BuildRealProtoEntry(cidSub, "Sub 68", null, "file:///c%3A/Work/Proj68", "P68", "pid-68", 5, 1, 0);
+                nSub.GetChild(2).GetChild(17).Children.Add(new ProtoNode(11, 2) { RawBytes = Encoding.UTF8.GetBytes(cidRoot), IsModified = true });
+                File.WriteAllBytes(Path.Combine(agDir, "agyhub_summaries_proto.pb"), ProtoCodec.Encode(new List<ProtoNode> { nRoot, nSub }));
+
+                IntPtr sumDb = OpenAndCreateSummaryWalDb(Path.Combine(agDir, "conversation_summaries.db"));
+                try
+                {
+                    InsertSummaryDbRow(sumDb, cidRoot, "new chat", "p", 4, "[\"file:///c%3A/Work/Proj68\"]", "CASCADE_RUN_STATUS_IDLE", "pid-68", "", "", 0, 0, ProtoCodec.Encode(nRoot.Children));
+                    InsertSummaryDbRow(sumDb, cidSub, "Sub 68", "p", 5, "[\"file:///c%3A/Work/Proj68\"]", "CASCADE_RUN_STATUS_IDLE", "pid-68", "coder", cidRoot, 1, 0, ProtoCodec.Encode(nSub.Children));
+                }
+                finally
+                {
+                    t_sqlite3_close(sumDb);
+                }
+
+                CreateSampleLiposuctionDb(Path.Combine(convDir, cidRoot + ".db"), cidRoot, 1, 128, 4);
+                string subDbPath = Path.Combine(convDir, cidSub + ".db");
+                CreateSampleLiposuctionDb(subDbPath, cidSub, 60, 100 * 1024, 5);
+                long subBefore = new FileInfo(subDbPath).Length;
+
+                // Mock agy.cmd for HTTP CLI status & suggest tests
+                string mockPs = Path.Combine(sb, "mock_http_agy.ps1");
+                File.WriteAllText(mockPs,
+                    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\r\n" +
+                    "if ($args -contains '--version') { [Console]::Out.WriteLine('agy-http 1.0'); exit 0 }\r\n" +
+                    "$null = [Console]::In.ReadToEnd()\r\n" +
+                    "[Console]::Out.WriteLine('[{\"cid\":\"" + cidRoot + "\",\"title\":\"【Proj68】HTTP建议标题\",\"summary\":\"CLI 摘要\"}]')\r\n",
+                    Encoding.UTF8);
+                string mockCmd = Path.Combine(sb, "agy.cmd");
+                File.WriteAllText(mockCmd,
+                    "@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + mockPs + "\" %*\r\n",
+                    new UTF8Encoding(false));
+
+                string token = "t68_tok_e2e";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "Repo"), 0, token))
+                {
+                    host.Start();
+
+                    // 1. GET /api/storage/analyze
+                    RawHttpTestResponse anResp = SendRawTcpHttp(host.Port, null, "GET", "/api/storage/analyze?minAgeDays=7&minSizeMb=5", apiHdr, null);
+                    AssertEqual(200, anResp.StatusCode, "T68: GET /api/storage/analyze returns 200");
+                    AssertTrue(anResp.BodyText.Contains(cidSub) && anResp.BodyText.Contains("\"eligibleForSlim\":true"),
+                        "T68: Storage analyze surfaces eligible subagent DB");
+
+                    // 2. POST /api/storage/slim (Liposuction)
+                    RawHttpTestResponse slimResp = SendRawTcpHttp(host.Port, null, "POST", "/api/storage/slim", apiHdr,
+                        "{\"mode\":\"liposuction\",\"minAgeDays\":7,\"minSizeMb\":5,\"verifyPreFlight\":true}");
+                    AssertEqual(200, slimResp.StatusCode, "T68: POST /api/storage/slim returns 200: " + slimResp.BodyText);
+                    AssertTrue(slimResp.BodyText.Contains("\"processedCount\":1") && slimResp.BodyText.Contains("\"preFlightPassed\":true"),
+                        "T68: Storage slim processed 1 subagent with pre-flight pass");
+                    AssertTrue(new FileInfo(subDbPath).Length < subBefore / 10, "T68: Subagent DB shrank via HTTP slim");
+
+                    // 3. GET /api/rename/cli-status
+                    RawHttpTestResponse cliStatResp = SendRawTcpHttp(host.Port, null, "GET", "/api/rename/cli-status?customCliPath=" + Uri.EscapeDataString(mockCmd), apiHdr, null);
+                    AssertEqual(200, cliStatResp.StatusCode, "T68: GET /api/rename/cli-status returns 200");
+                    AssertTrue(cliStatResp.BodyText.Contains("\"available\":true") && cliStatResp.BodyText.Contains("agy-http 1.0"),
+                        "T68: CLI status reports available with version");
+
+                    // 4. POST /api/rename/cli-suggest
+                    RawHttpTestResponse cliSugResp = SendRawTcpHttp(host.Port, null, "POST", "/api/rename/cli-suggest", apiHdr,
+                        "{\"cids\":[\"" + cidRoot + "\"],\"customCliPath\":\"" + UnifiedJson.EscapeString(mockCmd) + "\",\"timeoutSec\":15}");
+                    AssertEqual(200, cliSugResp.StatusCode, "T68: POST /api/rename/cli-suggest returns 200");
+                    AssertTrue(cliSugResp.BodyText.Contains("\"ok\":true") && cliSugResp.BodyText.Contains("HTTP建议标题"),
+                        "T68: CLI suggest returned structured suggestion via HTTP");
+
+                    // 5. HTTP 409 busy-job lock contention on /api/storage/slim and /api/rename/cli-suggest
+                    AssertTrue(host.TryAcquireJob("t68_lock", "Contention test"), "T68: Acquired simulated job lock");
+                    try
+                    {
+                        RawHttpTestResponse slim409 = SendRawTcpHttp(host.Port, null, "POST", "/api/storage/slim", apiHdr,
+                            "{\"mode\":\"liposuction\"}");
+                        AssertEqual(409, slim409.StatusCode, "T68: POST /api/storage/slim returns 409 when job busy");
+
+                        RawHttpTestResponse cli409 = SendRawTcpHttp(host.Port, null, "POST", "/api/rename/cli-suggest", apiHdr,
+                            "{\"cids\":[\"" + cidRoot + "\"]}");
+                        AssertEqual(409, cli409.StatusCode, "T68: POST /api/rename/cli-suggest returns 409 when job busy");
+                    }
+                    finally
+                    {
+                        host.ReleaseJob();
+                    }
+
+                    // 6. HTTP POST /api/backup/full (tier=fast vs tier=full) and POST /api/backup/import (restoreUserSettings=true)
+                    string cfgDir68 = Path.Combine(geminiDir, "config");
+                    Directory.CreateDirectory(cfgDir68);
+                    string cfgPath68 = Path.Combine(cfgDir68, "config.json");
+                    File.WriteAllText(cfgPath68,
+                        "{\"userSettings\":{\"themeMode\":\"THEME_MODE_DARK\",\"fromArchive\":true},\"plugins\":{\"plug-68\":{\"enabled\":true}}}",
+                        Encoding.UTF8);
+
+                    string fastHttpZip = Path.Combine(sb, "http_fast.agy");
+                    string fullHttpZip = Path.Combine(sb, "http_full.agy");
+                    RawHttpTestResponse bkFast = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/full", apiHdr,
+                        "{\"outputPath\":\"" + UnifiedJson.EscapeString(fastHttpZip) + "\",\"tier\":\"fast\"}");
+                    if (ProcessGuardService.IsAntigravityRunning())
+                    {
+                        AssertEqual(409, bkFast.StatusCode, "T68: POST /api/backup/full returns 409 IDE_RUNNING when host IDE is running");
+                        AssertTrue(bkFast.BodyText.Contains("IDE_RUNNING"), "T68: 409 payload indicates IDE_RUNNING");
+                    }
+                    else
+                    {
+                        AssertEqual(202, bkFast.StatusCode, "T68: POST /api/backup/full (tier=fast) returns 202");
+                        for (int w = 0; w < 100 && !File.Exists(fastHttpZip); w++) System.Threading.Thread.Sleep(50);
+                        for (int w = 0; w < 100; w++)
+                        {
+                            RawHttpTestResponse jr = SendRawTcpHttp(host.Port, null, "GET", "/api/jobs/current", apiHdr, null);
+                            if (jr.BodyText.Contains("\"busy\":false")) break;
+                            System.Threading.Thread.Sleep(50);
+                        }
+                        BackupArchiveIndex fastHttpIdx = StreamingZipIndexReader.ReadIndex(fastHttpZip);
+                        AssertEqual("FastDaily", fastHttpIdx.BackupTier, "T68: HTTP fast backup recorded FastDaily tier");
+                        AssertTrue(fastHttpIdx.ExistingConvoDbFiles.Contains(cidRoot) && !fastHttpIdx.ExistingConvoDbFiles.Contains(cidSub),
+                            "T68: HTTP FastDaily excluded subagent DB");
+
+                        RawHttpTestResponse bkFull = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/full", apiHdr,
+                            "{\"outputPath\":\"" + UnifiedJson.EscapeString(fullHttpZip) + "\",\"tier\":\"full\"}");
+                        AssertEqual(202, bkFull.StatusCode, "T68: POST /api/backup/full (tier=full) returns 202");
+                        for (int w = 0; w < 100; w++)
+                        {
+                            RawHttpTestResponse jr = SendRawTcpHttp(host.Port, null, "GET", "/api/jobs/current", apiHdr, null);
+                            if (jr.BodyText.Contains("\"busy\":false") && File.Exists(fullHttpZip)) break;
+                            System.Threading.Thread.Sleep(50);
+                        }
+                        BackupArchiveIndex fullHttpIdx = StreamingZipIndexReader.ReadIndex(fullHttpZip);
+                        AssertEqual("FullForensic", fullHttpIdx.BackupTier, "T68: HTTP full backup recorded FullForensic tier");
+                        AssertTrue(fullHttpIdx.ExistingConvoDbFiles.Contains(cidSub), "T68: HTTP FullForensic included subagent DB");
+
+                        // Mutate local config.json, open fastHttpZip, and restore via POST /api/backup/import with restoreUserSettings=true
+                        File.WriteAllText(cfgPath68,
+                            "{\"userSettings\":{\"themeMode\":\"THEME_MODE_LIGHT\",\"localOnlyKeep\":\"yes\"},\"plugins\":{\"plug-68\":{\"enabled\":false}}}",
+                            Encoding.UTF8);
+                        RawHttpTestResponse openFast = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/open", apiHdr,
+                            "{\"archivePath\":\"" + UnifiedJson.EscapeString(fastHttpZip) + "\"}");
+                        AssertEqual(200, openFast.StatusCode, "T68: POST /api/backup/open succeeded");
+                        AssertTrue(openFast.BodyText.Contains("\"backupTier\":\"FastDaily\""), "T68: /api/backup/open returns backupTier");
+
+                        RawHttpTestResponse impRestore = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/import", apiHdr,
+                            "{\"cids\":[],\"capKeys\":[],\"restoreUserSettings\":true}");
+                        AssertEqual(202, impRestore.StatusCode, "T68: POST /api/backup/import (restoreUserSettings=true) returns 202");
+                        for (int w = 0; w < 100; w++)
+                        {
+                            RawHttpTestResponse jr = SendRawTcpHttp(host.Port, null, "GET", "/api/jobs/current", apiHdr, null);
+                            if (jr.BodyText.Contains("\"busy\":false")) break;
+                            System.Threading.Thread.Sleep(50);
+                        }
+                        Dictionary<string, object> restoredCfg = UnifiedJson.AsDict(UnifiedJson.Parse(File.ReadAllText(cfgPath68, Encoding.UTF8)));
+                        Dictionary<string, object> restoredUs = UnifiedJson.AsDict(restoredCfg["userSettings"]);
+                        Dictionary<string, object> restoredPlug = UnifiedJson.AsDict(UnifiedJson.AsDict(restoredCfg["plugins"])["plug-68"]);
+                        AssertEqual("THEME_MODE_DARK", UnifiedJson.GetString(restoredUs, "themeMode", ""), "T68: HTTP restoreUserSettings updated themeMode");
+                        AssertEqual("yes", UnifiedJson.GetString(restoredUs, "localOnlyKeep", ""), "T68: HTTP restoreUserSettings preserved localOnlyKeep");
+                        AssertTrue(UnifiedJson.GetBool(restoredPlug, "enabled", false), "T68: HTTP restoreUserSettings updated plugin enabled flag");
+                    }
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T69_Stage3_LegacyCliArchivePruneAndCompleteOrphanGc()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t69_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string agDir = Path.Combine(geminiDir, "antigravity");
+                string cliDir = Path.Combine(geminiDir, "antigravity-cli");
+                Directory.CreateDirectory(Path.Combine(agDir, "conversations"));
+                Directory.CreateDirectory(Path.Combine(agDir, "brain"));
+                Directory.CreateDirectory(Path.Combine(agDir, "annotations"));
+                Directory.CreateDirectory(cliDir);
+
+                string cidActive = "a6900001-0000-4000-8000-000000000001";
+                string cidOrphan = "f6900002-0000-4000-8000-000000000002";
+                string cidLegacy = "c6900003-0000-4000-8000-000000000003";
+
+                ProtoNode nActive = BuildRealProtoEntry(cidActive, "Active 69", null, "file:///c%3A/P69", "P69", "pid-69", 3, 1, 1);
+                File.WriteAllBytes(Path.Combine(agDir, "agyhub_summaries_proto.pb"), ProtoCodec.Encode(new List<ProtoNode> { nActive }));
+
+                string activeDb = Path.Combine(agDir, "conversations", cidActive + ".db");
+                CreateMinimalValidSqliteDb(activeDb, cidActive);
+                File.WriteAllText(Path.Combine(agDir, "annotations", cidActive + ".pbtxt"), "title:\"Active 69\"", Encoding.UTF8);
+                Directory.CreateDirectory(Path.Combine(agDir, "brain", cidActive));
+                File.WriteAllText(Path.Combine(agDir, "brain", cidActive, "plan.md"), "# Keep", Encoding.UTF8);
+
+                // Leftover active .db.bak and stale .db-journal + orphan .pbtxt + orphan brain/ + orphan .db.bak
+                string activeBak = Path.Combine(agDir, "conversations", cidActive + ".db.bak");
+                string activeJournal = Path.Combine(agDir, "conversations", cidActive + ".db-journal");
+                string orphanDbBak = Path.Combine(agDir, "conversations", cidOrphan + ".db.bak");
+                string orphanPbtxt = Path.Combine(agDir, "annotations", cidOrphan + ".pbtxt");
+                string orphanBrain = Path.Combine(agDir, "brain", cidOrphan);
+
+                File.WriteAllText(activeBak, "BAK", Encoding.UTF8);
+                File.WriteAllText(activeJournal, "JRN", Encoding.UTF8);
+                File.WriteAllText(orphanDbBak, "OBAK", Encoding.UTF8);
+                File.WriteAllText(orphanPbtxt, "title:\"Orphan\"", Encoding.UTF8);
+                Directory.CreateDirectory(orphanBrain);
+                File.WriteAllText(Path.Combine(orphanBrain, "old.md"), "# Orphan", Encoding.UTF8);
+
+                // Legacy antigravity-cli/conversation_summaries.db
+                string legacyCliDbPath = Path.Combine(cliDir, "conversation_summaries.db");
+                IntPtr ldb = OpenAndCreateSummaryWalDb(legacyCliDbPath);
+                try
+                {
+                    ProtoNode nLeg = BuildRealProtoEntry(cidLegacy, "Legacy Ghost", null, null, "default-cli-project", "default-cli-project", 2, 1, 1);
+                    InsertSummaryDbRow(ldb, cidLegacy, "Legacy Ghost", "ghost", 2, "[]", "CASCADE_RUN_STATUS_IDLE", "default-cli-project", "", "", 0, 0, ProtoCodec.Encode(nLeg.Children));
+                }
+                finally
+                {
+                    t_sqlite3_close(ldb);
+                }
+
+                StorageAnalysisReport rep = StorageSlimService.AnalyzeStorage(homeDir, geminiDir);
+                AssertTrue(rep.LegacyCliArchive.Exists && rep.LegacyCliArchive.EntryCount == 1, "T69: AnalyzeStorage surfaced legacy CLI archive ghost entry");
+                AssertTrue(rep.Orphans.OrphanDbBakFiles.Count == 2, "T69: AnalyzeStorage detected both active leftover and orphan .db.bak");
+                AssertTrue(rep.Orphans.OrphanDbJournalFiles.Count == 1, "T69: AnalyzeStorage detected stale .db-journal");
+                AssertTrue(rep.Orphans.OrphanAnnotationFiles.Count == 1, "T69: AnalyzeStorage detected orphan .pbtxt");
+                AssertTrue(rep.Orphans.OrphanBrainDirs.Count == 1, "T69: AnalyzeStorage detected orphan brain dir");
+
+                StorageSlimRequest gcReq = new StorageSlimRequest();
+                gcReq.Mode = StorageSlimMode.OrphanGcOnly;
+                gcReq.CleanOrphans = true;
+                gcReq.PruneLegacyCliArchive = true;
+                StorageSlimResult gcRes = StorageSlimService.ExecuteStorageSlim(homeDir, geminiDir, gcReq);
+
+                AssertTrue(gcRes.Ok && gcRes.LegacyCliPruned, "T69: Legacy CLI archive pruned");
+                AssertTrue(File.Exists(gcRes.LegacyCliArchivePath), "T69: Legacy CLI cold archive .agy created before prune");
+                using (ZipArchive legZip = ZipFile.OpenRead(gcRes.LegacyCliArchivePath))
+                {
+                    AssertTrue(legZip.GetEntry("data/antigravity-cli/conversation_summaries.db") != null, "T69: Legacy CLI cold archive contains conversation_summaries.db");
+                }
+                AssertTrue(!File.Exists(legacyCliDbPath), "T69: Legacy antigravity-cli/conversation_summaries.db deleted after cold archive");
+
+                AssertTrue(!File.Exists(activeBak), "T69: Leftover .db.bak cleaned");
+                AssertTrue(!File.Exists(activeJournal), "T69: Stale .db-journal cleaned");
+                AssertTrue(!File.Exists(orphanDbBak), "T69: Orphan .db.bak cleaned");
+                AssertTrue(!File.Exists(orphanPbtxt), "T69: Orphan .pbtxt cleaned");
+                AssertTrue(!Directory.Exists(orphanBrain), "T69: Orphan brain/ cleaned");
+
+                // Active session assets preserved intact
+                AssertTrue(File.Exists(activeDb), "T69: Active .db preserved");
+                AssertTrue(File.Exists(Path.Combine(agDir, "annotations", cidActive + ".pbtxt")), "T69: Active .pbtxt preserved");
+                AssertTrue(File.Exists(Path.Combine(agDir, "brain", cidActive, "plan.md")), "T69: Active brain preserved");
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T70_Stage4_ScheduledSnapshotService_SettingsPersistenceRunAndRollingCleanup()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t70_" + Guid.NewGuid().ToString("N"));
+            string testRegSubKey = @"Software\AntigravityCompanionTest_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string agDir = Path.Combine(geminiDir, "antigravity");
+                Directory.CreateDirectory(Path.Combine(agDir, "conversations"));
+
+                string cidRoot = "a7000001-0000-4000-8000-000000000001";
+                string cidSub = "b7000002-0000-4000-8000-000000000002";
+                ProtoNode nRoot = BuildRealProtoEntry(cidRoot, "Root 70", null, "file:///c%3A/P70", "P70", "pid-70", 3, 1, 1);
+                ProtoNode nSub = BuildRealProtoEntry(cidSub, "Sub 70", null, "file:///c%3A/P70", "P70", "pid-70", 4, 1, 0);
+                nSub.GetChild(2).GetChild(17).Children.Add(new ProtoNode(11, 2) { RawBytes = Encoding.UTF8.GetBytes(cidRoot), IsModified = true });
+                File.WriteAllBytes(Path.Combine(agDir, "agyhub_summaries_proto.pb"), ProtoCodec.Encode(new List<ProtoNode> { nRoot, nSub }));
+                CreateMinimalValidSqliteDb(Path.Combine(agDir, "conversations", cidRoot + ".db"), cidRoot);
+                CreateMinimalValidSqliteDb(Path.Combine(agDir, "conversations", cidSub + ".db"), cidSub);
+
+                string settingsPath = Path.Combine(sb, "custom_companion_settings.json");
+                string snapDir = Path.Combine(sb, "snapshots");
+
+                bool busyToggle = true;
+                using (ScheduledSnapshotService svc = new ScheduledSnapshotService(
+                    homeDir,
+                    geminiDir,
+                    settingsPath,
+                    delegate(string jt, string msg) { return !busyToggle; },
+                    delegate() { },
+                    null))
+                {
+                    CompanionSettings cfg = new CompanionSettings();
+                    cfg.Enabled = false;
+                    cfg.IntervalHours = 6;
+                    cfg.TargetDirectory = snapDir;
+                    cfg.RetainCount = 2;
+                    cfg.Tier = "fast";
+                    cfg.MinimizeToTray = true;
+                    cfg.GlobalHotkey = "Ctrl+Shift+A";
+                    cfg.CustomAgyCliPath = @"C:\Tools\agy.cmd";
+                    cfg.VaultPath = Path.Combine(sb, "MyVault");
+                    cfg.StartWithWindows = true;
+                    svc.UpdateSettings(cfg);
+
+                    AssertTrue(File.Exists(settingsPath), "T70: Settings file persisted to override path");
+
+                    // Busy job skips cleanly without creating archive
+                    SnapshotRunResult busyRes = svc.RunSnapshotNow();
+                    AssertTrue(!busyRes.Ok && busyRes.SkippedBusy, "T70: Skips cleanly when TryAcquireJob reports busy");
+                    AssertTrue(!Directory.Exists(snapDir) || Directory.GetFiles(snapDir, "snapshot_*.agy").Length == 0,
+                        "T70: No snapshot created when busy");
+
+                    // Now allow job acquisition and run 3 snapshots to verify retainCount=2 rolling cleanup
+                    busyToggle = false;
+                    SnapshotRunResult r1 = svc.RunSnapshotNow();
+                    AssertTrue(r1.Ok && File.Exists(r1.FilePath), "T70: First FastDaily snapshot succeeded: " + r1.ErrorMessage);
+                    System.Threading.Thread.Sleep(30);
+                    SnapshotRunResult r2 = svc.RunSnapshotNow();
+                    AssertTrue(r2.Ok && File.Exists(r2.FilePath), "T70: Second snapshot succeeded");
+                    System.Threading.Thread.Sleep(30);
+                    SnapshotRunResult r3 = svc.RunSnapshotNow();
+                    AssertTrue(r3.Ok && File.Exists(r3.FilePath), "T70: Third snapshot succeeded");
+                    AssertTrue(r3.DeletedOldCount >= 1, "T70: Third snapshot pruned older snapshot beyond retainCount=2");
+
+                    string[] remaining = Directory.GetFiles(snapDir, "snapshot_*.agy");
+                    AssertEqual(2, remaining.Length, "T70: retainCount=2 keeps exact 2 newest snapshot_*.agy files");
+
+                    BackupArchiveIndex idx = StreamingZipIndexReader.ReadIndex(r3.FilePath);
+                    AssertEqual("FastDaily", idx.BackupTier, "T70: Snapshot recorded FastDaily tier");
+                    AssertTrue(idx.ExistingConvoDbFiles.Contains(cidRoot), "T70: Snapshot includes root IDE DB");
+                    AssertTrue(!idx.ExistingConvoDbFiles.Contains(cidSub), "T70: FastDaily snapshot excludes subagent DB");
+                }
+
+                // Reload settings from disk in a fresh service instance
+                using (ScheduledSnapshotService svcReload = new ScheduledSnapshotService(homeDir, geminiDir, settingsPath))
+                {
+                    CompanionSettings loaded = svcReload.GetSettings();
+                    AssertEqual(6, loaded.IntervalHours, "T70: Reloaded IntervalHours");
+                    AssertEqual(2, loaded.RetainCount, "T70: Reloaded RetainCount");
+                    AssertEqual("Ctrl+Shift+A", loaded.GlobalHotkey, "T70: Reloaded GlobalHotkey");
+                    AssertEqual(@"C:\Tools\agy.cmd", loaded.CustomAgyCliPath, "T70: Reloaded CustomAgyCliPath");
+                    AssertTrue(!string.IsNullOrEmpty(loaded.LastRunUtc) && loaded.LastSizeBytes > 0, "T70: Reloaded LastRunUtc & LastSizeBytes");
+                }
+
+                // Isolated HKCU registry Run-key verification
+                bool regSet = ScheduledSnapshotService.SetStartWithWindowsInKey(
+                    Microsoft.Win32.Registry.CurrentUser, testRegSubKey, "AntigravityCompanion", true, @"C:\App\Antigravity_Companion.exe");
+                AssertTrue(regSet, "T70: Wrote isolated HKCU Run test value");
+                AssertTrue(ScheduledSnapshotService.IsStartWithWindowsEnabledInKey(
+                    Microsoft.Win32.Registry.CurrentUser, testRegSubKey, "AntigravityCompanion"),
+                    "T70: Verified Run test value enabled");
+                bool regClear = ScheduledSnapshotService.SetStartWithWindowsInKey(
+                    Microsoft.Win32.Registry.CurrentUser, testRegSubKey, "AntigravityCompanion", false, null);
+                AssertTrue(regClear && !ScheduledSnapshotService.IsStartWithWindowsEnabledInKey(
+                    Microsoft.Win32.Registry.CurrentUser, testRegSubKey, "AntigravityCompanion"),
+                    "T70: Verified Run test value removed");
+            }
+            finally
+            {
+                try { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(testRegSubKey, false); } catch { }
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T71_Stage4_HttpCompanionSettingsAndSnapshotEndpointsEndToEnd()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t71_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string agDir = Path.Combine(geminiDir, "antigravity");
+                Directory.CreateDirectory(Path.Combine(agDir, "conversations"));
+
+                string cid = "a7100001-0000-4000-8000-000000000001";
+                ProtoNode n1 = BuildRealProtoEntry(cid, "HTTP Snap 71", null, "file:///c%3A/P71", "P71", "pid-71", 2, 1, 1);
+                File.WriteAllBytes(Path.Combine(agDir, "agyhub_summaries_proto.pb"), ProtoCodec.Encode(new List<ProtoNode> { n1 }));
+                CreateMinimalValidSqliteDb(Path.Combine(agDir, "conversations", cid + ".db"), cid);
+
+                string token = "t71_tok_e2e";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "Vault"), 0, token))
+                {
+                    host.Start();
+
+                    // 1. GET /api/settings/companion
+                    RawHttpTestResponse getDef = SendRawTcpHttp(host.Port, null, "GET", "/api/settings/companion", apiHdr, null);
+                    AssertEqual(200, getDef.StatusCode, "T71: GET /api/settings/companion returns 200");
+                    AssertTrue(getDef.BodyText.Contains("\"intervalHours\":12") && getDef.BodyText.Contains("\"globalHotkey\":\"Ctrl+Alt+A\""),
+                        "T71: Default companion settings returned");
+
+                    // 2. Invalid hotkey rejected with 400
+                    RawHttpTestResponse badHk = SendRawTcpHttp(host.Port, null, "POST", "/api/settings/companion", apiHdr,
+                        "{\"globalHotkey\":\"InvalidOnlyKey\"}");
+                    AssertEqual(400, badHk.StatusCode, "T71: Invalid globalHotkey rejected with HTTP 400");
+
+                    // 3. POST /api/settings/companion valid update
+                    string customSnapDir = Path.Combine(sb, "CustomSnaps");
+                    RawHttpTestResponse postCfg = SendRawTcpHttp(host.Port, null, "POST", "/api/settings/companion", apiHdr,
+                        "{\"enabled\":true,\"intervalHours\":6,\"retainCount\":3,\"tier\":\"fast\",\"minimizeToTray\":false,\"globalHotkey\":\"Ctrl+Alt+K\",\"targetDirectory\":\"" + UnifiedJson.EscapeString(customSnapDir) + "\"}");
+                    AssertEqual(200, postCfg.StatusCode, "T71: POST /api/settings/companion returns 200: " + postCfg.BodyText);
+                    AssertTrue(postCfg.BodyText.Contains("\"intervalHours\":6") && postCfg.BodyText.Contains("\"globalHotkey\":\"Ctrl+Alt+K\""),
+                        "T71: Updated companion settings echoed back");
+
+                    // 4. POST /api/snapshots/run-now
+                    RawHttpTestResponse runNow = SendRawTcpHttp(host.Port, null, "POST", "/api/snapshots/run-now", apiHdr, "{}");
+                    AssertEqual(200, runNow.StatusCode, "T71: POST /api/snapshots/run-now returns 200: " + runNow.BodyText);
+                    Dictionary<string, object> runDict = UnifiedJson.AsDict(UnifiedJson.Parse(runNow.BodyText));
+                    string snapFile = UnifiedJson.GetString(runDict, "filePath", string.Empty);
+                    AssertTrue(UnifiedJson.GetBool(runDict, "ok", false) && !string.IsNullOrEmpty(snapFile) && File.Exists(snapFile),
+                        "T71: Snapshot archive created on disk");
+
+                    // 5. GET /api/snapshots/status
+                    RawHttpTestResponse stResp = SendRawTcpHttp(host.Port, null, "GET", "/api/snapshots/status", apiHdr, null);
+                    AssertEqual(200, stResp.StatusCode, "T71: GET /api/snapshots/status returns 200");
+                    AssertTrue(stResp.BodyText.Contains("\"existingCount\":1") && stResp.BodyText.Contains(Path.GetFileName(snapFile)),
+                        "T71: Snapshot status reports created archive");
+
+                    // 6. Busy job contention returns 409
+                    AssertTrue(host.TryAcquireJob("t71_lock", "Lock test"), "T71: Acquired host job lock");
+                    try
+                    {
+                        RawHttpTestResponse busyResp = SendRawTcpHttp(host.Port, null, "POST", "/api/snapshots/run-now", apiHdr, "{}");
+                        AssertEqual(409, busyResp.StatusCode, "T71: POST /api/snapshots/run-now returns 409 when busy");
+                    }
+                    finally
+                    {
+                        host.ReleaseJob();
+                    }
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T72_Stage4_HttpEmbeddedUiAssetsServed()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t72_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                Directory.CreateDirectory(Path.Combine(geminiDir, "antigravity"));
+
+                string token = "t72_tok_ui";
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "Vault"), 0, token))
+                {
+                    host.Start();
+
+                    RawHttpTestResponse boot = SendRawTcpHttp(host.Port, null, "GET", "/?t=" + token, null, null);
+                    AssertEqual(200, boot.StatusCode, "T72: GET /?t=token returns 200");
+                    AssertTrue(boot.BodyText.Contains("Antigravity Companion V1.0"), "T72: index.html has V1.0 title");
+                    AssertTrue(boot.BodyText.Contains("/js/views/backup.js"), "T72: index.html references modular views");
+
+                    string sidName = "agy_sid_" + host.Port;
+                    Dictionary<string, string> cookieHdr = new Dictionary<string, string> { { "Cookie", sidName + "=" + token } };
+
+                    string[] assetPaths = new string[]
+                    {
+                        "/index.html",
+                        "/styles.css",
+                        "/app.js",
+                        "/js/api.js",
+                        "/js/state.js",
+                        "/js/components.js",
+                        "/js/views/overview.js",
+                        "/js/views/cockpit.js",
+                        "/js/views/sessions.js",
+                        "/js/views/storage.js",
+                        "/js/views/vault.js",
+                        "/js/views/backup.js"
+                    };
+
+                    for (int i = 0; i < assetPaths.Length; i++)
+                    {
+                        string ap = assetPaths[i];
+                        RawHttpTestResponse r = SendRawTcpHttp(host.Port, null, "GET", ap, cookieHdr, null);
+                        AssertEqual(200, r.StatusCode, "T72: Asset " + ap + " returns HTTP 200");
+                        AssertTrue(r.BodyByteCount > 100, "T72: Asset " + ap + " is non-empty (" + r.BodyByteCount + " bytes)");
+                        AssertTrue(!r.BodyText.Contains("Missing UI asset"), "T72: Asset " + ap + " loaded from embedded resource without missing fallback");
+                    }
+
+                    RawHttpTestResponse vsResp = SendRawTcpHttp(host.Port, null, "GET", "/api/vault/status", cookieHdr, null);
+                    AssertEqual(200, vsResp.StatusCode, "T72: GET /api/vault/status returns 200");
+                    AssertTrue(vsResp.BodyText.Contains("\"vaultPath\""), "T72: Vault status includes vaultPath");
+
+                    RawHttpTestResponse favResp = SendRawTcpHttp(host.Port, null, "GET", "/favicon.ico", null, null);
+                    AssertEqual(204, favResp.StatusCode, "T72: GET /favicon.ico returns 204 No Content cleanly");
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T73_Stage4_TrayHost_HotkeyParserAndMenuState()
+        {
+            uint mods, vk;
+            AssertTrue(TrayHost.TryParseHotkey("Ctrl+Alt+A", out mods, out vk), "T73: Parses Ctrl+Alt+A");
+            AssertEqual(TrayHost.MOD_CONTROL | TrayHost.MOD_ALT, mods, "T73: Ctrl+Alt modifiers exact");
+            AssertEqual((uint)'A', vk, "T73: Key 'A' virtual key exact");
+
+            AssertTrue(TrayHost.TryParseHotkey("ctrl + shift + f12", out mods, out vk), "T73: Parses ctrl + shift + f12");
+            AssertEqual(TrayHost.MOD_CONTROL | TrayHost.MOD_SHIFT, mods, "T73: Ctrl+Shift modifiers exact");
+            AssertEqual((uint)0x7B, vk, "T73: F12 virtual key exact");
+
+            AssertTrue(TrayHost.TryParseHotkey("Win+Alt+Space", out mods, out vk), "T73: Parses Win+Alt+Space");
+            AssertEqual(TrayHost.MOD_WIN | TrayHost.MOD_ALT, mods, "T73: Win+Alt modifiers exact");
+            AssertEqual((uint)0x20, vk, "T73: Space virtual key exact");
+
+            AssertTrue(TrayHost.TryParseHotkey("F9", out mods, out vk) && mods == 0 && vk == 0x78, "T73: Standalone F9 allowed");
+            AssertTrue(!TrayHost.TryParseHotkey("", out mods, out vk), "T73: Empty hotkey rejected");
+            AssertTrue(!TrayHost.TryParseHotkey("A", out mods, out vk), "T73: Single letter without modifier rejected");
+            AssertTrue(!TrayHost.TryParseHotkey("Ctrl+", out mods, out vk), "T73: Trailing plus rejected");
+            AssertTrue(!TrayHost.TryParseHotkey("Ctrl+NotAValidKeyName", out mods, out vk), "T73: Unknown key rejected");
+            AssertTrue(!TrayHost.TryParseHotkey("Ctrl+A+B", out mods, out vk), "T73: Multiple non-modifier keys rejected");
+
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t73_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                Directory.CreateDirectory(geminiDir);
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "Vault"), 0, "t73_tok"))
+                using (TrayHost tray = new TrayHost(host, "http://127.0.0.1:12345/?t=t73_tok", false, false))
+                {
+                    string[] items = tray.MenuItemTexts;
+                    AssertEqual(4, items.Length, "T73: Tray menu exposes 4 action items");
+                    AssertEqual("打开驾驶舱", items[0], "T73: Menu item 0 matches");
+                    AssertEqual("立即执行极速快照", items[1], "T73: Menu item 1 matches");
+                    AssertEqual("开机自启动", items[2], "T73: Menu item 2 matches");
+                    AssertEqual("退出", items[3], "T73: Menu item 3 matches");
+                    AssertTrue(!tray.StartupMenuChecked, "T73: Startup menu initially unchecked");
+
+                    CompanionSettings cfg = host.SnapshotService.GetSettings();
+                    cfg.StartWithWindows = true;
+                    host.SnapshotService.UpdateSettings(cfg);
+                    tray.RefreshMenuState();
+                    AssertTrue(tray.StartupMenuChecked, "T73: Startup menu checked state updates after RefreshMenuState");
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static void T74_Stage4_CompanionCommandDispatcher_RegistrationParity()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t74_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                Directory.CreateDirectory(Path.Combine(geminiDir, "antigravity"));
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, Path.Combine(sb, "Vault"), 0, "t74_tok"))
+                {
+                    host.Start();
+                    CompanionCommandDispatcher disp = host.Dispatcher;
+                    AssertTrue(disp != null, "T74: Dispatcher non-null");
+
+                    string[] expectedCmds = new string[]
+                    {
+                        "overview.get",
+                        "sessions.list",
+                        "capabilities.list",
+                        "rename.candidates",
+                        "gc.scan",
+                        "sessions.search",
+                        "cockpit.summary",
+                        "mcp.doctor",
+                        "editor.read",
+                        "storage.analyze",
+                        "settings.companion.get",
+                        "snapshots.status",
+                        "vault.status"
+                    };
+
+                    for (int i = 0; i < expectedCmds.Length; i++)
+                    {
+                        AssertTrue(disp.HasCommand(expectedCmds[i]), "T74: Command registered -> " + expectedCmds[i]);
+                    }
+
+                    OperationResult<Dictionary<string, object>> stRes = disp.Execute("settings.companion.get", null);
+                    AssertTrue(stRes.Ok && stRes.Data.ContainsKey("globalHotkey"), "T74: settings.companion.get executes cleanly");
+
+                    OperationResult<Dictionary<string, object>> snapRes = disp.Execute("snapshots.status", null);
+                    AssertTrue(snapRes.Ok && snapRes.Data.ContainsKey("retainCount"), "T74: snapshots.status executes cleanly");
+
+                    OperationResult<Dictionary<string, object>> stoRes = disp.Execute("storage.analyze", null);
+                    AssertTrue(stoRes.Ok && stoRes.Data.ContainsKey("totalBytes"), "T74: storage.analyze executes cleanly");
+
+                    OperationResult<Dictionary<string, object>> vRes = disp.Execute("vault.status", null);
+                    AssertTrue(vRes.Ok && vRes.Data.ContainsKey("vaultPath"), "T74: vault.status executes cleanly");
 
                     host.Stop();
                 }

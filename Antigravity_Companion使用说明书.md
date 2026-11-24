@@ -1,129 +1,96 @@
-# Antigravity Companion 使用说明书 (V0.8)
+# Antigravity Companion 使用说明书 (V1.0)
 
 ---
 
 ## 一、 软件概述
 
-**Antigravity Companion V0.8** 是专为 Google DeepMind Antigravity (AGY) 生态打造的现代桌面工作台，集**环境概览体检、工程与 CLI 会话管理、三步式智能重命名、双向能力仓库 Diff 同步与 .agy 备份迁移**于一体。
+**Antigravity Companion V1.0** 是专为 Google Antigravity (AGY) 生态打造的本地单文件每日驾驶舱与资产治理桌面工具，集**每日配置开关与 MCP 体检、工程与 CLI 会话管理、三步式智能重命名、存储空间抽脂瘦身、Portable Vault 能力同步与定时静默快照**于一体。
 
-本工具基于纯原生 C# 5 / .NET Framework 4.8+ 与零外部 CDN 离线单页前端开发，编译为**单个独立可执行文件 `Antigravity_Companion.exe`**：启动后自动在纯用户态回环端口（`127.0.0.1` 动态端口，无需管理员权限或 UAC）启动内嵌 HTTP/1.1 + SSE 服务，并通过 Edge `--app`（回退 Chrome `--app` 或默认浏览器）以原生桌面应用形态运行；同时保留 `--legacy-ui` 命令行参数用于回退旧版 WinForms 双栏界面。
-
-```mermaid
-flowchart TD
-    A["Antigravity Companion V0.8 单文件桌面工作台"] --> S1["1. 概览 (落地体检页)"]
-    A --> S2["2. 会话管理 (工程与 CLI 统一治理)"]
-    A --> S3["3. 智能重命名 (三步引导工作台)"]
-    A --> S4["4. 能力仓库 (双向 Diff 与源码对比)"]
-    A --> S5["5. 备份迁移 (.agy 全量/增量流式往返)"]
-
-    S1 --> S1a["本机工程/主会话/CLI 会话/能力数卡片"]
-    S1 --> S1b["IDE 进程状态与只读孤儿体检 (GC)"]
-
-    S2 --> S2a["统一双行工程卡片 · 多根目录 · 最短区分父目录 · CLI 分组"]
-    S2 --> S2b["FTS5/LIKE 搜正文 · 抽屉式 Markdown 预览/导出 · F1/F2/F3"]
-
-    S3 --> S3a["Step 1 范围与规则 · Step 2 双栏预览/AI 润色 · Step 3 快照回滚"]
-    S3 --> S3b["可视化规则表单 + 沙盒试跑 + Field 9->4 分支与【...】标签吸收"]
-
-    S4 --> S4a["双向同步方向标识 (两侧一致 / 仅仓库有 / 仓库较新 / 本机较新 / 冲突)"]
-    S4 --> S4b["右侧抽屉红绿行级 Diff · 缺失路径检测与一键重定位"]
-
-    S5 --> S5a["全量备份导出 / .agy 免解压探测 / 按需合流导入"]
-```
-
-### V0.8 核心升级亮点
-
-| 模块 / 特性 | 核心能力 | 技术实现与安全边界 |
-| :--- | :--- | :--- |
-| **零依赖单文件桌面工作台** | 5 模块左侧固定导航（概览 / 会话管理 / 智能重命名 / 能力仓库 / 备份迁移）+ 浅灰默认 / 深色模式切换 + 28px 底部可折叠实时日志条 | `LocalWebHost`（纯用户态 `TcpListener` + SSE 推送 + 严格 `Host`/`Origin`/`SameSite=Strict`/CSP 无内联脚本防护）+ `NativeDialogBridge` 原生文件与目录弹窗 |
-| **工程归属修复与路径降噪** | 彻底修复二进制 `Field 17->1` 子消息与 `folderUris` 多根目录引起的工程丢失/分裂；支持 `antigravity-cli` 会话完整首问与 Markdown 预览 | `ProtoCodec.IsValidCascadeContainer` 与 `IsSafeDisplayProjectName` 防乱码穿透；同 basename 工程自动剥离共同前缀，展示最短区分父目录段 |
-| **三步式智能重命名 & 规则工作台** | 自动匹配 `Field 9->4` Git 分支与机型关键字、剥离尾缀 `"分支"`、折叠标题中/尾部元数据 `【标签】` 避免双重括号，默认取消勾选 0 步/通用水词会话 | 抽屉式 **可视化规则表单** 与 **沙盒试跑** 实时调优 `Repository/rename_rules.json`；**两步 AI 润色助手** 支持剪贴板与 JSON 文件双向交换；快照行级精准回滚 |
-| **方向感能力 Diff 矩阵** | 明确给出同步建议（`两侧一致` / `仅仓库有（可导入）` / `仅本机有（可入库）` / `仓库较新` / `本机较新` / `双方均有修改`） | 优先对比三层基线签名，缺失基线时回退统一 UTC 文件修改时间（含 ZIP 时间 UTC 校准）；抽屉支持受控有界行级红绿 LCS Diff 与 `{{HOME}}` 路径重定位 |
-| **安全进程门禁与只读 GC** | 只读孤儿体检即使在 IDE 运行锁定 `.pb` 时仍可安全执行；写入前自动检测运行中 IDE 并引导关闭或安全热写入 | `ReadAllBytesShared` / `ReadUtf8TextShared` 共享只读读取；清理与全量写前二次扫描防 TOCTOU；保留 `--legacy-ui` 兼容开关 |
+本软件编译为**单个独立可执行文件 `Antigravity_Companion.exe`**（无需安装 Node.js / Python / 第三方运行库）：
+- **零权限要求**：以纯用户态监听 `127.0.0.1` 动态回环端口提供 HTTP/1.1 + SSE 服务，无需管理员权限。
+- **桌面壳 + 原生托盘**：默认通过 Edge `--app`（回退 Chrome `--app` 或系统默认浏览器）打开现代化工作台，并常驻 Windows 系统托盘。
+- **全局热键唤醒**：默认支持 `Ctrl+Alt+A` 一键呼出或重开驾驶舱（可在「备份与快照」中自定义）。
 
 ---
 
-## 二、 五大模块操作指南
+## 二、 六大功能模块操作指南
 
 ### 1. 概览（启动默认页）
-- **状态总览**：直观查看正式工程数、主会话数、CLI 会话数、本机与仓库能力对齐情况，以及可释放空间大小。
-- **IDE 运行门禁**：右上角实时展示 Antigravity IDE 主进程与语言服务数量；可一键触发只读孤儿体检、安全清理孤儿垃圾或直达智能重命名/能力同步入口。
+- **健康卡片**：
+  - 分别统计**本机缺失路径**与 **Vault 缺失路径**，避免两类问题混淆。
+  - 精确区分**可整理未标前缀会话**与**运行中/未完全空闲锁定会话（`not_fully_idle`）**，并支持弹窗查看锁定原因。
+  - 展示常驻规则总 Token 预算与孤儿垃圾待体检状态。
+- **已登记工程快速启动台**：按工程聚合展示会话数、`.agents/` 与规则文件状态，支持一键 **「IDE 打开」**、**「打开目录」**、**「开终端 (PowerShell)」**、**「看会话」** 以及 **「删除工程」**。
 
-### 2. 会话管理
-- **左栏统一工程导航**：每个工程固定展示 2 行（工程名称 + 会话总数；物理路径按 `~` / `多目录 · N 个根目录` / 同名最短区分父目录折叠）。底部辅助分组集中收纳 `CLI 命令行会话`、`Outside of Project`、`子任务` 与临时对话。
-- **三层读取与搜正文**：自动按 **Layer 1 `.pbtxt` > Layer 2 `conversation_summaries.db` > Layer 3 `.pb`** 叠加标题；开启 **「搜正文」** 后通过 FTS5 `MATCH` 与安全转义 `LIKE` 检索完整对话文本。
-- **抽屉式 Markdown 预览与导出**：点击任意会话右侧 **「预览」** 在右侧抽屉渲染结构化 Markdown（已清理 `<ADDITIONAL_METADATA>` 噪音，兼容 CLI 会话脑区日志），支持一键复制或 **「导出为 .md」**；支持多选执行 **「迁移工程」**、**「导出 .agy」**、**「级联删除」** 及工程路径 **「重定位」**。
+### 2. 每日驾驶舱
+- **全局运行策略 (`config/config.json → userSettings`)**：可视化调整自动命令执行策略、产物审阅模式、浏览器 JS 策略、工作区外文件访问、终端沙盒、提示音、AI Credits 与主题；**完整保留 JSONC 注释及未知自定义枚举值**，保存前自动创建 `.bak` 备份。
+- **统一 Plugin / MCP / Hook 开关台**：支持按类别与关键词即时过滤（局部刷新不闪烁），一键切换启用/禁用状态；若存在跨文件/跨插件重复定义的 MCP ID，顶部与对应行会显示黄色**重复 MCP 冲突告警**。
+- **一键 MCP 健康体检 (MCP Doctor)**：实测所有启用中的 `stdio` 与 `HTTP` MCP 服务连通性、握手协议版本与响应延迟，异常节点可展开查看实时 `stderr` 报错。
 
-### 3. 智能重命名（三步引导）
-1. **Step 1：范围筛选 & 规则调节**：支持按正式工程范围筛选，开关 **「已有【】前缀」**、**「0 步 / 通用水词」**、**「运行中」** 会话；点击 **「规则编辑器」** 打开可视化表单调节工程别名、多仓机型关键字与分支正则，支持 **「▶ 沙盒试跑规则」** 与源码 JSON 切换。
-2. **Step 2：双栏预览、手工微调与 AI 润色**：左侧勾选清单（默认不选 0 步/通用水词、已标前缀或运行中会话），右侧实时查看首问全文、提取分支与单行新标题编辑；点击 **「AI 润色」** 可选剪贴板协同或 `.txt` / JSON 文件往返批处理。
-3. **Step 3：确认并三层持久化写入**：点击执行后自动生成 `companion_rename_backups` 三层快照并写入 `.pbtxt` / `.db` / `.pb`；随时点击 **「⏪ 回滚历史」** 按批次恢复。
+### 3. 会话与智能命名
+- **会话浏览与导出**：
+  - 左侧按正式工程（同名工程自动展示最短区分父目录，支持多根目录 `folderUris`）、辅助分组（CLI / 项目外 / 子任务）及可折叠的**历史 CLI 只读归档**分组展示。
+  - 开启 **「搜对话正文」** 可通过 `winsqlite3` FTS5 / LIKE 检索完整对话文本。
+  - 点击会话打开右侧抽屉，渲染安全清理后的 Markdown 对话（支持基于文本节点的安全关键词高亮），一键复制或导出为 `.md`。
+  - 支持批量迁移工程、重定位工程物理目录、导出轻量 `.agy` 包以及含子任务的级联物理删除。
+- **三步智能重命名向导**：
+  1. **Step 1（筛选范围与锁定检查）**：按工程或指定勾选带入会话，显式列出运行中锁定会话，支持开关过滤已带前缀/CLI/低价值会话。
+  2. **Step 2（规则精校 / `agy` CLI / 离线 AI 润色）**：
+     - 点击 **「⚙ 命名规则」** 可对 `projectAliases` 与 `multiRepoRules` 执行完整增删改查及沙盒试跑。
+     - 点击 **「⚡ Zero-Key agy CLI」** 可调用本机已登录的 `agy -p --output-format json` 无密钥批量生成标题与摘要。
+     - 点击 **「📋 离线 AI 剪贴板」** 可通过提示词复制/JSON 回贴或 `.txt`/`.json` 文件与任意外部大模型协同。
+  3. **Step 3（Diff 确认与三层写入）**：支持关闭 IDE 全写或免关机热写持久化层；提示条准确反馈实际更新条数与跳过条数，随时支持从最近 15 批快照按批回滚。
 
-### 4. 能力仓库 (`Repository/`)
-- **分类筛选与同步建议**：按 `Plugin` / `Skill` / `Rule` / `MCP` / `Hook` 或同步方向筛选（`仅需处理` 快速定位未对齐项）。
-- **行级源码 Diff 抽屉**：点击 **「对比差异」** 查看具体 JSON 注册片段及文件逐行红绿 Diff，并在抽屉底栏直接执行 **「← 采纳仓库版到本地」** 或 **「推入内置仓库 →」**。
-- **脚本路径体检与重定位**：存在本机缺失脚本或可执行路径的 MCP / Hook 条目带黄色预警徽标，支持展开内联更换本地路径（支持原生文件选择框）。
+### 4. 存储瘦身与孤儿清理
+- **空间分布盘点**：分段进度条可视化展示主会话 DB、子代理 DB、脑区目录、CLI DB 与孤儿残留体积，并按工程汇总及列出 Top 大体积数据库（含 `executor_metadata` 与 `steps` 字节占比条）。
+- **安全瘦身模式**：
+  - **Mode 5C（无损抽脂）**：清空闲置超龄子代理数据库中的 `executor_metadata` 并执行 `VACUUM` 压缩体积，100% 保留 `steps` 对话正文与 Markdown 导出结果。
+  - **Mode 5A（冷归档裁剪）**：在先建立完整冷归档 `.agy` 并校验通过后，移除选中的超龄子代理 `.db` 文件，保留主会话与 `brain/` 产物。
+  - **双保险护栏**：写入前自动在 `%TEMP%` 运行沙盒兼容性预检，并强制先写入 `~/.gemini/companion-cold-archives/subagents_*.agy` 备份包且在页面高亮显示冷归档路径。
+- **全量孤儿 GC**：一站式清理脱离索引的 `.db`、残留 `.db.bak`、过期 `.db-journal`、`brain/`、`annotations/*.pbtxt`，并可选先冷归档再裁剪历史 `antigravity-cli/conversation_summaries.db`。
 
-### 5. 备份迁移 (`.agy`)
-- **全量备份与选择性打包**：一键后台流式创建全量 `.agy` 归档（经 SSE 实时更新顶部进度提示），或在会话管理中按勾选导出轻量包。
-- **免解压流式导入**：打开外部 `.agy` 后，自动比对归档与本机的能力差异（支持红绿 Diff 查看）及各工程/会话新增状态，一键按 Key 级合流与路径重映射导入。
+### 5. 能力与规则（Portable Vault）
+- **Token 预算仪表盘**：实时汇总全局常驻规则、已启用插件规则与工程规则的估算 Token（按 1,500 tokens 阈值预警），超标文件一键直达在线编辑。
+- **在线配置编辑器**：严格遵循白名单安全边界（仅允许 `~/.gemini/`、Portable Vault 与已注册工程下的 `.agents/`、`GEMINI.md`、`AGENTS.md`、manifests 等 `.md/.json/.jsonc` 文件，自动拦截符号链接逃逸与敏感密钥文件），输入时实时更新 Token 计量条，JSON 保存前自动做语法校验与 `.bak` 备份。
+- **Portable Vault 与双向同步**：支持切换 Portable Vault 路径、从旧版 `./Repository` 一键迁移，查看方向性差异（含 `NeedsReview` 待人工核验标识），并在源码 Diff 抽屉中逐条修复多个本机缺失路径。
+
+### 6. 备份与定时快照
+- **两级备份创建**：选择 **FastDaily（极速日常：跳过子代理明细 DB）** 或 **FullForensic（全量法证）** 创建 `.agy` 归档包。
+- **`.agy` 归档浏览器**：打开外部 `.agy` 包后，支持中文状态徽标（归档新增 / 归档较新 / 本机较新 / 双向有差异 / 已对齐）、实时关键词检索、父子折叠查看子代理，以及勾选 **「同时恢复全局 userSettings 与插件开关」**。
+- **定时静默快照与托盘设置**：
+  - 配置保存在 `%LOCALAPPDATA%\AntigravityCompanion\companion_settings.json`。
+  - 支持开启后台定时只读快照（默认每 12 小时，保留最新 5 份 `snapshot_*.agy` 并自动滚动删除旧快照，有写入任务冲突时安全跳过）。
+  - 支持设置「关闭窗口后最小化到托盘 (`minimizeToTray`)」、全局热键（默认 `Ctrl+Alt+A`）以及「随 Windows 开机自启（`--tray-only`）」。
 
 ---
 
-## 三、 启动参数与源码测试说明
+## 三、 托盘菜单与命令行参数
 
-### 1. 命令行参数（可选）
+### 1. 系统托盘右键菜单
+- **打开驾驶舱**：拉起或打开浏览器工作台窗口（左键单击/双击托盘图标效果相同）。
+- **立即执行极速快照**：后台立即执行一次只读 `FastDaily` `.agy` 快照并弹出结果通知。
+- **开机自启动**：勾选/取消当前用户的 Windows 登录自启动项（写入 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`）。
+- **退出**：安全停止定时快照、注销全局热键、关闭本地 HTTP 服务并退出程序。
+
+### 2. 命令行参数（可选）
 
 | 参数 | 说明 |
 | :--- | :--- |
-| `--legacy-ui` | 强制启动传统 WinForms 双栏界面（V0.8 保留兼容回退） |
-| `--no-browser` | 仅启动本地工作台 HTTP 服务并输出访问 URL，不自动拉起浏览器窗口 |
-| `--port <port>` | 指定回环监听端口（默认自动分配空闲端口 `0`） |
-| `--home <dir>` | 指定隔离测试或自定义用户主目录 |
-| `--repo <dir>` | 指定自定义能力仓库 `Repository` 目录 |
-| `--token <token>` | 指定固定访问会话令牌（默认每次启动通过 `RNGCryptoServiceProvider` 生成 32 字节随机令牌） |
+| `--tray-only` | 静默启动并在系统托盘驻留，不自动弹出浏览器窗口 |
+| `--no-browser` | 仅启动本地 HTTP 服务并在控制台打印监听 URL 与令牌，不启动托盘与浏览器 |
+| `--port <port>` | 指定本地回环监听端口（默认自动分配空闲端口） |
+| `--home <dir>` | 指定自定义用户主目录（用于多环境或沙盒隔离） |
+| `--vault <dir>` | 指定 Portable Vault 目录（兼容 `--repo <dir>`） |
+| `--token <token>` | 指定固定会话访问令牌（默认每次启动随机生成 32 字节十六进制令牌） |
 
-### 2. 源码目录结构
+---
 
-```text
-Antigravity_Companion/
-├── AppServices.cs                    # 进程门禁、工作区聚合分组、备份传输调度与 STA 原生弹窗桥
-├── LocalWebHost.cs                   # 纯用户态 TcpListener HTTP/1.1 + SSE 服务、CSP 与 REST API
-├── WebShellLauncher.cs               # Edge/Chrome --app 独立桌面壳拉起与空闲生命周期托管
-├── ui/
-│   ├── index.html                    # 零外部依赖离线 SPA 骨架
-│   ├── styles.css                    # Slate Light (默认) / Dark 主题与极简排版样式系统
-│   └── app.js                        # 5 模块交互状态机、SSE 订阅、抽屉 Diff/Markdown/规则编辑器
-├── ProtoAstCodec.cs                  # 原生 Protobuf AST、Field 17/9 提取与 SQLite/FTS5 桥接
-├── SessionMetadataExtractor.cs       # 三层元数据叠加、多根目录匹配与 antigravity-cli 首问提取
-├── SessionRenameEngine.cs            # .pbtxt 编解码、规则合成、标签吸收、沙盒试跑、回滚与 AI 交换
-├── StreamingZipIndexReader.cs        # 流式 Zip 索引、多格式路径重映射与 folderUris 数组扫描
-├── VisualDiffEngine.cs               # 方向感知能力 Diff (三方基线 + UTC 时间) 与有界 LCS 行级 Diff
-├── LocalWorkspaceManager.cs          # 本地三层原子写入、级联删除与共享读锁只读孤儿 GC
-├── CapabilityRepositoryManager.cs    # 能力扫描、{{HOME}} 跨机泛化、键值级合流与同步基线持久化
-├── TranscriptMarkdownExporter.cs     # 会话流与 CLI 脑区日志 Markdown 有界预览与完整导出
-├── MainForm.cs                       # 程序入口路由、命令行解析与 --legacy-ui WinForms 界面
-├── build.bat                         # 编译单文件 Antigravity_Companion.exe（内嵌 ui/* 资源）
-├── Repository/                       # 明文能力仓库与重命名规则 rename_rules.json
-└── tests/
-    ├── build_tests.bat               # 编译并运行生产代码端到端验证套件
-    └── TestRunner.cs                 # 核心引擎与 HTTP 工作台全量测试套件 (T01 - T42)
-```
-
-### 3. 编译构建与自动化验证 (`T01` ~ `T42`)
+## 四、 编译与自动化测试
 
 ```cmd
 :: 1. 编译单文件可执行程序 Antigravity_Companion.exe
 cmd /c build.bat
 
-:: 2. 编译并运行 42 项生产代码自动化验证套件
+:: 2. 编译并运行 74 项生产代码全量自动化测试 (T01 ~ T74)
 cmd /c tests\build_tests.bat
 ```
-
-- **T01 ~ T36**：覆盖 Protobuf AST、三层标题同步、`winsqlite3.dll` FTS5/LIKE、`rename_rules.json` 规则合成、行级快照回滚、AI 剪贴板往返、五类能力 Key 级合流、`ZipSlip` 防御与共享读锁校验。
-- **T37**：验证 `Field 17->1` 二进制子消息防乱码保护、SQLite `ProjectId` 回填及 `folderUris` 多根目录归属匹配。
-- **T38**：验证 `Field 9->4` 多仓库分支筛选、尾缀 `"分支"` 剥离、`PayGo 【标签】` 折叠防双括号、正文强调保护及 0 步低价值识别。
-- **T39**：验证 `antigravity-cli/brain` 首问与 Markdown 导出回退、最短区分父目录计算及辅助分组隔离。
-- **T40**：验证三方基线/UTC 时间双向 Diff、有界 LCS 行级 Diff 截断护栏与 `.pb` 共享锁定状态下的只读 GC。
-- **T41**：验证纯用户态 `LocalWebHost` 动态端口、防 DNS 重绑定（`Host`）、CSRF `Origin`、`SameSite=Strict` Cookie 重载、CSP 头、UTF-8 中文 `Content-Length` 精确分帧及只读 API。
-- **T42**：验证隔离沙盒端到端 HTTP 闭环（执行重命名 -> 快照历史 -> 回滚、AI 提示词导出与 JSON 文件回填、能力入库/刷新/本地导入、GC 体检与 `.agy` 归档探测）。

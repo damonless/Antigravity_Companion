@@ -3,18 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Antigravity Companion V0.8</title>
+  <title>Antigravity Companion V1.0</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <div id="appShell" class="app-shell">
-    <!-- Left Primary Navigation -->
+    <!-- Left Primary Navigation (6 Views) -->
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-logo" aria-hidden="true">A</div>
         <div class="brand-text">
           <div class="brand-name">Antigravity 伴侣</div>
-          <div class="brand-ver">V0.8 工作台</div>
+          <div class="brand-ver">V1.0 工作台</div>
         </div>
       </div>
 
@@ -23,28 +23,32 @@
           <span class="nav-icon" data-icon="home"></span>
           <span class="nav-label">概览</span>
         </button>
+        <button class="nav-item" data-view="cockpit" type="button">
+          <span class="nav-icon" data-icon="sliders"></span>
+          <span class="nav-label">驾驶舱</span>
+        </button>
         <button class="nav-item" data-view="sessions" type="button">
           <span class="nav-icon" data-icon="message"></span>
-          <span class="nav-label">会话管理</span>
-          <span class="nav-pill" id="navCountSessions">0</span>
+          <span class="nav-label">会话与命名</span>
+          <span class="nav-pill nav-pill-accent" id="navCountUntagged" title="可整理未标前缀会话">0</span>
         </button>
-        <button class="nav-item" data-view="rename" type="button">
-          <span class="nav-icon" data-icon="sparkles"></span>
-          <span class="nav-label">智能重命名</span>
-          <span class="nav-pill nav-pill-accent" id="navCountUntagged">0</span>
+        <button class="nav-item" data-view="storage" type="button">
+          <span class="nav-icon" data-icon="harddrive"></span>
+          <span class="nav-label">存储瘦身</span>
         </button>
-        <button class="nav-item" data-view="capabilities" type="button">
+        <button class="nav-item" data-view="vault" type="button">
           <span class="nav-icon" data-icon="layers"></span>
-          <span class="nav-label">能力仓库</span>
-          <span class="nav-pill" id="navCountCapDiffs">0</span>
+          <span class="nav-label">能力与规则</span>
+          <span class="nav-pill" id="navCountCapDiffs" title="待同步能力差异">0</span>
         </button>
         <button class="nav-item" data-view="backup" type="button">
           <span class="nav-icon" data-icon="archive"></span>
-          <span class="nav-label">备份迁移</span>
+          <span class="nav-label">备份与快照</span>
         </button>
       </nav>
 
       <div class="sidebar-footer">
+        <div class="sidebar-meta muted" id="navSessionTotalLabel">会话总数: 0</div>
         <button class="sidebar-btn" id="btnToggleTheme" type="button">
           <span class="nav-icon" data-icon="moon"></span>
           <span id="lblThemeToggle">深色模式</span>
@@ -62,7 +66,7 @@
       <header class="topbar">
         <div class="topbar-left">
           <h1 class="page-title" id="pageTitle">概览</h1>
-          <span class="page-subtitle" id="pageSubtitle">查看本机状态、同步差异与存储健康度</span>
+          <span class="page-subtitle" id="pageSubtitle">查看本机状态、工程入口、同步差异与存储健康度</span>
         </div>
         <div class="topbar-right">
           <div class="ide-pill" id="ideStatusPill" title="点击可查看或安全关闭运行中的 Antigravity IDE">
@@ -108,7 +112,7 @@
     <div class="log-drawer-body" id="logDrawerBody"></div>
   </section>
 
-  <!-- Right Slide-Over Drawer (Markdown Preview / Code Diff / Rule Editor / AI Polish / Rollback History) -->
+  <!-- Right Slide-Over Drawer -->
   <div class="drawer-backdrop hidden" id="drawerBackdrop">
     <aside class="drawer-panel" id="drawerPanel" role="dialog" aria-modal="true">
       <div class="drawer-header">
@@ -140,6 +144,16 @@
   <!-- Toast Stack -->
   <div class="toast-stack" id="toastStack"></div>
 
+  <!-- Modular Frontend Scripts (strictly same-origin, zero inline scripts) -->
+  <script src="/js/api.js"></script>
+  <script src="/js/state.js"></script>
+  <script src="/js/components.js"></script>
+  <script src="/js/views/overview.js"></script>
+  <script src="/js/views/cockpit.js"></script>
+  <script src="/js/views/sessions.js"></script>
+  <script src="/js/views/storage.js"></script>
+  <script src="/js/views/vault.js"></script>
+  <script src="/js/views/backup.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
