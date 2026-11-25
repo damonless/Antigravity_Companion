@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
@@ -111,9 +113,87 @@ namespace AntigravityCompanion
             }
         }
 
+        private const int SW_RESTORE = 9;
+
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+        [DllImport("user32.dll")]
+        private static extern int GetWindowTextLength(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsIconic(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool BringWindowToTop(IntPtr hWnd);
+
+        public static bool TryFocusExistingShellWindow()
+        {
+            IntPtr foundHwnd = IntPtr.Zero;
+            try
+            {
+                EnumWindows(delegate(IntPtr hWnd, IntPtr lParam)
+                {
+                    if (!IsWindowVisible(hWnd)) return true;
+                    int len = GetWindowTextLength(hWnd);
+                    if (len <= 0 || len > 512) return true;
+                    StringBuilder sb = new StringBuilder(len + 1);
+                    GetWindowText(hWnd, sb, sb.Capacity);
+                    string title = sb.ToString();
+                    if (string.IsNullOrEmpty(title)) return true;
+                    if (title.IndexOf("AntigravityCompanionHotkeyWindow", StringComparison.OrdinalIgnoreCase) >= 0)
+                        return true;
+                    if (title.IndexOf("Antigravity Companion", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        title.IndexOf("Antigravity 伴侣", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        foundHwnd = hWnd;
+                        return false;
+                    }
+                    return true;
+                }, IntPtr.Zero);
+
+                if (foundHwnd != IntPtr.Zero)
+                {
+                    if (IsIconic(foundHwnd))
+                    {
+                        ShowWindow(foundHwnd, SW_RESTORE);
+                    }
+                    BringWindowToTop(foundHwnd);
+                    SetForegroundWindow(foundHwnd);
+                    return true;
+                }
+            }
+            catch { }
+            return false;
+        }
+
         public static bool OpenUrlInPreferredShell(string url)
         {
+            return OpenUrlInPreferredShell(url, true);
+        }
+
+        public static bool OpenUrlInPreferredShell(string url, bool focusExistingFirst)
+        {
             if (string.IsNullOrWhiteSpace(url)) return false;
+
+            if (focusExistingFirst && TryFocusExistingShellWindow())
+            {
+                return true;
+            }
 
             string appExe;
             bool isAppMode;

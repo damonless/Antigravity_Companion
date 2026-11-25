@@ -106,6 +106,14 @@ namespace AntigravityCompanion.Tests
             Run("T78_ACC04_CockpitSettingsAndToggleIdeRunningWarnings", T78_ACC04_CockpitSettingsAndToggleIdeRunningWarnings);
             Run("T79_ACC05_ACC09_StartupRollbackAndHardenedDefaults", T79_ACC05_ACC09_StartupRollbackAndHardenedDefaults);
             Run("T80_ACC06_ACC10_SecurityNormalizationAndTokenBudget", T80_ACC06_ACC10_SecurityNormalizationAndTokenBudget);
+            Run("T81_Phase1_IdeCloseTimeoutEscapeHatchAndStorageSlimGuard", T81_Phase1_IdeCloseTimeoutEscapeHatchAndStorageSlimGuard);
+            Run("T82_Phase1_ReleaseJobBroadcastsProgressEndFrame", T82_Phase1_ReleaseJobBroadcastsProgressEndFrame);
+            Run("T83_Phase1_PerVaultSyncBaselineIsolation", T83_Phase1_PerVaultSyncBaselineIsolation);
+            Run("T84_Phase1_ColdArchiveReadableAndRestorableEndToEnd", T84_Phase1_ColdArchiveReadableAndRestorableEndToEnd);
+            Run("T85_Phase2_UnifiedSoftDeleteTrashAndRestoreEndToEnd", T85_Phase2_UnifiedSoftDeleteTrashAndRestoreEndToEnd);
+            Run("T86_Phase2_ConfigBackupVersionHistoryAndRestore", T86_Phase2_ConfigBackupVersionHistoryAndRestore);
+            Run("T87_Phase2_OnlineHotBackupSmartAutoFlushAndLiveSse", T87_Phase2_OnlineHotBackupSmartAutoFlushAndLiveSse);
+            Run("T88_Phase2_TrayDebounceUnifiedOrphanEngineAndUiParity", T88_Phase2_TrayDebounceUnifiedOrphanEngineAndUiParity);
 
             sw.Stop();
             Console.WriteLine("-------------------------------------------------------------------------------");
@@ -8023,6 +8031,841 @@ namespace AntigravityCompanion.Tests
             {
                 if (Directory.Exists(sb)) Directory.Delete(sb, true);
             }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // T81: Phase 1 — IDE_CLOSE_TIMEOUT two-step force-kill escape hatch
+        // ══════════════════════════════════════════════════════════════════════
+        private static void T81_Phase1_IdeCloseTimeoutEscapeHatchAndStorageSlimGuard()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t81_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string agyDir = Path.Combine(geminiDir, "antigravity");
+                string convDir = Path.Combine(agyDir, "conversations");
+                string vaultDir = Path.Combine(sb, "Vault");
+                Directory.CreateDirectory(convDir);
+                Directory.CreateDirectory(vaultDir);
+
+                string cid = "11111111-1111-1111-1111-111111111181";
+                ProtoNode entry = BuildRealProtoEntry(cid, "Initial Title", string.Empty, "file:///c:/proj81", "Proj81", "pid-81", 4, 2, null);
+                File.WriteAllBytes(Path.Combine(agyDir, "agyhub_summaries_proto.pb"), ProtoCodec.Encode(new List<ProtoNode> { entry }));
+                CreateMinimalValidSqliteDb(Path.Combine(convDir, cid + ".db"), "t81");
+                // Seed an orphan so gc/clean has real work
+                File.WriteAllText(Path.Combine(convDir, "deadbeef-dead-beef-dead-beef00000081.db.bak"), "orphan bak", Encoding.UTF8);
+
+                string token = "t81_tok_escape";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, vaultDir, 0, token))
+                {
+                    bool simulatedRunning = true;
+                    host.IdeRunningOverride = delegate() { return simulatedRunning; };
+                    host.CloseIdeOverride = delegate(bool forceKill)
+                    {
+                        if (!forceKill) return "IDE_CLOSE_TIMEOUT: Simulated graceful close timeout";
+                        simulatedRunning = false;
+                        return null;
+                    };
+                    host.Start();
+
+                    // 1. /api/storage/slim without closeIdeIfRunning -> 409 IDE_RUNNING
+                    RawHttpTestResponse slimBlock = SendRawTcpHttp(host.Port, null, "POST", "/api/storage/slim", apiHdr,
+                        "{\"mode\":\"orphanGcOnly\",\"cleanOrphans\":true}");
+                    AssertEqual(409, slimBlock.StatusCode, "T81: /api/storage/slim blocks with 409 when IDE running");
+                    Dictionary<string, object> slimBlockDict = UnifiedJson.AsDict(UnifiedJson.Parse(slimBlock.BodyText));
+                    AssertEqual("IDE_RUNNING", UnifiedJson.GetString(slimBlockDict, "code", string.Empty), "T81: /api/storage/slim code=IDE_RUNNING");
+
+                    // 2. /api/storage/slim with closeIdeIfRunning=true, forceKill=false -> 409 IDE_CLOSE_TIMEOUT + canForceKill=true
+                    RawHttpTestResponse slimTimeout = SendRawTcpHttp(host.Port, null, "POST", "/api/storage/slim", apiHdr,
+                        "{\"mode\":\"orphanGcOnly\",\"cleanOrphans\":true,\"closeIdeIfRunning\":true,\"forceKill\":false}");
+                    AssertEqual(409, slimTimeout.StatusCode, "T81: /api/storage/slim returns 409 on graceful close timeout");
+                    Dictionary<string, object> slimTimeoutDict = UnifiedJson.AsDict(UnifiedJson.Parse(slimTimeout.BodyText));
+                    AssertEqual("IDE_CLOSE_TIMEOUT", UnifiedJson.GetString(slimTimeoutDict, "code", string.Empty), "T81: /api/storage/slim code=IDE_CLOSE_TIMEOUT");
+                    AssertEqual(true, UnifiedJson.GetBool(slimTimeoutDict, "canForceKill", false), "T81: /api/storage/slim canForceKill=true");
+
+                    // 3. /api/storage/slim with forceKill=true -> 200 OK
+                    RawHttpTestResponse slimForce = SendRawTcpHttp(host.Port, null, "POST", "/api/storage/slim", apiHdr,
+                        "{\"mode\":\"orphanGcOnly\",\"cleanOrphans\":true,\"closeIdeIfRunning\":true,\"forceKill\":true}");
+                    AssertEqual(200, slimForce.StatusCode, "T81: /api/storage/slim succeeds with forceKill=true");
+                    AssertEqual(false, simulatedRunning, "T81: forceKill override flipped simulated IDE off");
+
+                    // 4. /api/ide/close timeout then forceKill
+                    simulatedRunning = true;
+                    RawHttpTestResponse closeTimeout = SendRawTcpHttp(host.Port, null, "POST", "/api/ide/close", apiHdr, "{\"forceKill\":false}");
+                    AssertEqual(409, closeTimeout.StatusCode, "T81: /api/ide/close returns 409 on graceful timeout");
+                    Dictionary<string, object> closeTimeoutDict = UnifiedJson.AsDict(UnifiedJson.Parse(closeTimeout.BodyText));
+                    AssertEqual("IDE_CLOSE_TIMEOUT", UnifiedJson.GetString(closeTimeoutDict, "code", string.Empty), "T81: /api/ide/close code=IDE_CLOSE_TIMEOUT");
+                    AssertEqual(true, UnifiedJson.GetBool(closeTimeoutDict, "canForceKill", false), "T81: /api/ide/close canForceKill=true");
+
+                    RawHttpTestResponse closeForce = SendRawTcpHttp(host.Port, null, "POST", "/api/ide/close", apiHdr, "{\"forceKill\":true}");
+                    AssertEqual(200, closeForce.StatusCode, "T81: /api/ide/close forceKill=true returns 200");
+
+                    // 5. /api/gc/clean timeout then forceKill
+                    simulatedRunning = true;
+                    RawHttpTestResponse gcTimeout = SendRawTcpHttp(host.Port, null, "POST", "/api/gc/clean", apiHdr,
+                        "{\"closeIdeIfRunning\":true,\"forceKill\":false}");
+                    AssertEqual(409, gcTimeout.StatusCode, "T81: /api/gc/clean returns 409 IDE_CLOSE_TIMEOUT");
+                    Dictionary<string, object> gcTimeoutDict = UnifiedJson.AsDict(UnifiedJson.Parse(gcTimeout.BodyText));
+                    AssertEqual("IDE_CLOSE_TIMEOUT", UnifiedJson.GetString(gcTimeoutDict, "code", string.Empty), "T81: /api/gc/clean code=IDE_CLOSE_TIMEOUT");
+
+                    // 6. /api/rename/execute CloseAndFullWrite timeout
+                    RawHttpTestResponse renTimeout = SendRawTcpHttp(host.Port, null, "POST", "/api/rename/execute", apiHdr,
+                        "{\"strategy\":\"CloseAndFullWrite\",\"forceKill\":false,\"items\":[{\"cid\":\"" + cid + "\",\"newTitle\":\"New81\"}]}");
+                    AssertEqual(409, renTimeout.StatusCode, "T81: /api/rename/execute CloseAndFullWrite returns 409 IDE_CLOSE_TIMEOUT");
+                    Dictionary<string, object> renTimeoutDict = UnifiedJson.AsDict(UnifiedJson.Parse(renTimeout.BodyText));
+                    AssertEqual("IDE_CLOSE_TIMEOUT", UnifiedJson.GetString(renTimeoutDict, "code", string.Empty), "T81: /api/rename/execute code=IDE_CLOSE_TIMEOUT");
+                    AssertEqual(true, UnifiedJson.GetBool(renTimeoutDict, "canForceKill", false), "T81: /api/rename/execute canForceKill=true");
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // T82: Phase 1 — ReleaseJob broadcasts SSE progress busy:false frame
+        // ══════════════════════════════════════════════════════════════════════
+        private static void T82_Phase1_ReleaseJobBroadcastsProgressEndFrame()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t82_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string vaultDir = Path.Combine(sb, "Vault");
+                Directory.CreateDirectory(geminiDir);
+                Directory.CreateDirectory(vaultDir);
+
+                string token = "t82_tok_sse_end";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, vaultDir, 0, token))
+                {
+                    host.IdeRunningOverride = delegate() { return false; };
+                    host.Start();
+
+                    using (TcpClient sseClient = new TcpClient("127.0.0.1", host.Port))
+                    {
+                        sseClient.ReceiveTimeout = 5000;
+                        NetworkStream sseStream = sseClient.GetStream();
+                        byte[] reqBytes = Encoding.ASCII.GetBytes(
+                            "GET /api/events HTTP/1.1\r\nHost: 127.0.0.1:" + host.Port + "\r\nX-AGY-Token: " + token + "\r\nConnection: keep-alive\r\n\r\n");
+                        sseStream.Write(reqBytes, 0, reqBytes.Length);
+                        sseStream.Flush();
+
+                        string hello = ReadSseUntilEvent(sseStream, "connected", 3000);
+                        AssertTrue(hello.Contains("event: connected"), "T82: SSE connected received");
+
+                        // Trigger synchronous endpoint that acquires & releases job without calling BroadcastJobDone
+                        RawHttpTestResponse gcResp = SendRawTcpHttp(host.Port, null, "POST", "/api/gc/clean", apiHdr, "{}");
+                        AssertEqual(200, gcResp.StatusCode, "T82: /api/gc/clean returned 200");
+
+                        StringBuilder collected = new StringBuilder();
+                        DateTime deadline = DateTime.UtcNow.AddMilliseconds(4000);
+                        byte[] buf = new byte[4096];
+                        bool sawBusyFalse = false;
+                        while (DateTime.UtcNow < deadline)
+                        {
+                            if (sseStream.DataAvailable)
+                            {
+                                int n = sseStream.Read(buf, 0, buf.Length);
+                                if (n > 0)
+                                {
+                                    collected.Append(Encoding.UTF8.GetString(buf, 0, n));
+                                    string cur = collected.ToString();
+                                    if (cur.IndexOf("\"busy\":false", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                                        cur.IndexOf("\"percent\":100", StringComparison.OrdinalIgnoreCase) >= 0)
+                                    {
+                                        sawBusyFalse = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                System.Threading.Thread.Sleep(25);
+                            }
+                        }
+                        AssertTrue(sawBusyFalse, "T82: ReleaseJob() broadcast SSE progress frame with busy:false and percent:100. Got: " + collected.ToString());
+                    }
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // T83: Phase 1 — Per-Vault sync baseline isolation
+        // ══════════════════════════════════════════════════════════════════════
+        private static void T83_Phase1_PerVaultSyncBaselineIsolation()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t83_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string vaultA = Path.Combine(sb, "VaultA");
+                string vaultB = Path.Combine(sb, "VaultB");
+                Directory.CreateDirectory(geminiDir);
+                Directory.CreateDirectory(Path.Combine(vaultA, "rules"));
+                Directory.CreateDirectory(Path.Combine(vaultB, "rules"));
+
+                string baseStore = Path.Combine(geminiDir, ".companion_sync_baseline.json");
+                string scopedA = CapabilitySyncBaselineStore.GetVaultScopedStorePath(baseStore, vaultA);
+                string scopedB = CapabilitySyncBaselineStore.GetVaultScopedStorePath(baseStore, vaultB);
+                AssertTrue(!string.Equals(scopedA, scopedB, StringComparison.OrdinalIgnoreCase), "T83: Scoped baseline paths for VaultA and VaultB differ");
+                AssertTrue(scopedA.EndsWith(".json", StringComparison.OrdinalIgnoreCase), "T83: Scoped baseline path ends with .json");
+
+                File.WriteAllText(Path.Combine(geminiDir, "GEMINI.md"), "# Local Version A\n", Encoding.UTF8);
+                string repoRuleA = CapabilityVaultService.ResolveRepoRulePath(vaultA, "GEMINI.md");
+                string repoRuleB = CapabilityVaultService.ResolveRepoRulePath(vaultB, "GEMINI.md");
+                Directory.CreateDirectory(Path.GetDirectoryName(repoRuleA));
+                Directory.CreateDirectory(Path.GetDirectoryName(repoRuleB));
+                File.WriteAllText(repoRuleA, "# Local Version A\n", Encoding.UTF8);
+                File.WriteAllText(repoRuleB, "# Vault B Different Version\n", Encoding.UTF8);
+
+                string token = "t83_tok_vault_iso";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, vaultA, 0, token))
+                {
+                    host.Start();
+                    string hostScopedA = host.BaselinePath;
+
+                    // Push to VaultA -> creates VaultA-scoped baseline file
+                    RawHttpTestResponse pushA = SendRawTcpHttp(host.Port, null, "POST", "/api/capabilities/push", apiHdr,
+                        "{\"keys\":[\"Rule:GEMINI.md\"]}");
+                    AssertEqual(200, pushA.StatusCode, "T83: Push GEMINI.md to VaultA returns 200");
+                    AssertTrue(File.Exists(hostScopedA), "T83: VaultA-scoped baseline file created: " + hostScopedA);
+
+                    // Switch to VaultB -> MUST NOT inherit VaultA's baseline (should be NeedsReview/Conflict, not false RemoteNewer!)
+                    RawHttpTestResponse swB = SendRawTcpHttp(host.Port, null, "POST", "/api/vault/select", apiHdr,
+                        "{\"vaultPath\":\"" + UnifiedJson.EscapeString(vaultB) + "\"}");
+                    AssertEqual(200, swB.StatusCode, "T83: Switch to VaultB returns 200");
+                    string hostScopedB = host.BaselinePath;
+                    AssertTrue(!string.Equals(hostScopedA, hostScopedB, StringComparison.OrdinalIgnoreCase), "T83: Host effective baseline path changed on Vault switch");
+                    AssertTrue(!File.Exists(hostScopedB), "T83: VaultB-scoped baseline file NOT yet created");
+
+                    RawHttpTestResponse capsB = SendRawTcpHttp(host.Port, null, "GET", "/api/capabilities", apiHdr, null);
+                    AssertEqual(200, capsB.StatusCode, "T83: GET /api/capabilities on VaultB returns 200");
+                    Dictionary<string, object> capsBDict = UnifiedJson.AsDict(UnifiedJson.Parse(capsB.BodyText));
+                    List<object> itemsB = UnifiedJson.AsList(capsBDict["items"]);
+                    Dictionary<string, object> gemItem = null;
+                    for (int i = 0; i < itemsB.Count; i++)
+                    {
+                        Dictionary<string, object> row = UnifiedJson.AsDict(itemsB[i]);
+                        if (string.Equals(UnifiedJson.GetString(row, "key", string.Empty), "Rule:GEMINI.md", StringComparison.OrdinalIgnoreCase))
+                        {
+                            gemItem = row;
+                            break;
+                        }
+                    }
+                    AssertTrue(gemItem != null, "T83: Found Rule:GEMINI.md in VaultB diff");
+                    string reasonB = UnifiedJson.GetString(gemItem, "directionReason", string.Empty);
+                    AssertEqual("no_baseline_review", reasonB, "T83: VaultB has isolated baseline so directionReason is no_baseline_review (not VaultA baseline)");
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // T84: Phase 1 — Cold Archive (.agy) readable & restorable E2E + snapshots
+        // ══════════════════════════════════════════════════════════════════════
+        private static void T84_Phase1_ColdArchiveReadableAndRestorableEndToEnd()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t84_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string agyDir = Path.Combine(geminiDir, "antigravity");
+                string convDir = Path.Combine(agyDir, "conversations");
+                string cliDir = Path.Combine(geminiDir, "antigravity-cli");
+                string vaultDir = Path.Combine(sb, "Vault");
+                Directory.CreateDirectory(convDir);
+                Directory.CreateDirectory(cliDir);
+                Directory.CreateDirectory(vaultDir);
+
+                string parentCid = "22222222-2222-2222-2222-222222222284";
+                string subCid = "33333333-3333-3333-3333-333333333384";
+                string subDbPath = Path.Combine(convDir, subCid + ".db");
+                CreateSampleLiposuctionDb(subDbPath, subCid, 4, 2048, 3);
+                File.SetLastWriteTimeUtc(subDbPath, DateTime.UtcNow.AddDays(-15));
+                byte[] origSubBytes = File.ReadAllBytes(subDbPath);
+
+                // Seed master .pb index with parent + subagent (field23=0, field17.11=parentCid)
+                ProtoNode nPar84 = BuildRealProtoEntry(parentCid, "Parent 84", null, "file:///c%3A/p84", "P84", "pid84", 5, 2, 1);
+                ProtoNode nSub84 = BuildRealProtoEntry(subCid, "Old Subagent 84", null, "file:///c%3A/p84", "P84", "pid84", 3, 1, 0);
+                nSub84.GetChild(2).GetChild(17).Children.Add(new ProtoNode(11, 2) { RawBytes = Encoding.UTF8.GetBytes(parentCid), IsModified = true });
+                ulong oldEpoch84 = (ulong)(DateTime.UtcNow.AddDays(-15) - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
+                nSub84.GetChild(2).GetChild(3).GetChild(1).VarintValue = oldEpoch84;
+                File.WriteAllBytes(Path.Combine(agyDir, "agyhub_summaries_proto.pb"),
+                    ProtoCodec.Encode(new List<ProtoNode> { nPar84, nSub84 }));
+
+                // Create summary DB with parent + subagent
+                string sumDbPath = Path.Combine(agyDir, "conversation_summaries.db");
+                IntPtr db = OpenAndCreateSummaryWalDb(sumDbPath);
+                try
+                {
+                    InsertSummaryDbRow(db, parentCid, "Parent 84", "preview", 5, "[\"file:///c%3A/p84\"]", "IDLE", "pid84", string.Empty, string.Empty, 0, 0, ProtoCodec.Encode(nPar84.Children));
+                    InsertSummaryDbRow(db, subCid, "Old Subagent 84", "sub preview", 3, "[\"file:///c%3A/p84\"]", "IDLE", "pid84", "worker", parentCid, 1, 0, ProtoCodec.Encode(nSub84.Children));
+                    t_sqlite3_exec(db, Utf8Z("PRAGMA wal_checkpoint(TRUNCATE);"), IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+                }
+                finally { t_sqlite3_close(db); }
+
+                // Create legacy CLI summary DB
+                string legacyCliDb = Path.Combine(cliDir, "conversation_summaries.db");
+                CreateMinimalValidSqliteDb(legacyCliDb, "legacy_cli_marker_84");
+                byte[] origLegacyBytes = File.ReadAllBytes(legacyCliDb);
+
+                // Execute Mode 5A cold archive prune + legacy CLI archive prune
+                StorageSlimRequest slimReq = new StorageSlimRequest();
+                slimReq.Mode = StorageSlimMode.ColdArchivePrune;
+                slimReq.TargetCids.Add(subCid);
+                slimReq.MinAgeDays = 1.0;
+                slimReq.MinSizeMb = 0.0;
+                slimReq.PruneLegacyCliArchive = true;
+                StorageSlimResult slimRes = StorageSlimService.ExecuteStorageSlim(homeDir, geminiDir, slimReq);
+                AssertTrue(slimRes.Ok, "T84: Mode5A + LegacyCLI cold archive succeeded: " + slimRes.ErrorMessage);
+                AssertTrue(File.Exists(slimRes.ColdArchivePath), "T84: Subagent cold archive .agy exists");
+                AssertTrue(File.Exists(slimRes.LegacyCliArchivePath), "T84: Legacy CLI cold archive .agy exists");
+                AssertTrue(!File.Exists(subDbPath), "T84: Subagent .db pruned after cold archiving");
+                AssertTrue(!File.Exists(legacyCliDb), "T84: Legacy CLI DB pruned after cold archiving");
+
+                string token = "t84_tok_cold_restore";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, vaultDir, 0, token))
+                {
+                    host.IdeRunningOverride = delegate() { return false; };
+                    host.Start();
+
+                    // Check /api/storage/cold-archives & /api/snapshots/status list the cold archives
+                    RawHttpTestResponse listCold = SendRawTcpHttp(host.Port, null, "GET", "/api/storage/cold-archives", apiHdr, null);
+                    AssertEqual(200, listCold.StatusCode, "T84: GET /api/storage/cold-archives returns 200");
+                    Dictionary<string, object> listColdDict = UnifiedJson.AsDict(UnifiedJson.Parse(listCold.BodyText));
+                    AssertTrue(UnifiedJson.GetInt(listColdDict, "count", 0) >= 2, "T84: ListColdArchives found >= 2 archives");
+
+                    RawHttpTestResponse snapStat = SendRawTcpHttp(host.Port, null, "GET", "/api/snapshots/status", apiHdr, null);
+                    AssertEqual(200, snapStat.StatusCode, "T84: GET /api/snapshots/status returns 200");
+                    Dictionary<string, object> snapDict = UnifiedJson.AsDict(UnifiedJson.Parse(snapStat.BodyText));
+                    AssertTrue(UnifiedJson.GetInt(snapDict, "coldArchivesCount", 0) >= 2, "T84: /api/snapshots/status exposes coldArchivesCount");
+
+                    // Open subagent cold archive via /api/backup/open (using archivePath)
+                    RawHttpTestResponse openSub = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/open", apiHdr,
+                        "{\"archivePath\":\"" + UnifiedJson.EscapeString(slimRes.ColdArchivePath) + "\"}");
+                    AssertEqual(200, openSub.StatusCode, "T84: Open subagent cold archive returns 200");
+                    Dictionary<string, object> openSubDict = UnifiedJson.AsDict(UnifiedJson.Parse(openSub.BodyText));
+                    AssertEqual(true, UnifiedJson.GetBool(openSubDict, "isColdArchive", false), "T84: Subagent archive has isColdArchive=true");
+                    AssertEqual("companion-cold-archive", UnifiedJson.GetString(openSubDict, "coldArchiveType", string.Empty), "T84: coldArchiveType matches");
+                    AssertEqual(1, UnifiedJson.GetInt(openSubDict, "conversationsCount", 0), "T84: Cold archive lists 1 subagent conversation");
+
+                    // Restore subagent .db via /api/backup/import + wait SSE job_done
+                    using (TcpClient sseClient = new TcpClient("127.0.0.1", host.Port))
+                    {
+                        sseClient.ReceiveTimeout = 5000;
+                        NetworkStream sseStream = sseClient.GetStream();
+                        byte[] reqBytes = Encoding.ASCII.GetBytes(
+                            "GET /api/events HTTP/1.1\r\nHost: 127.0.0.1:" + host.Port + "\r\nX-AGY-Token: " + token + "\r\nConnection: keep-alive\r\n\r\n");
+                        sseStream.Write(reqBytes, 0, reqBytes.Length);
+                        sseStream.Flush();
+                        ReadSseUntilEvent(sseStream, "connected", 3000);
+
+                        RawHttpTestResponse impSub = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/import", apiHdr,
+                            "{\"cids\":[\"" + subCid + "\"],\"capKeys\":[]}");
+                        AssertEqual(202, impSub.StatusCode, "T84: Cold archive subagent restore accepted (202)");
+                        string doneSub = ReadSseUntilEvent(sseStream, "job_done", 5000);
+                        AssertTrue(doneSub.Contains("\"ok\":true"), "T84: Subagent cold archive restore job_done ok:true");
+                        AssertTrue(File.Exists(subDbPath), "T84: Subagent .db file restored on disk");
+                        AssertEqual(origSubBytes.Length, new FileInfo(subDbPath).Length, "T84: Restored subagent .db size matches");
+
+                        // Open legacy CLI cold archive via /api/backup/open (using path alias)
+                        RawHttpTestResponse openLeg = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/open", apiHdr,
+                            "{\"path\":\"" + UnifiedJson.EscapeString(slimRes.LegacyCliArchivePath) + "\"}");
+                        AssertEqual(200, openLeg.StatusCode, "T84: Open legacy CLI cold archive returns 200");
+                        Dictionary<string, object> openLegDict = UnifiedJson.AsDict(UnifiedJson.Parse(openLeg.BodyText));
+                        AssertEqual(true, UnifiedJson.GetBool(openLegDict, "isColdArchive", false), "T84: Legacy CLI archive isColdArchive=true");
+                        AssertEqual(true, UnifiedJson.GetBool(openLegDict, "hasLegacyCliSummaryDb", false), "T84: hasLegacyCliSummaryDb=true");
+
+                        RawHttpTestResponse impLeg = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/import", apiHdr,
+                            "{\"cids\":[],\"capKeys\":[],\"restoreLegacyCliArchive\":true}");
+                        AssertEqual(202, impLeg.StatusCode, "T84: Legacy CLI cold archive restore accepted (202)");
+                        string doneLeg = ReadSseUntilEvent(sseStream, "job_done", 5000);
+                        AssertTrue(doneLeg.Contains("\"ok\":true"), "T84: Legacy CLI restore job_done ok:true");
+                        AssertTrue(File.Exists(legacyCliDb), "T84: Legacy CLI conversation_summaries.db restored on disk");
+                        AssertEqual(origLegacyBytes.Length, new FileInfo(legacyCliDb).Length, "T84: Restored legacy CLI DB matches original size");
+                    }
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // T85: Phase 2 — Unified Soft-Delete Trash & Restore E2E + Explorer Allowlist
+        // ══════════════════════════════════════════════════════════════════════
+        private static void T85_Phase2_UnifiedSoftDeleteTrashAndRestoreEndToEnd()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t85_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string agyDir = Path.Combine(geminiDir, "antigravity");
+                string convDir = Path.Combine(agyDir, "conversations");
+                string brainDir = Path.Combine(agyDir, "brain");
+                string annotDir = Path.Combine(agyDir, "annotations");
+                string projDir = Path.Combine(geminiDir, "config", "projects");
+                string vaultDir = Path.Combine(sb, "Vault");
+                Directory.CreateDirectory(convDir);
+                Directory.CreateDirectory(brainDir);
+                Directory.CreateDirectory(annotDir);
+                Directory.CreateDirectory(projDir);
+                Directory.CreateDirectory(vaultDir);
+
+                string cid = "44444444-4444-4444-4444-444444444485";
+                string pid = "proj-uuid-85";
+                string wsFolder = Path.Combine(sb, "MyProj85");
+                Directory.CreateDirectory(wsFolder);
+                string wsUri = SessionLifecycleService.ToFileUri(wsFolder);
+
+                File.WriteAllText(Path.Combine(projDir, pid + ".json"),
+                    "{\"name\":\"MyProj85\",\"folderUri\":\"" + UnifiedJson.EscapeString(wsUri) + "\"}", Encoding.UTF8);
+                ProtoNode entry = BuildRealProtoEntry(cid, "Trash Test Session 85", string.Empty, wsUri, "MyProj85", pid, 6, 3, null);
+                File.WriteAllBytes(Path.Combine(agyDir, "agyhub_summaries_proto.pb"), ProtoCodec.Encode(new List<ProtoNode> { entry }));
+
+                string dbFile = Path.Combine(convDir, cid + ".db");
+                CreateMinimalValidSqliteDb(dbFile, "session85");
+                string cBrainDir = Path.Combine(brainDir, cid);
+                Directory.CreateDirectory(cBrainDir);
+                string notePath = Path.Combine(cBrainDir, "note.md");
+                File.WriteAllText(notePath, "Brain artifact 85", Encoding.UTF8);
+                string pbtxtPath = Path.Combine(annotDir, cid + ".pbtxt");
+                File.WriteAllText(pbtxtPath, "title: \"Trash Test Session 85\"\n", Encoding.UTF8);
+
+                string sumDbPath = Path.Combine(agyDir, "conversation_summaries.db");
+                IntPtr db = OpenAndCreateSummaryWalDb(sumDbPath);
+                try
+                {
+                    InsertSummaryDbRow(db, cid, "Trash Test Session 85", "preview85", 6, "[\"" + wsUri + "\"]", "IDLE", pid, string.Empty, string.Empty, 0, 0, new byte[] { 9, 8, 7 });
+                    t_sqlite3_exec(db, Utf8Z("PRAGMA wal_checkpoint(TRUNCATE);"), IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+                }
+                finally { t_sqlite3_close(db); }
+
+                string gemMd = Path.Combine(geminiDir, "GEMINI.md");
+                File.WriteAllText(gemMd, "# Global Rule 85\n", Encoding.UTF8);
+
+                string token = "t85_tok_trash";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, vaultDir, 0, token))
+                {
+                    bool ideRunning85 = false;
+                    host.IdeRunningOverride = delegate() { return ideRunning85; };
+                    host.Start();
+
+                    // 1. Soft-delete session -> moved to Trash
+                    RawHttpTestResponse delResp = SendRawTcpHttp(host.Port, null, "POST", "/api/sessions/delete", apiHdr,
+                        "{\"cids\":[\"" + cid + "\"]}");
+                    AssertEqual(200, delResp.StatusCode, "T85: Soft-delete session returns 200");
+                    Dictionary<string, object> delDict = UnifiedJson.AsDict(UnifiedJson.Parse(delResp.BodyText));
+                    string trashId = UnifiedJson.GetString(delDict, "trashId", string.Empty);
+                    AssertTrue(!string.IsNullOrEmpty(trashId), "T85: Soft-delete returns non-empty trashId");
+                    AssertTrue(!File.Exists(dbFile), "T85: Session .db removed from active dir");
+                    AssertTrue(!Directory.Exists(cBrainDir), "T85: Brain dir removed from active dir");
+                    AssertTrue(!File.Exists(pbtxtPath), "T85: .pbtxt removed from active dir");
+
+                    // 2. /api/trash/list shows the deleted session
+                    RawHttpTestResponse listResp = SendRawTcpHttp(host.Port, null, "GET", "/api/trash/list", apiHdr, null);
+                    AssertEqual(200, listResp.StatusCode, "T85: GET /api/trash/list returns 200");
+                    Dictionary<string, object> listDict = UnifiedJson.AsDict(UnifiedJson.Parse(listResp.BodyText));
+                    AssertEqual(1, UnifiedJson.GetInt(listDict, "totalCount", 0), "T85: Trash contains 1 item");
+
+                    // 3. Restoring session while IDE running without closeIdeIfRunning -> 409 IDE_RUNNING
+                    ideRunning85 = true;
+                    RawHttpTestResponse resBlocked = SendRawTcpHttp(host.Port, null, "POST", "/api/trash/restore", apiHdr,
+                        "{\"id\":\"" + UnifiedJson.EscapeString(trashId) + "\"}");
+                    AssertEqual(409, resBlocked.StatusCode, "T85: Restoring session from trash blocks with 409 when IDE running");
+
+                    // 4. Restore when IDE stopped -> ALL files, .pb entry & SQLite row back!
+                    ideRunning85 = false;
+                    RawHttpTestResponse resOk = SendRawTcpHttp(host.Port, null, "POST", "/api/trash/restore", apiHdr,
+                        "{\"id\":\"" + UnifiedJson.EscapeString(trashId) + "\"}");
+                    AssertEqual(200, resOk.StatusCode, "T85: Restore session from trash returns 200");
+                    AssertTrue(File.Exists(dbFile), "T85: Session .db restored");
+                    AssertTrue(File.Exists(notePath), "T85: Brain artifact note.md restored");
+                    AssertTrue(File.Exists(pbtxtPath), "T85: .pbtxt annotation restored");
+                    HashSet<string> liveIds = SummarySqliteBridge.ReadAllConversationIds(sumDbPath);
+                    AssertTrue(liveIds.Contains(cid), "T85: SQLite conversation_summaries row restored");
+                    RawHttpTestResponse sessAfter = SendRawTcpHttp(host.Port, null, "GET", "/api/sessions", apiHdr, null);
+                    AssertTrue(sessAfter.BodyText.Contains("Trash Test Session 85"), "T85: Restored session visible in /api/sessions");
+
+                    // 5. Soft-delete local capability -> restore -> back on disk
+                    RawHttpTestResponse delCap = SendRawTcpHttp(host.Port, null, "POST", "/api/capabilities/delete-local", apiHdr,
+                        "{\"keys\":[\"Rule:GEMINI.md\"]}");
+                    AssertEqual(200, delCap.StatusCode, "T85: Soft-delete local capability returns 200");
+                    string capTrashId = UnifiedJson.GetString(UnifiedJson.AsDict(UnifiedJson.Parse(delCap.BodyText)), "trashId", string.Empty);
+                    AssertTrue(!string.IsNullOrEmpty(capTrashId), "T85: Local capability delete returns trashId");
+                    AssertTrue(!File.Exists(gemMd), "T85: GEMINI.md removed from active dir");
+
+                    RawHttpTestResponse resCap = SendRawTcpHttp(host.Port, null, "POST", "/api/trash/restore", apiHdr,
+                        "{\"id\":\"" + UnifiedJson.EscapeString(capTrashId) + "\"}");
+                    AssertEqual(200, resCap.StatusCode, "T85: Restore local capability from trash returns 200");
+                    AssertTrue(File.Exists(gemMd) && File.ReadAllText(gemMd, Encoding.UTF8).Contains("Global Rule 85"), "T85: GEMINI.md content restored");
+
+                    // 6. Security: path traversal in trashId rejected with 400
+                    RawHttpTestResponse trav = SendRawTcpHttp(host.Port, null, "POST", "/api/trash/restore", apiHdr,
+                        "{\"id\":\"../outside\"}");
+                    AssertEqual(400, trav.StatusCode, "T85: Path traversal trashId rejected with 400");
+
+                    // 7. Explorer allowlist includes companion-trash & companion-snapshots (404 not 403 for non-existent probe path inside root)
+                    string probeTrashPath = Path.Combine(TrashAndBackupService.GetTrashRoot(geminiDir), "nonexistent_probe_85.txt");
+                    RawHttpTestResponse expTrash = SendRawTcpHttp(host.Port, null, "POST", "/api/native/open-in-explorer", apiHdr,
+                        "{\"path\":\"" + UnifiedJson.EscapeString(probeTrashPath) + "\"}");
+                    AssertEqual(404, expTrash.StatusCode, "T85: companion-trash passes Explorer allowlist (404 missing file, not 403 forbidden)");
+
+                    string probeSnapPath = Path.Combine(geminiDir, "companion-snapshots", "nonexistent_snap_85.agy");
+                    RawHttpTestResponse expSnap = SendRawTcpHttp(host.Port, null, "POST", "/api/native/open-in-explorer", apiHdr,
+                        "{\"path\":\"" + UnifiedJson.EscapeString(probeSnapPath) + "\"}");
+                    AssertEqual(404, expSnap.StatusCode, "T85: companion-snapshots passes Explorer allowlist (404 missing file, not 403 forbidden)");
+
+                    // 8. Purge all
+                    RawHttpTestResponse purgeAll = SendRawTcpHttp(host.Port, null, "POST", "/api/trash/purge", apiHdr, "{\"all\":true}");
+                    AssertEqual(200, purgeAll.StatusCode, "T85: Empty trash returns 200");
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // T86: Phase 2 — .bak.* Config Version History & 1-Click Restore
+        // ══════════════════════════════════════════════════════════════════════
+        private static void T86_Phase2_ConfigBackupVersionHistoryAndRestore()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t86_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string vaultDir = Path.Combine(sb, "Vault");
+                Directory.CreateDirectory(geminiDir);
+                Directory.CreateDirectory(vaultDir);
+
+                string gemMd = Path.Combine(geminiDir, "GEMINI.md");
+                File.WriteAllText(gemMd, "# Version One Content\n", Encoding.UTF8);
+
+                string outsideBak = Path.Combine(sb, "secret.json.bak.20261125_000000");
+                File.WriteAllText(outsideBak, "{\"secret\":true}", Encoding.UTF8);
+
+                string token = "t86_tok_bak";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, vaultDir, 0, token))
+                {
+                    host.Start();
+
+                    // Save v2 via editor -> auto-generates .bak.* containing v1
+                    RawHttpTestResponse saveV2 = SendRawTcpHttp(host.Port, null, "POST", "/api/editor/save", apiHdr,
+                        "{\"path\":\"" + UnifiedJson.EscapeString(gemMd) + "\",\"content\":\"# Version Two Content\\n\"}");
+                    AssertEqual(200, saveV2.StatusCode, "T86: Save v2 returns 200");
+                    AssertTrue(File.ReadAllText(gemMd, Encoding.UTF8).Contains("Version Two"), "T86: GEMINI.md now contains Version Two");
+
+                    // List backups for GEMINI.md
+                    RawHttpTestResponse listBak = SendRawTcpHttp(host.Port, null, "GET",
+                        "/api/config-backups/list?path=" + Uri.EscapeDataString(gemMd), apiHdr, null);
+                    AssertEqual(200, listBak.StatusCode, "T86: GET /api/config-backups/list returns 200");
+                    Dictionary<string, object> listDict = UnifiedJson.AsDict(UnifiedJson.Parse(listBak.BodyText));
+                    List<object> items = UnifiedJson.AsList(listDict["items"]);
+                    AssertTrue(items != null && items.Count >= 1, "T86: At least 1 .bak.* backup listed for GEMINI.md");
+
+                    Dictionary<string, object> bakItem = UnifiedJson.AsDict(items[0]);
+                    string bakPath = UnifiedJson.GetString(bakItem, "backupPath", string.Empty);
+                    AssertEqual("GEMINI.md", UnifiedJson.GetString(bakItem, "originalFileName", string.Empty), "T86: originalFileName is GEMINI.md");
+                    AssertTrue(UnifiedJson.GetString(bakItem, "preview", string.Empty).Contains("Version One"), "T86: backup preview shows Version One");
+
+                    // Restore v1 from .bak.*
+                    RawHttpTestResponse resBak = SendRawTcpHttp(host.Port, null, "POST", "/api/config-backups/restore", apiHdr,
+                        "{\"backupPath\":\"" + UnifiedJson.EscapeString(bakPath) + "\"}");
+                    AssertEqual(200, resBak.StatusCode, "T86: POST /api/config-backups/restore returns 200");
+                    Dictionary<string, object> resDict = UnifiedJson.AsDict(UnifiedJson.Parse(resBak.BodyText));
+                    string safetyBak = UnifiedJson.GetString(resDict, "safetyBackupPath", string.Empty);
+                    AssertTrue(File.ReadAllText(gemMd, Encoding.UTF8).Contains("Version One"), "T86: GEMINI.md restored to Version One");
+                    AssertTrue(!string.IsNullOrEmpty(safetyBak) && File.Exists(safetyBak), "T86: Safety backup created before restore");
+                    AssertTrue(File.ReadAllText(safetyBak, Encoding.UTF8).Contains("Version Two"), "T86: Safety backup preserves Version Two");
+
+                    // Security: outside-allowlist .bak.* rejected with 403
+                    RawHttpTestResponse badBak = SendRawTcpHttp(host.Port, null, "POST", "/api/config-backups/restore", apiHdr,
+                        "{\"backupPath\":\"" + UnifiedJson.EscapeString(outsideBak) + "\"}");
+                    AssertEqual(403, badBak.StatusCode, "T86: Outside-allowlist config backup restore rejected with 403");
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // T87: Phase 2 — Online Hot Backup + SmartAuto Flush + Live SSE Events
+        // ══════════════════════════════════════════════════════════════════════
+        private static void T87_Phase2_OnlineHotBackupSmartAutoFlushAndLiveSse()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t87_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string agyDir = Path.Combine(geminiDir, "antigravity");
+                string convDir = Path.Combine(agyDir, "conversations");
+                string annotDir = Path.Combine(agyDir, "annotations");
+                string cfgDir = Path.Combine(geminiDir, "config");
+                string vaultDir = Path.Combine(sb, "Vault");
+                Directory.CreateDirectory(convDir);
+                Directory.CreateDirectory(annotDir);
+                Directory.CreateDirectory(cfgDir);
+                Directory.CreateDirectory(vaultDir);
+
+                string cid = "55555555-5555-5555-5555-555555555587";
+                string pbPath = Path.Combine(agyDir, "agyhub_summaries_proto.pb");
+                ProtoNode entry = BuildRealProtoEntry(cid, "Original Title 87", string.Empty, "file:///c:/proj87", "Proj87", "pid87", 5, 2, null);
+                File.WriteAllBytes(pbPath, ProtoCodec.Encode(new List<ProtoNode> { entry }));
+                CreateMinimalValidSqliteDb(Path.Combine(convDir, cid + ".db"), "t87");
+                File.WriteAllText(Path.Combine(annotDir, cid + ".pbtxt"), "title: \"Original Title 87\"\n", Encoding.UTF8);
+
+                string sumDbPath = Path.Combine(agyDir, "conversation_summaries.db");
+                IntPtr db = OpenAndCreateSummaryWalDb(sumDbPath);
+                try
+                {
+                    InsertSummaryDbRow(db, cid, "Original Title 87", "p87", 5, "[\"file:///c:/proj87\"]", "IDLE", "pid87", string.Empty, string.Empty, 0, 0, new byte[] { 1 });
+                    t_sqlite3_exec(db, Utf8Z("PRAGMA wal_checkpoint(TRUNCATE);"), IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+                }
+                finally { t_sqlite3_close(db); }
+
+                string token = "t87_tok_hot";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, vaultDir, 0, token))
+                {
+                    bool ideRunning87 = true;
+                    host.IdeRunningOverride = delegate() { return ideRunning87; };
+                    host.Start();
+
+                    using (TcpClient sseClient = new TcpClient("127.0.0.1", host.Port))
+                    {
+                        sseClient.ReceiveTimeout = 6000;
+                        NetworkStream sseStream = sseClient.GetStream();
+                        byte[] reqBytes = Encoding.ASCII.GetBytes(
+                            "GET /api/events HTTP/1.1\r\nHost: 127.0.0.1:" + host.Port + "\r\nX-AGY-Token: " + token + "\r\nConnection: keep-alive\r\n\r\n");
+                        sseStream.Write(reqBytes, 0, reqBytes.Length);
+                        sseStream.Flush();
+                        ReadSseUntilEvent(sseStream, "connected", 3000);
+
+                        // 1. Online hot backup succeeds with 202 while IDE is running!
+                        string hotFullAgy = Path.Combine(sb, "hot_full_87.agy");
+                        RawHttpTestResponse hotFull = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/full", apiHdr,
+                            "{\"outputPath\":\"" + UnifiedJson.EscapeString(hotFullAgy) + "\",\"tier\":\"fast\",\"onlineHotBackup\":true}");
+                        AssertEqual(202, hotFull.StatusCode, "T87: /api/backup/full with onlineHotBackup=true succeeds (202) while IDE running");
+                        string doneHot1 = ReadSseUntilEvent(sseStream, "job_done", 6000);
+                        AssertTrue(doneHot1.Contains("\"ok\":true"), "T87: Online hot full backup completed ok:true");
+                        AssertTrue(File.Exists(hotFullAgy), "T87: Online hot full backup .agy created");
+
+                        string hotSelAgy = Path.Combine(sb, "hot_sel_87.agy");
+                        RawHttpTestResponse hotSel = SendRawTcpHttp(host.Port, null, "POST", "/api/backup/selective-export", apiHdr,
+                            "{\"cids\":[\"" + cid + "\"],\"capKeys\":[],\"outputPath\":\"" + UnifiedJson.EscapeString(hotSelAgy) + "\",\"onlineHotBackup\":true}");
+                        AssertEqual(202, hotSel.StatusCode, "T87: /api/backup/selective-export with onlineHotBackup=true succeeds (202) while IDE running");
+                        string doneHot2 = ReadSseUntilEvent(sseStream, "job_done", 6000);
+                        AssertTrue(doneHot2.Contains("\"ok\":true"), "T87: Online hot selective export completed ok:true");
+                        AssertTrue(File.Exists(hotSelAgy), "T87: Online hot selective .agy created");
+
+                        // 2. SmartAuto rename while IDE running -> hot writes L1/L2, queues L3 .pb flush!
+                        RawHttpTestResponse smartRen = SendRawTcpHttp(host.Port, null, "POST", "/api/sessions/rename-single", apiHdr,
+                            "{\"cid\":\"" + cid + "\",\"newTitle\":\"SmartAuto Flushed Title 87\",\"strategy\":\"SmartAuto\"}");
+                        AssertEqual(200, smartRen.StatusCode, "T87: SmartAuto rename succeeds (200) while IDE running without prompt");
+                        Dictionary<string, object> renDict = UnifiedJson.AsDict(UnifiedJson.Parse(smartRen.BodyText));
+                        AssertEqual(true, UnifiedJson.GetBool(renDict, "deferredToPbFlush", false), "T87: deferredToPbFlush=true");
+                        AssertEqual(1, UnifiedJson.GetInt(renDict, "pendingPbSyncCount", 0), "T87: pendingPbSyncCount=1");
+                        AssertTrue(File.ReadAllText(Path.Combine(annotDir, cid + ".pbtxt"), Encoding.UTF8).Contains("SmartAuto Flushed Title 87"),
+                            "T87: Layer 1 .pbtxt immediately updated");
+
+                        // Verify .pb STILL has old title before IDE closes
+                        List<ConversationSummaryInfo> beforeFlush = SessionMetadataExtractor.ExtractSummariesFromProto(File.ReadAllBytes(pbPath));
+                        AssertTrue(beforeFlush.Count == 1 && beforeFlush[0].DisplayTitle == "Original Title 87",
+                            "T87: Layer 3 .pb untouched while IDE still running");
+
+                        // 3. Simulate IDE exit -> CheckIdeStatusAndAutoFlushNow broadcasts ide_status & auto-flushes Layer 3 .pb!
+                        ideRunning87 = false;
+                        host.CheckIdeStatusAndAutoFlushNow();
+
+                        string ideEv = ReadSseUntilEvent(sseStream, "ide_status", 4000);
+                        AssertTrue(ideEv.Contains("\"running\":false"), "T87: Live SSE ide_status running:false received");
+                        AssertEqual(0, TrashAndBackupService.GetPendingPbSyncCount(geminiDir), "T87: Pending .pb flush queue drained to 0 on IDE exit");
+
+                        List<ConversationSummaryInfo> afterFlush = SessionMetadataExtractor.ExtractSummariesFromProto(File.ReadAllBytes(pbPath));
+                        AssertTrue(afterFlush.Count == 1 && afterFlush[0].DisplayTitle == "SmartAuto Flushed Title 87",
+                            "T87: Layer 3 .pb automatically updated on IDE exit!");
+
+                        // 4. FileSystemWatcher debounced fs_changed SSE broadcast
+                        System.Threading.Thread.Sleep(900); // Allow self-write suppression window to expire
+                        File.WriteAllText(Path.Combine(cfgDir, "external_change_87.json"), "{\"ok\":true}", Encoding.UTF8);
+                        string fsEv = ReadSseUntilEvent(sseStream, "fs_changed", 4000);
+                        AssertTrue(fsEv.Contains("event: fs_changed"), "T87: FileSystemWatcher pushed debounced fs_changed SSE event");
+                    }
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // T88: Phase 2 — Tray Debounce + Unified Orphan Engine + Embedded UI Parity
+        // ══════════════════════════════════════════════════════════════════════
+        private static void T88_Phase2_TrayDebounceUnifiedOrphanEngineAndUiParity()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t88_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string agyDir = Path.Combine(geminiDir, "antigravity");
+                string convDir = Path.Combine(agyDir, "conversations");
+                string brainDir = Path.Combine(agyDir, "brain");
+                string annotDir = Path.Combine(agyDir, "annotations");
+                string vaultDir = Path.Combine(sb, "Vault");
+                Directory.CreateDirectory(convDir);
+                Directory.CreateDirectory(brainDir);
+                Directory.CreateDirectory(annotDir);
+                Directory.CreateDirectory(vaultDir);
+
+                // Seed 1 live conversation so orphan scanner master index exists (safety guard requires live .pb index)
+                string liveCid = "77777777-7777-7777-7777-777777777788";
+                ProtoNode liveEntry = BuildRealProtoEntry(liveCid, "Live Session 88", string.Empty, "file:///c:/p88", "Proj88", "pid88", 3, 1, null);
+                File.WriteAllBytes(Path.Combine(agyDir, "agyhub_summaries_proto.pb"), ProtoCodec.Encode(new List<ProtoNode> { liveEntry }));
+                CreateMinimalValidSqliteDb(Path.Combine(convDir, liveCid + ".db"), "live88");
+
+                // Seed 1 orphan across ALL 5 file/folder types including .db.bak and .db-journal
+                string orphCid = "66666666-6666-6666-6666-666666666688";
+                File.WriteAllText(Path.Combine(convDir, orphCid + ".db"), "orphan db", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(convDir, orphCid + ".db.bak"), "orphan bak", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(convDir, orphCid + ".db-journal"), "orphan journal", Encoding.UTF8);
+                Directory.CreateDirectory(Path.Combine(brainDir, orphCid));
+                File.WriteAllText(Path.Combine(brainDir, orphCid, "a.txt"), "brain", Encoding.UTF8);
+                File.WriteAllText(Path.Combine(annotDir, orphCid + ".pbtxt"), "title: \"orph\"\n", Encoding.UTF8);
+
+                string token = "t88_tok_parity";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, vaultDir, 0, token))
+                {
+                    host.Start();
+
+                    // 1. TrayHost double-click debounce check
+                    using (TrayHost tray = new TrayHost(host, "http://127.0.0.1:" + host.Port + "/?t=" + token, false, false))
+                    {
+                        AssertEqual(true, tray.TryAcquireOpenCockpitDebounce(1000, 800), "T88: First tray click allowed");
+                        AssertEqual(false, tray.TryAcquireOpenCockpitDebounce(1200, 800), "T88: Second click within 800ms suppressed");
+                        AssertEqual(false, tray.TryAcquireOpenCockpitDebounce(1799, 800), "T88: Click at +799ms still suppressed");
+                        AssertEqual(true, tray.TryAcquireOpenCockpitDebounce(1800, 800), "T88: Click at +800ms allowed");
+                    }
+
+                    // 2. Unified orphan engine parity: /api/gc/scan == /api/storage/analyze orphans (both count .db.bak and .db-journal)
+                    RawHttpTestResponse gcScan = SendRawTcpHttp(host.Port, null, "POST", "/api/gc/scan", apiHdr, "{}");
+                    AssertEqual(200, gcScan.StatusCode, "T88: /api/gc/scan returns 200");
+                    Dictionary<string, object> gcDict = UnifiedJson.AsDict(UnifiedJson.Parse(gcScan.BodyText));
+
+                    RawHttpTestResponse stoScan = SendRawTcpHttp(host.Port, null, "POST", "/api/storage/analyze", apiHdr, "{\"topN\":10}");
+                    AssertEqual(200, stoScan.StatusCode, "T88: /api/storage/analyze returns 200");
+                    Dictionary<string, object> stoDict = UnifiedJson.AsDict(UnifiedJson.Parse(stoScan.BodyText));
+                    Dictionary<string, object> stoOrph = UnifiedJson.AsDict(stoDict["orphans"]);
+
+                    int gcTotal = UnifiedJson.GetInt(gcDict, "totalItems", -1);
+                    int stoTotal = UnifiedJson.GetInt(stoOrph, "totalItems", -2);
+                    AssertEqual(5, gcTotal, "T88: /api/gc/scan detects all 5 orphan artifacts (.db, .db.bak, .db-journal, brain, .pbtxt)");
+                    AssertEqual(stoTotal, gcTotal, "T88: /api/gc/scan totalItems matches /api/storage/analyze orphans.totalItems");
+                    AssertEqual(1, UnifiedJson.GetInt(gcDict, "orphanDbBakCount", 0), "T88: /api/gc/scan exposes orphanDbBakCount=1");
+                    AssertEqual(1, UnifiedJson.GetInt(gcDict, "orphanDbJournalCount", 0), "T88: /api/gc/scan exposes orphanDbJournalCount=1");
+
+                    // 3. Embedded UI asset & Phase 1/2 structural parity checks
+                    RawHttpTestResponse idxResp = SendRawTcpHttp(host.Port, null, "GET", "/?t=" + token, null, null);
+                    AssertEqual(200, idxResp.StatusCode, "T88: GET / returns 200");
+                    AssertTrue(idxResp.BodyText.Contains("工作台") && idxResp.BodyText.Contains("对话管理") &&
+                        idxResp.BodyText.Contains("扩展与配置") && idxResp.BodyText.Contains("空间清理") &&
+                        idxResp.BodyText.Contains("备份与同步") && idxResp.BodyText.Contains("回收站") &&
+                        idxResp.BodyText.Contains("应用设置"), "T88: index.html renders 5+1 navigation IA");
+                    AssertTrue(idxResp.BodyText.Contains("disconnectBanner") && idxResp.BodyText.Contains("staleDataBanner"),
+                        "T88: index.html includes disconnectBanner and staleDataBanner");
+                    AssertTrue(idxResp.BodyText.Contains("/js/views/trash.js"), "T88: index.html loads /js/views/trash.js");
+
+                    RawHttpTestResponse trashJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/trash.js", apiHdr, null);
+                    AssertEqual(200, trashJs.StatusCode, "T88: Embedded /js/views/trash.js served with 200");
+                    AssertTrue(trashJs.BodyText.Contains("/api/trash/restore") && trashJs.BodyText.Contains("/api/config-backups/restore"),
+                        "T88: trash.js wires both trash and config-backup restore endpoints");
+
+                    RawHttpTestResponse compJs = SendRawTcpHttp(host.Port, null, "GET", "/js/components.js", apiHdr, null);
+                    AssertEqual(200, compJs.StatusCode, "T88: Embedded /js/components.js served");
+                    AssertTrue(compJs.BodyText.Contains("IDE_CLOSE_TIMEOUT") && compJs.BodyText.Contains("handleIdeConflictError"),
+                        "T88: components.js handles IDE_CLOSE_TIMEOUT escape hatch");
+                    // Only closeDrawer should set drawerDirtyCheck = null (1 occurrence), NOT post-save in openInlineEditorDrawer
+                    int compResetCount = CountOccurrences(compJs.BodyText, "AGY.state.drawerDirtyCheck = null");
+                    AssertEqual(1, compResetCount, "T88: components.js resets drawerDirtyCheck only on closeDrawer, not after save");
+
+                    RawHttpTestResponse renJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/rename.js", apiHdr, null);
+                    AssertEqual(200, renJs.StatusCode, "T88: Embedded /js/views/rename.js served");
+                    AssertEqual(0, CountOccurrences(renJs.BodyText, "AGY.state.drawerDirtyCheck = null"),
+                        "T88: rename.js never destroys drawerDirtyCheck on save");
+
+                    RawHttpTestResponse apiJs = SendRawTcpHttp(host.Port, null, "GET", "/js/api.js", apiHdr, null);
+                    AssertTrue(apiJs.BodyText.Contains("withButtonBusy"), "T88: api.js exports withButtonBusy");
+
+                    RawHttpTestResponse appJs = SendRawTcpHttp(host.Port, null, "GET", "/app.js", apiHdr, null);
+                    AssertTrue(appJs.BodyText.Contains("Promise.allSettled") && appJs.BodyText.Contains("hasUnsavedWork"),
+                        "T88: app.js uses Promise.allSettled and hasUnsavedWork dirty guard");
+
+                    RawHttpTestResponse bkJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/backup.js", apiHdr, null);
+                    AssertTrue(bkJs.BodyText.Contains("onlineHotBackup: true") && bkJs.BodyText.Contains("existingSnapshots"),
+                        "T88: backup.js uses onlineHotBackup and renders existingSnapshots");
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        private static int CountOccurrences(string haystack, string needle)
+        {
+            if (string.IsNullOrEmpty(haystack) || string.IsNullOrEmpty(needle)) return 0;
+            int count = 0;
+            int idx = 0;
+            while ((idx = haystack.IndexOf(needle, idx, StringComparison.Ordinal)) >= 0)
+            {
+                count++;
+                idx += needle.Length;
+            }
+            return count;
         }
     }
 }

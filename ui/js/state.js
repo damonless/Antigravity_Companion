@@ -12,13 +12,16 @@
     sessionsData: null,
     renameData: null,
     storageData: null,
+    coldArchivesData: null,
     capData: null,
     backupData: null,
     companionSettings: null,
     snapshotStatus: null,
     vaultStatus: null,
+    trashData: null,
+    configBackupsData: null,
 
-    // Lazy refresh dirty flags (ACC-07)
+    // Lazy refresh dirty flags
     dirty: {
       overview: false,
       cockpit: true,
@@ -27,8 +30,23 @@
       vault: true,
       backup: true,
       storage: true,
+      trash: true,
       settings: true
     },
+
+    // Sub-tabs under the 5+1 IA
+    sessionsSubView: 'browse',   // 'browse' | 'rename'
+    cockpitSubView: 'settings',  // 'settings' | 'editor' | 'vault'
+    trashTab: 'trash',           // 'trash' | 'backups'
+
+    // Dirty edit guards & connection state
+    formDirty: {
+      cockpit: false,
+      settings: false
+    },
+    staleDataNotice: false,
+    disconnected: false,
+    heartbeatFailures: 0,
 
     // Sessions & Rename state
     selectedBucketKey: '__ALL__',
@@ -52,7 +70,7 @@
     renameFocusedCid: '',
     renamePromptExpanded: false,
     renameTechExpanded: false,
-    renameStrategy: 'CloseAndFullWrite',
+    renameStrategy: 'SmartAuto',
     cliStatus: null,
 
     // Cockpit state
@@ -70,18 +88,19 @@
     lastSlimResult: null,
 
     // Vault & Capabilities state
-    vaultTab: 'sync', // 'sync' | 'rules_editor'
+    vaultTab: 'sync',
     capCategory: 'ALL',
     capDirFilter: 'ALL',
     capSearch: '',
     capChecked: {},
 
-    // Backup & Storage Sub-View state
-    backupSubView: 'backup', // 'backup' | 'storage'
+    // Backup state
+    backupSubView: 'backup',
     backupTier: 'fast',
     backupTab: 'caps',
     backupSearch: '',
     backupRestoreUserSettings: false,
+    backupRestoreLegacyCli: false,
     backupExpandedParents: {},
     backupCheckedCaps: {},
     backupCheckedConvs: {},

@@ -31,6 +31,9 @@ namespace AntigravityCompanion
         public bool HasMcp;
         public bool HasUserSettings;
         public bool HasCliSessions;
+        public bool IsColdArchive;
+        public string ColdArchiveType;
+        public bool HasLegacyCliSummaryDb;
         public long TotalZipSizeBytes;
         public long ExtractedMetadataSizeBytes;
         public double ElapsedMilliseconds;

@@ -105,6 +105,7 @@ namespace AntigravityCompanion
                 try
                 {
                     int deleted = 0;
+                    string trashId = string.Empty;
                     lock (_host.MutationLock)
                     {
                         List<CapabilityItem> localSnap;
@@ -113,13 +114,14 @@ namespace AntigravityCompanion
                             localSnap = new List<CapabilityItem>(_host.LocalCapsUnsafe);
                         }
                         List<CapabilityItem> selected = SelectCapsByKeys(localSnap, keys);
-                        deleted = CapabilityVaultService.DeleteCapabilitiesFromLocal(_host.GeminiPath, selected);
+                        deleted = TrashAndBackupService.SoftDeleteLocalCapabilities(_host.GeminiPath, selected, out trashId);
                         _host.ReloadAllLocalStateLocked();
                     }
-                    _host.AppendLog("warn", string.Format("已从本机删除 {0} 项能力配置（已生成 .bak.*）。", deleted));
+                    _host.AppendLog("warn", string.Format("已从本机移除 {0} 项扩展配置（已移入回收站，可随时还原）。", deleted));
                     Dictionary<string, object> resp = new Dictionary<string, object>();
                     resp["ok"] = true;
                     resp["deleted"] = deleted;
+                    resp["trashId"] = trashId ?? string.Empty;
                     HttpProtocolHelper.WriteJsonResponse(stream, 200, resp);
                 }
                 finally
@@ -142,6 +144,7 @@ namespace AntigravityCompanion
                 try
                 {
                     int deleted = 0;
+                    string trashId = string.Empty;
                     lock (_host.MutationLock)
                     {
                         List<CapabilityItem> repoSnap;
@@ -150,13 +153,14 @@ namespace AntigravityCompanion
                             repoSnap = new List<CapabilityItem>(_host.RepoCapsUnsafe);
                         }
                         List<CapabilityItem> selected = SelectCapsByKeys(repoSnap, keys);
-                        deleted = CapabilityVaultService.DeleteCapabilitiesFromRepository(_host.RepoPath, selected);
+                        deleted = TrashAndBackupService.SoftDeleteRepoCapabilities(_host.RepoPath, _host.GeminiPath, selected, out trashId);
                         _host.ReloadAllLocalStateLocked();
                     }
-                    _host.AppendLog("warn", string.Format("已从内置仓库移除 {0} 项能力快照。", deleted));
+                    _host.AppendLog("warn", string.Format("已从配置同步库移除 {0} 项配置（已移入回收站，可随时还原）。", deleted));
                     Dictionary<string, object> resp = new Dictionary<string, object>();
                     resp["ok"] = true;
                     resp["deleted"] = deleted;
+                    resp["trashId"] = trashId ?? string.Empty;
                     HttpProtocolHelper.WriteJsonResponse(stream, 200, resp);
                 }
                 finally
@@ -233,6 +237,8 @@ namespace AntigravityCompanion
             {
                 string agyPath = UnifiedJson.GetString(body, "archivePath", string.Empty).Trim();
                 if (string.IsNullOrEmpty(agyPath))
+                    agyPath = UnifiedJson.GetString(body, "path", string.Empty).Trim();
+                if (string.IsNullOrEmpty(agyPath))
                 {
                     bool dlgBusy;
                     agyPath = NativeDialogBridge.PickOpenFile("打开 Antigravity 备份归档包 (.agy)", "Antigravity 备份包 (*.agy)|*.agy|ZIP 压缩包 (*.zip)|*.zip|所有文件 (*.*)|*.*", out dlgBusy);
@@ -295,6 +301,7 @@ namespace AntigravityCompanion
                 bool includeGlobal = UnifiedJson.GetBool(body, "includeGlobalCaps", false);
                 bool closeIde = UnifiedJson.GetBool(body, "closeIdeIfRunning", false);
                 bool forceKill = UnifiedJson.GetBool(body, "forceKill", false);
+                bool onlineHotBackup = UnifiedJson.GetBool(body, "onlineHotBackup", false);
                 string outPath = UnifiedJson.GetString(body, "outputPath", string.Empty).Trim();
                 string tierStr = UnifiedJson.GetString(body, "tier", "fast").Trim();
                 BackupTier selTier = (string.Equals(tierStr, "full", StringComparison.OrdinalIgnoreCase) ||
@@ -333,13 +340,13 @@ namespace AntigravityCompanion
                     }
                 }
 
-                // FIX P1-11: Acquire job BEFORE closing IDE!
-                if (!_host.TryAcquireJob("selective_export", "正在导出轻量归档 (.agy)..."))
+                // FIX P1-11 + Phase 2: Read-only export supports onlineHotBackup without closing IDE (WAL-safe SqliteOnlineBackup)
+                if (!_host.TryAcquireJob("selective_export", "正在导出备份文件 (.agy)..."))
                 {
                     HttpProtocolHelper.WriteJsonError(stream, 409, "当前有其他后台任务正在执行。");
                     return true;
                 }
-                if (cids.Count > 0 && !EnsureIdeClosedIfNeeded(closeIde, forceKill, stream))
+                if (cids.Count > 0 && !onlineHotBackup && !EnsureIdeClosedIfNeeded(closeIde, forceKill, stream))
                 {
                     _host.ReleaseJob();
                     return true;
@@ -574,6 +581,40 @@ namespace AntigravityCompanion
                 return true;
             }
 
+            if (path == "/api/trash/list" && req.Method == "GET")
+            {
+                OperationResult<Dictionary<string, object>> res = _dispatcher.Execute("trash.list", null);
+                if (!res.Ok) { HttpProtocolHelper.WriteJsonError(stream, 500, res.ErrorMessage); return true; }
+                HttpProtocolHelper.WriteJsonResponse(stream, 200, res.Data);
+                return true;
+            }
+            if (path == "/api/trash/restore" && req.Method == "POST")
+            {
+                WriteDispatcherResult(stream, _dispatcher.Execute("trash.restore", body));
+                return true;
+            }
+            if (path == "/api/trash/purge" && req.Method == "POST")
+            {
+                WriteDispatcherResult(stream, _dispatcher.Execute("trash.purge", body));
+                return true;
+            }
+            if (path == "/api/config-backups/list" && req.Method == "GET")
+            {
+                string filterPath = string.Empty;
+                if (req.Query != null) req.Query.TryGetValue("path", out filterPath);
+                Dictionary<string, object> cmdArgs = new Dictionary<string, object>();
+                cmdArgs["path"] = filterPath ?? string.Empty;
+                OperationResult<Dictionary<string, object>> res = _dispatcher.Execute("config.backups.list", cmdArgs);
+                if (!res.Ok) { HttpProtocolHelper.WriteJsonError(stream, 500, res.ErrorMessage); return true; }
+                HttpProtocolHelper.WriteJsonResponse(stream, 200, res.Data);
+                return true;
+            }
+            if (path == "/api/config-backups/restore" && req.Method == "POST")
+            {
+                WriteDispatcherResult(stream, _dispatcher.Execute("config.backups.restore", body));
+                return true;
+            }
+
             return false;
         }
 
@@ -679,6 +720,7 @@ namespace AntigravityCompanion
             string outPath = UnifiedJson.GetString(args, "outputPath", string.Empty).Trim();
             bool closeIde = UnifiedJson.GetBool(args, "closeIdeIfRunning", false);
             bool forceKill = UnifiedJson.GetBool(args, "forceKill", false);
+            bool onlineHotBackup = UnifiedJson.GetBool(args, "onlineHotBackup", false);
             string tierStr = UnifiedJson.GetString(args, "tier", "fast").Trim();
             BackupTier backupTier = (string.Equals(tierStr, "full", StringComparison.OrdinalIgnoreCase) ||
                                      string.Equals(tierStr, "FullForensic", StringComparison.OrdinalIgnoreCase) ||
@@ -707,11 +749,14 @@ namespace AntigravityCompanion
             bool handedOff = false;
             try
             {
-                int errHttpCode;
-                Dictionary<string, object> errPayload;
-                if (!EnsureIdeClosedIfNeededResult(closeIde, forceKill, out errHttpCode, out errPayload))
+                if (!onlineHotBackup)
                 {
-                    return FailCommandPayload(errHttpCode, errPayload, UnifiedJson.GetString(errPayload, "error", "IDE 正在运行。"));
+                    int errHttpCode;
+                    Dictionary<string, object> errPayload;
+                    if (!EnsureIdeClosedIfNeededResult(closeIde, forceKill, out errHttpCode, out errPayload))
+                    {
+                        return FailCommandPayload(errHttpCode, errPayload, UnifiedJson.GetString(errPayload, "error", "IDE 正在运行。"));
+                    }
                 }
 
                 string destSnap = outPath;
@@ -749,6 +794,7 @@ namespace AntigravityCompanion
                 ack["jobType"] = "full_backup";
                 ack["outputPath"] = destSnap;
                 ack["tier"] = backupTier == BackupTier.FullForensic ? "full" : "fast";
+                ack["onlineHotBackup"] = onlineHotBackup;
                 ack["httpStatusCode"] = 202;
                 return OperationResult<Dictionary<string, object>>.Success(ack);
             }
@@ -766,10 +812,11 @@ namespace AntigravityCompanion
             bool forceKill = UnifiedJson.GetBool(args, "forceKill", false);
             bool includeUserSettings = UnifiedJson.GetBool(args, "includeUserSettings", false);
             bool restoreUserSettings = UnifiedJson.GetBool(args, "restoreUserSettings", false);
+            bool restoreLegacyCliArchive = UnifiedJson.GetBool(args, "restoreLegacyCliArchive", false);
 
-            if (cids.Count == 0 && capKeys.Count == 0 && !includeUserSettings && !restoreUserSettings)
+            if (cids.Count == 0 && capKeys.Count == 0 && !includeUserSettings && !restoreUserSettings && !restoreLegacyCliArchive)
             {
-                return FailCommand(400, "请先选择要从归档包导入的能力或会话。");
+                return FailCommand(400, "请先选择要从备份文件导入的配置或对话。");
             }
 
             // Check backup loaded under _stateLock before acquiring job
@@ -794,7 +841,7 @@ namespace AntigravityCompanion
             bool handedOff = false;
             try
             {
-                if (cids.Count > 0 || includeUserSettings || restoreUserSettings)
+                if (cids.Count > 0 || includeUserSettings || restoreUserSettings || restoreLegacyCliArchive)
                 {
                     int errHttpCode;
                     Dictionary<string, object> errPayload;
@@ -809,7 +856,7 @@ namespace AntigravityCompanion
                 {
                     if (_host.BackupIndexUnsafe == null || string.IsNullOrEmpty(_host.LoadedBackupPathUnsafe))
                     {
-                        return FailCommand(400, "当前未打开任何 .agy 备份归档包。");
+                        return FailCommand(400, "当前未打开任何 .agy 备份文件。");
                     }
                     importReq.GeminiPath = _host.GeminiPath;
                     importReq.HomePath = _host.HomePath;
@@ -823,6 +870,7 @@ namespace AntigravityCompanion
                     importReq.ConvProjDiffMap = new Dictionary<string, ProjectDiffNode>(StringComparer.OrdinalIgnoreCase);
                     importReq.IncludeUserSettings = includeUserSettings;
                     importReq.RestoreUserSettings = restoreUserSettings;
+                    importReq.RestoreLegacyCliArchive = restoreLegacyCliArchive;
                 }
 
                 handedOff = true;
@@ -1049,6 +1097,140 @@ namespace AntigravityCompanion
             return OperationResult<Dictionary<string, object>>.Success(resp);
         }
 
+        // ── Trash & Config Backup Write Commands ──
+
+        private OperationResult<Dictionary<string, object>> ExecuteTrashRestoreCommand(Dictionary<string, object> args)
+        {
+            string trashId = UnifiedJson.GetString(args, "trashId", string.Empty).Trim();
+            if (string.IsNullOrEmpty(trashId)) trashId = UnifiedJson.GetString(args, "id", string.Empty).Trim();
+            if (string.IsNullOrEmpty(trashId))
+                return FailCommand(400, "请指定要还原的回收站记录 ID。");
+
+            bool closeIde = UnifiedJson.GetBool(args, "closeIdeIfRunning", false);
+            bool forceKill = UnifiedJson.GetBool(args, "forceKill", false);
+
+            if (!_host.TryAcquireJob("trash_restore", "正在从回收站还原数据..."))
+                return FailJobBusy("当前有其他后台写入任务正在执行，请稍后再试。");
+
+            try
+            {
+                if (TrashAndBackupService.TrashItemRequiresIdeClosed(_host.GeminiPath, trashId))
+                {
+                    int errHttpCode;
+                    Dictionary<string, object> errPayload;
+                    if (!EnsureIdeClosedIfNeededResult(closeIde, forceKill, out errHttpCode, out errPayload))
+                        return FailCommandPayload(errHttpCode, errPayload, UnifiedJson.GetString(errPayload, "error", "Antigravity 主窗口正在运行。"));
+                }
+
+                TrashRestoreResult restoreRes;
+                lock (_host.MutationLock)
+                {
+                    restoreRes = TrashAndBackupService.RestoreTrashItem(_host.GeminiPath, _host.RepoPath, trashId);
+                    if (restoreRes.Ok) _host.ReloadAllLocalStateLocked();
+                }
+
+                if (!restoreRes.Ok)
+                    return FailCommand(400, restoreRes.ErrorMessage ?? "还原失败。");
+
+                _host.AppendLog("success", string.Format("已从回收站还原记录 {0}（恢复文件 {1} 项）。", trashId, restoreRes.RestoredFilesCount));
+                Dictionary<string, object> resp = new Dictionary<string, object>();
+                resp["ok"] = true;
+                resp["trashId"] = restoreRes.TrashId;
+                resp["kind"] = restoreRes.Kind;
+                resp["restoredFiles"] = restoreRes.RestoredFilesCount;
+                resp["restoredProtoEntries"] = restoreRes.RestoredProtoEntriesCount;
+                resp["restoredDbRows"] = restoreRes.RestoredDbRowsCount;
+                resp["warnings"] = new List<object>(OverviewBuilder.ToObjList(restoreRes.Warnings));
+                return OperationResult<Dictionary<string, object>>.Success(resp);
+            }
+            finally
+            {
+                _host.ReleaseJob();
+            }
+        }
+
+        private OperationResult<Dictionary<string, object>> ExecuteTrashPurgeCommand(Dictionary<string, object> args)
+        {
+            bool emptyAll = UnifiedJson.GetBool(args, "all", false);
+            string trashId = UnifiedJson.GetString(args, "trashId", string.Empty).Trim();
+            if (string.IsNullOrEmpty(trashId)) trashId = UnifiedJson.GetString(args, "id", string.Empty).Trim();
+
+            if (!emptyAll && string.IsNullOrEmpty(trashId))
+                return FailCommand(400, "请指定要彻底删除的记录 ID 或传入 all=true。");
+
+            if (!_host.TryAcquireJob("trash_purge", emptyAll ? "正在清空回收站..." : "正在彻底删除回收站记录..."))
+                return FailJobBusy("当前有其他后台写入任务正在执行，请稍后再试。");
+
+            try
+            {
+                if (emptyAll)
+                {
+                    int removed = 0;
+                    lock (_host.MutationLock)
+                    {
+                        removed = TrashAndBackupService.EmptyTrash(_host.GeminiPath);
+                    }
+                    _host.AppendLog("warn", string.Format("已清空回收站，彻底删除 {0} 条历史记录。", removed));
+                    Dictionary<string, object> resp = new Dictionary<string, object>();
+                    resp["ok"] = true;
+                    resp["purgedCount"] = removed;
+                    return OperationResult<Dictionary<string, object>>.Success(resp);
+                }
+
+                string err;
+                bool ok;
+                lock (_host.MutationLock)
+                {
+                    ok = TrashAndBackupService.PurgeTrashItem(_host.GeminiPath, trashId, out err);
+                }
+                if (!ok) return FailCommand(400, err ?? "彻底删除失败。");
+                _host.AppendLog("warn", "已从回收站彻底删除记录: " + trashId);
+                Dictionary<string, object> singleResp = new Dictionary<string, object>();
+                singleResp["ok"] = true;
+                singleResp["purgedCount"] = 1;
+                return OperationResult<Dictionary<string, object>>.Success(singleResp);
+            }
+            finally
+            {
+                _host.ReleaseJob();
+            }
+        }
+
+        private OperationResult<Dictionary<string, object>> ExecuteConfigBackupRestoreCommand(Dictionary<string, object> args)
+        {
+            string backupPath = UnifiedJson.GetString(args, "backupPath", string.Empty).Trim();
+            if (string.IsNullOrEmpty(backupPath))
+                return FailCommand(400, "backupPath 不能为空。");
+
+            if (!_host.TryAcquireJob("config_backup_restore", "正在还原配置文件历史版本..."))
+                return FailJobBusy("当前有其他后台写入任务正在执行，请稍后再试。");
+
+            try
+            {
+                ConfigBackupRestoreResult res;
+                lock (_host.MutationLock)
+                {
+                    res = TrashAndBackupService.RestoreConfigBackup(_host.GeminiPath, _host.HomePath, _host.RepoPath, backupPath);
+                    if (res.Ok) _host.ReloadAllLocalStateLocked();
+                }
+
+                if (!res.Ok)
+                    return FailCommand(res.HttpStatusCode > 0 ? res.HttpStatusCode : 400, res.ErrorMessage ?? "还原配置版本失败。");
+
+                _host.AppendLog("success", "已还原配置文件历史版本：" + Path.GetFileName(res.OriginalPath));
+                Dictionary<string, object> resp = new Dictionary<string, object>();
+                resp["ok"] = true;
+                resp["originalPath"] = res.OriginalPath;
+                resp["restoredFromPath"] = res.RestoredFromPath;
+                resp["safetyBackupPath"] = res.SafetyBackupPath;
+                return OperationResult<Dictionary<string, object>>.Success(resp);
+            }
+            finally
+            {
+                _host.ReleaseJob();
+            }
+        }
+
         // ── Vault, Backup & Settings Payload Helpers ──
 
         private CapabilityDiffNode FindCapDiffNode(string key, bool fromBackup)
@@ -1098,6 +1280,12 @@ namespace AntigravityCompanion
                 list.Add(r.ExistingSnapshots[i]);
             }
             d["existingSnapshots"] = list;
+
+            List<Dictionary<string, object>> coldRaw = StorageSlimService.ListColdArchives(_host.GeminiPath);
+            List<object> coldObj = new List<object>(coldRaw.Count);
+            for (int i = 0; i < coldRaw.Count; i++) coldObj.Add(coldRaw[i]);
+            d["coldArchives"] = coldObj;
+            d["coldArchivesCount"] = coldRaw.Count;
             return d;
         }
 

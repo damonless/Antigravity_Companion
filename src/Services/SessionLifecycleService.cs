@@ -33,6 +33,8 @@ namespace AntigravityCompanion
         public List<string> OrphanBrainDirs;
         public List<string> OrphanAnnotationFiles;
         public HashSet<string> OrphanSessionIds;
+        public int OrphanDbBakCount;
+        public int OrphanDbJournalCount;
         public long TotalOrphanBytes;
 
         public OrphanScanResult()
@@ -109,7 +111,7 @@ namespace AntigravityCompanion
             }
         }
 
-        private static readonly string[] SessionDbDeleteExtensions = new string[]
+        internal static readonly string[] SessionDbDeleteExtensions = new string[]
         {
             ".db", ".db-wal", ".db-shm", ".db.bak", ".db-journal"
         };
@@ -966,6 +968,16 @@ namespace AntigravityCompanion
             bool allowHotWriteSkipRunning,
             out RenameBatchResult result)
         {
+            return RenameSessionsBatch(geminiPath, cidToNewTitle, allowHotWriteSkipRunning, false, out result);
+        }
+
+        public static bool RenameSessionsBatch(
+            string geminiPath,
+            Dictionary<string, string> cidToNewTitle,
+            bool allowHotWriteSkipRunning,
+            bool deferLayer3Pb,
+            out RenameBatchResult result)
+        {
             result = new RenameBatchResult();
             LastWarning = null;
             LastError = null;
@@ -1270,7 +1282,12 @@ namespace AntigravityCompanion
             }
 
             // Layer 3: agyhub_summaries_proto.pb
-            if (pbRootNodes != null)
+            if (deferLayer3Pb && pbRootNodes != null)
+            {
+                result.Layer3Updated = false;
+                result.Warnings.Add("主窗口运行中已延迟写入 Layer 3 (.pb)，将在主窗口退出后自动补刷。");
+            }
+            else if (pbRootNodes != null)
             {
                 bool modifiedPb = false;
                 foreach (KeyValuePair<string, string> kvp in activeTargets)
@@ -1381,6 +1398,158 @@ namespace AntigravityCompanion
                 }
                 if (dbWarn != null && dbWarn.Count > 0 && warnings != null) warnings.AddRange(dbWarn);
             }
+        }
+
+        internal static bool FlushPendingTitlesToPbOnly(
+            string geminiPath,
+            Dictionary<string, string> cidToNewTitle,
+            out int updatedCount,
+            out List<string> warnings)
+        {
+            updatedCount = 0;
+            warnings = new List<string>();
+            if (string.IsNullOrEmpty(geminiPath) || cidToNewTitle == null || cidToNewTitle.Count == 0)
+                return true;
+
+            string[] pbPaths = new string[]
+            {
+                Path.Combine(geminiPath, "antigravity", "agyhub_summaries_proto.pb"),
+                Path.Combine(geminiPath, "antigravity-cli", "agyhub_summaries_proto.pb")
+            };
+
+            for (int p = 0; p < pbPaths.Length; p++)
+            {
+                string pbPath = pbPaths[p];
+                if (!File.Exists(pbPath) || GetFileSizeSafe(pbPath) == 0) continue;
+
+                try
+                {
+                    byte[] rawBytes = ReadAllBytesShared(pbPath);
+                    List<ProtoNode> rootNodes = ProtoCodec.Decode(rawBytes);
+                    bool modified = false;
+                    int fileUpdated = 0;
+
+                    for (int i = 0; i < rootNodes.Count; i++)
+                    {
+                        ProtoNode entry = rootNodes[i];
+                        if (entry.FieldNumber != 1 || entry.WireType != 2) continue;
+                        ProtoCodec.DecodeSummaryEntryTree(entry);
+                        ProtoNode f1 = entry.GetChild(1);
+                        if (f1 == null) continue;
+                        string cid = f1.GetString();
+                        if (string.IsNullOrWhiteSpace(cid)) continue;
+
+                        string newTitle;
+                        if (cidToNewTitle.TryGetValue(cid.Trim(), out newTitle) && !string.IsNullOrWhiteSpace(newTitle))
+                        {
+                            ApplyTitleToEntryAst(entry, newTitle.Trim());
+                            modified = true;
+                            fileUpdated++;
+                        }
+                    }
+
+                    if (modified)
+                    {
+                        byte[] encoded = ProtoCodec.Encode(rootNodes);
+                        UnifiedJson.CreateTimestampedBackup(pbPath, 5);
+                        WriteBytesAtomicWithBackup(pbPath, encoded, null);
+                        updatedCount += fileUpdated;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    warnings.Add("自动补刷 " + Path.GetFileName(pbPath) + " 失败: " + ex.Message);
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        internal static byte[] ExportProtoEntriesForCids(string pbPath, HashSet<string> targetCids)
+        {
+            if (string.IsNullOrEmpty(pbPath) || !File.Exists(pbPath) || targetCids == null || targetCids.Count == 0)
+                return null;
+            try
+            {
+                byte[] rawBytes = ReadAllBytesShared(pbPath);
+                List<ProtoNode> rootNodes = ProtoCodec.Decode(rawBytes);
+                List<ProtoNode> matched = new List<ProtoNode>();
+                for (int i = 0; i < rootNodes.Count; i++)
+                {
+                    ProtoNode node = rootNodes[i];
+                    if (node.FieldNumber != 1 || node.WireType != 2) continue;
+                    ProtoCodec.DecodeSummaryEntryTree(node);
+                    ProtoNode f1 = node.GetChild(1);
+                    if (f1 == null) continue;
+                    string cid = f1.GetString();
+                    if (!string.IsNullOrWhiteSpace(cid) && targetCids.Contains(cid.Trim()))
+                    {
+                        matched.Add(node);
+                    }
+                }
+                return matched.Count > 0 ? ProtoCodec.Encode(matched) : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        internal static int MergeArchivedProtoEntriesIntoPb(string pbPath, byte[] archivedBytes)
+        {
+            if (string.IsNullOrEmpty(pbPath) || archivedBytes == null || archivedBytes.Length == 0)
+                return 0;
+
+            List<ProtoNode> restoredNodes = ProtoCodec.Decode(archivedBytes);
+            if (restoredNodes == null || restoredNodes.Count == 0) return 0;
+
+            HashSet<string> restoredCids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < restoredNodes.Count; i++)
+            {
+                ProtoNode n = restoredNodes[i];
+                if (n.FieldNumber == 1 && n.WireType == 2)
+                {
+                    ProtoCodec.DecodeSummaryEntryTree(n);
+                    ProtoNode f1 = n.GetChild(1);
+                    if (f1 != null && !string.IsNullOrWhiteSpace(f1.GetString()))
+                        restoredCids.Add(f1.GetString().Trim());
+                }
+            }
+
+            List<ProtoNode> existingNodes = new List<ProtoNode>();
+            if (File.Exists(pbPath) && GetFileSizeSafe(pbPath) > 0)
+            {
+                byte[] curBytes = ReadAllBytesShared(pbPath);
+                List<ProtoNode> curDecoded = ProtoCodec.Decode(curBytes);
+                for (int i = 0; i < curDecoded.Count; i++)
+                {
+                    ProtoNode n = curDecoded[i];
+                    bool duplicate = false;
+                    if (n.FieldNumber == 1 && n.WireType == 2)
+                    {
+                        ProtoCodec.DecodeSummaryEntryTree(n);
+                        ProtoNode f1 = n.GetChild(1);
+                        if (f1 != null && !string.IsNullOrWhiteSpace(f1.GetString()) &&
+                            restoredCids.Contains(f1.GetString().Trim()))
+                        {
+                            duplicate = true;
+                        }
+                    }
+                    if (!duplicate) existingNodes.Add(n);
+                }
+            }
+
+            for (int i = 0; i < restoredNodes.Count; i++)
+            {
+                existingNodes.Add(restoredNodes[i]);
+            }
+
+            string dir = Path.GetDirectoryName(pbPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            if (File.Exists(pbPath)) UnifiedJson.CreateTimestampedBackup(pbPath, 5);
+            WriteBytesAtomicWithBackup(pbPath, ProtoCodec.Encode(existingNodes), null);
+            return restoredNodes.Count;
         }
 
         internal static byte[] ReadAllBytesShared(string filePath)
@@ -2859,8 +3028,18 @@ namespace AntigravityCompanion
             bool allowHotWriteSkipRunning,
             out RenameBatchResult result)
         {
+            return RenameSessionsBatch(geminiPath, cidToNewTitle, allowHotWriteSkipRunning, false, out result);
+        }
+
+        public static bool RenameSessionsBatch(
+            string geminiPath,
+            Dictionary<string, string> cidToNewTitle,
+            bool allowHotWriteSkipRunning,
+            bool deferLayer3Pb,
+            out RenameBatchResult result)
+        {
             return SessionLifecycleService.RenameSessionsBatch(
-                geminiPath, cidToNewTitle, allowHotWriteSkipRunning, out result);
+                geminiPath, cidToNewTitle, allowHotWriteSkipRunning, deferLayer3Pb, out result);
         }
 
         public static int MoveSessionsToProject(

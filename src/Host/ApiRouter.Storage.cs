@@ -40,6 +40,17 @@ namespace AntigravityCompanion
                 HttpProtocolHelper.WriteJsonResponse(stream, 200, res.Data);
                 return true;
             }
+            if (path == "/api/storage/cold-archives" && req.Method == "GET")
+            {
+                List<Dictionary<string, object>> list = StorageSlimService.ListColdArchives(_host.GeminiPath);
+                List<object> objList = new List<object>(list.Count);
+                for (int i = 0; i < list.Count; i++) objList.Add(list[i]);
+                Dictionary<string, object> resp = new Dictionary<string, object>();
+                resp["items"] = objList;
+                resp["count"] = list.Count;
+                HttpProtocolHelper.WriteJsonResponse(stream, 200, resp);
+                return true;
+            }
             if (path == "/api/storage/slim" && req.Method == "POST")
             {
                 WriteDispatcherResult(stream, _dispatcher.Execute("storage.slim", body));
@@ -54,7 +65,7 @@ namespace AntigravityCompanion
             }
             if (path == "/api/gc/clean" && req.Method == "POST")
             {
-                if (!_host.TryAcquireJob("gc_clean", "正在执行两阶段安全孤儿清理..."))
+                if (!_host.TryAcquireJob("gc_clean", "正在将残留垃圾文件安全移入回收站..."))
                 {
                     HttpProtocolHelper.WriteJsonError(stream, 409, "当前有其他后台写入任务正在执行，请稍后再试。");
                     return true;
@@ -63,18 +74,30 @@ namespace AntigravityCompanion
                 {
                     bool closeIde = UnifiedJson.GetBool(body, "closeIdeIfRunning", false);
                     bool forceKill = UnifiedJson.GetBool(body, "forceKill", false);
+                    if (!EnsureIdeClosedIfNeeded(closeIde, forceKill, stream)) return true;
+
                     DeletionResult delRes;
-                    string err;
+                    string trashId = string.Empty;
                     lock (_host.MutationLock)
                     {
-                        bool ok = WorkspaceService.CleanOrphansSafe(_host.GeminiPath, closeIde, forceKill,
-                            delegate(string m) { _host.AppendLog("info", m); }, out delRes, out err);
-                        if (!ok)
+                        List<ConversationSummaryInfo> sumsSnap;
+                        lock (_host.StateLock)
                         {
-                            HttpProtocolHelper.WriteJsonError(stream, 409, err ?? "孤儿清理未执行。");
-                            return true;
+                            sumsSnap = new List<ConversationSummaryInfo>(_host.LocalSummariesUnsafe);
                         }
-                        OrphanScanResult rescanned = WorkspaceService.ScanOrphansReadOnly(_host.GeminiPath);
+                        List<string> warns = new List<string>();
+                        OrphanGcInventory inv = StorageSlimService.ScanCompleteOrphans(_host.GeminiPath, sumsSnap, warns);
+                        if (inv.TotalOrphanItems == 0)
+                        {
+                            delRes = new DeletionResult();
+                        }
+                        else
+                        {
+                            delRes = TrashAndBackupService.SoftDeleteOrphans(_host.GeminiPath, inv, out trashId);
+                        }
+
+                        OrphanGcInventory afterInv = StorageSlimService.ScanCompleteOrphans(_host.GeminiPath, sumsSnap, null);
+                        OrphanScanResult rescanned = ConvertInventoryToOrphanScan(afterInv);
                         lock (_host.StateLock)
                         {
                             _host.LastOrphanScanUnsafe = rescanned;
@@ -88,7 +111,8 @@ namespace AntigravityCompanion
                     resp["deletedBrainDirs"] = delRes.DeletedBrainDirsCount;
                     resp["deletedAnnotations"] = delRes.DeletedAnnotationsCount;
                     resp["freedMegabytes"] = Math.Round(delRes.FreedMegabytes, 2);
-                    _host.AppendLog("success", string.Format("孤儿清理完成：清理数据库 {0} 个、脑区 {1} 个、标注 {2} 个，释放 {3:F2} MB。",
+                    resp["trashId"] = trashId ?? string.Empty;
+                    _host.AppendLog("success", string.Format("残留垃圾文件已移入回收站：数据库 {0} 个、产物目录 {1} 个、标题标注 {2} 个，释放 {3:F2} MB。",
                         delRes.DeletedDbFilesCount, delRes.DeletedBrainDirsCount, delRes.DeletedAnnotationsCount, delRes.FreedMegabytes));
                     HttpProtocolHelper.WriteJsonResponse(stream, 200, resp);
                 }
@@ -146,6 +170,7 @@ namespace AntigravityCompanion
                     : UnifiedJson.GetBool(args, "runPreFlight", true);
                 slimReq.CleanOrphans = UnifiedJson.GetBool(args, "cleanOrphans", false);
                 slimReq.PruneLegacyCliArchive = UnifiedJson.GetBool(args, "pruneLegacyCliArchive", false);
+                slimReq.MoveOrphansToTrash = !UnifiedJson.GetBool(args, "skipTrash", false);
 
                 StorageSlimResult slimRes;
                 lock (_host.MutationLock)
@@ -292,6 +317,7 @@ namespace AntigravityCompanion
             d["freedOrphanBytes"] = r.FreedOrphanBytes;
             d["legacyCliPruned"] = r.LegacyCliPruned;
             d["legacyCliArchivePath"] = r.LegacyCliArchivePath ?? string.Empty;
+            d["trashId"] = r.TrashId ?? string.Empty;
             d["errorMessage"] = r.ErrorMessage ?? string.Empty;
             d["warnings"] = new List<object>(OverviewBuilder.ToObjList(r.Warnings));
 

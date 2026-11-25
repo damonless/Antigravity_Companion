@@ -1246,3 +1246,158 @@ html, body {
   padding-top: 14px;
 }
 
+/* ── Phase 1 & Phase 2 UX Enhancements ── */
+.disconnect-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.56);
+  backdrop-filter: blur(3px);
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.disconnect-card {
+  width: min(440px, 92vw);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  padding: 22px 24px;
+  text-align: center;
+}
+.disconnect-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+.disconnect-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.stale-banner {
+  padding: 8px 18px;
+  background: var(--blue-soft, rgba(59, 130, 246, 0.1));
+  border-bottom: 1px solid rgba(59, 130, 246, 0.28);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.subtab-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.btn-busy {
+  opacity: 0.72;
+  cursor: wait !important;
+  pointer-events: none;
+}
+
+.dropdown-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 170px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  box-shadow: var(--shadow-lg);
+  padding: 5px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dropdown-item {
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dropdown-item:hover {
+  background: var(--bg-subtle);
+}
+.dropdown-item.danger {
+  color: var(--red-text);
+}
+.dropdown-item.danger:hover {
+  background: var(--red-soft);
+}
+.dropdown-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 3px 4px;
+}
+
+.del-manifest-list {
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--bg-subtle);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 10px 0;
+}
+.del-manifest-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.del-manifest-row:last-child {
+  border-bottom: none;
+}
+
+.trash-item-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.snap-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.snap-history-row:last-child {
+  border-bottom: none;
+}
+
+

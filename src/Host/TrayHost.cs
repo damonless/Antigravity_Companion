@@ -123,6 +123,7 @@ namespace AntigravityCompanion
         private Icon _ownedAppIcon;
         private string _activeHotkeyText = string.Empty;
         private int _lastObservedSettingsVersion = -1;
+        private long _lastOpenTicksMs = -10000;
         private bool _disposed;
 
         public TrayHost(LocalWebHost host, string launchUrl, bool trayOnly)
@@ -163,10 +164,6 @@ namespace AntigravityCompanion
             {
                 if (e.Button == MouseButtons.Left)
                     OpenCockpit();
-            };
-            _notifyIcon.DoubleClick += delegate(object sender, EventArgs e)
-            {
-                OpenCockpit();
             };
 
             if (showTrayAndRegisterHotkey)
@@ -340,8 +337,23 @@ namespace AntigravityCompanion
             }
         }
 
+        internal bool TryAcquireOpenCockpitDebounce(long nowMs, long cooldownMs)
+        {
+            long effectiveCooldown = cooldownMs > 0 ? cooldownMs : 800;
+            if (_lastOpenTicksMs >= 0 && (nowMs - _lastOpenTicksMs) >= 0 && (nowMs - _lastOpenTicksMs) < effectiveCooldown)
+            {
+                return false;
+            }
+            _lastOpenTicksMs = nowMs;
+            return true;
+        }
+
         private void OpenCockpit()
         {
+            long nowMs = DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond;
+            if (!TryAcquireOpenCockpitDebounce(nowMs, 800))
+                return;
+
             if (!string.IsNullOrEmpty(_launchUrl))
             {
                 WebShellLauncher.OpenUrlInPreferredShell(_launchUrl);

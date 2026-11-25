@@ -2181,6 +2181,16 @@ namespace AntigravityCompanion
             bool allowHotWrite,
             out RenameRollbackResult result)
         {
+            return RollbackSnapshot(geminiPath, snapshotDir, allowHotWrite, false, out result);
+        }
+
+        public static bool RollbackSnapshot(
+            string geminiPath,
+            string snapshotDir,
+            bool allowHotWrite,
+            bool deferLayer3Pb,
+            out RenameRollbackResult result)
+        {
             result = new RenameRollbackResult();
             if (string.IsNullOrEmpty(geminiPath) || string.IsNullOrEmpty(snapshotDir))
             {
@@ -2366,7 +2376,12 @@ namespace AntigravityCompanion
                 }
             }
 
-            if (pbExists)
+            if (deferLayer3Pb && pbExists)
+            {
+                result.PbSkippedDueToLock = true;
+                result.Warnings.Add("主窗口运行中已延迟回滚 Layer 3 (.pb)，将在主窗口退出后自动补刷。");
+            }
+            else if (pbExists)
             {
                 try
                 {
@@ -3046,8 +3061,17 @@ namespace AntigravityCompanion
             Dictionary<string, string> cidToNewTitle,
             bool allowHotWriteSkipRunning)
         {
+            return ApplyRenameBatch(geminiPath, cidToNewTitle, allowHotWriteSkipRunning, false);
+        }
+
+        public static OperationResult<RenameBatchResult> ApplyRenameBatch(
+            string geminiPath,
+            Dictionary<string, string> cidToNewTitle,
+            bool allowHotWriteSkipRunning,
+            bool deferLayer3Pb)
+        {
             RenameBatchResult res;
-            bool ok = SessionLifecycleService.RenameSessionsBatch(geminiPath, cidToNewTitle, allowHotWriteSkipRunning, out res);
+            bool ok = SessionLifecycleService.RenameSessionsBatch(geminiPath, cidToNewTitle, allowHotWriteSkipRunning, deferLayer3Pb, out res);
             if (!ok)
             {
                 string err = (res != null && res.Warnings != null && res.Warnings.Count > 0)

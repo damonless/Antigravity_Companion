@@ -162,6 +162,7 @@ namespace AntigravityCompanion
         public bool RunPreFlight;
         public bool CleanOrphans;
         public bool PruneLegacyCliArchive;
+        public bool MoveOrphansToTrash;
 
         public StorageSlimRequest()
         {
@@ -172,6 +173,7 @@ namespace AntigravityCompanion
             RunPreFlight = true;
             CleanOrphans = false;
             PruneLegacyCliArchive = false;
+            MoveOrphansToTrash = false;
         }
     }
 
@@ -211,6 +213,7 @@ namespace AntigravityCompanion
         public long FreedOrphanBytes;
         public bool LegacyCliPruned;
         public string LegacyCliArchivePath;
+        public string TrashId;
         public List<StorageSlimItemResult> Items;
         public List<string> Warnings;
         public string ErrorMessage;
@@ -225,6 +228,7 @@ namespace AntigravityCompanion
             ColdArchivePath = string.Empty;
             PreFlightReport = string.Empty;
             LegacyCliArchivePath = string.Empty;
+            TrashId = string.Empty;
             Items = new List<StorageSlimItemResult>();
             Warnings = new List<string>();
             ErrorMessage = string.Empty;
@@ -727,7 +731,17 @@ namespace AntigravityCompanion
             if (req.CleanOrphans || req.Mode == StorageSlimMode.OrphanGcOnly)
             {
                 OrphanGcInventory inv = ScanCompleteOrphans(safeGemini, summaries, result.Warnings);
-                DeletionResult gcRes = CleanOrphanedInventory(inv);
+                DeletionResult gcRes;
+                if (req.MoveOrphansToTrash && inv.TotalOrphanItems > 0)
+                {
+                    string trashId;
+                    gcRes = TrashAndBackupService.SoftDeleteOrphans(safeGemini, inv, out trashId);
+                    result.TrashId = trashId ?? string.Empty;
+                }
+                else
+                {
+                    gcRes = CleanOrphanedInventory(inv);
+                }
                 result.DeletedOrphanCount = gcRes.DeletedDbFilesCount + gcRes.DeletedBrainDirsCount + gcRes.DeletedAnnotationsCount;
                 result.FreedOrphanBytes = gcRes.FreedBytes;
                 result.FreedBytes += gcRes.FreedBytes;
@@ -816,6 +830,7 @@ namespace AntigravityCompanion
                 DbOffenderInfo target = new DbOffenderInfo();
                 target.ConversationId = cid;
                 target.Title = s.DisplayTitle ?? cid;
+                target.ProjectName = s.ProjectName ?? string.Empty;
                 target.IsCli = s.IsCliSession;
                 target.IsSubagent = s.IsSubagent;
                 target.Status = s.RunStatus ?? string.Empty;
@@ -985,6 +1000,7 @@ namespace AntigravityCompanion
                             Dictionary<string, object> mItem = new Dictionary<string, object>(StringComparer.Ordinal);
                             mItem["cid"] = t.ConversationId;
                             mItem["title"] = t.Title ?? string.Empty;
+                            mItem["projectName"] = t.ProjectName ?? string.Empty;
                             mItem["isCli"] = t.IsCli;
                             mItem["originalPath"] = t.DbPath;
                             mItem["entryName"] = entryName;
@@ -2105,6 +2121,78 @@ namespace AntigravityCompanion
             }
             catch { }
             return false;
+        }
+
+        public static List<Dictionary<string, object>> ListColdArchives(string geminiPath)
+        {
+            List<Dictionary<string, object>> list = new List<Dictionary<string, object>>();
+            if (string.IsNullOrWhiteSpace(geminiPath)) return list;
+            string archiveDir = Path.Combine(geminiPath, "companion-cold-archives");
+            if (!Directory.Exists(archiveDir)) return list;
+
+            try
+            {
+                string[] files = Directory.GetFiles(archiveDir, "*.agy", SearchOption.TopDirectoryOnly);
+                List<FileInfo> infos = new List<FileInfo>(files.Length);
+                for (int i = 0; i < files.Length; i++)
+                {
+                    try { infos.Add(new FileInfo(files[i])); } catch { }
+                }
+                infos.Sort(delegate(FileInfo a, FileInfo b)
+                {
+                    int cmp = DateTime.Compare(b.LastWriteTimeUtc, a.LastWriteTimeUtc);
+                    if (cmp != 0) return cmp;
+                    return string.Compare(b.Name, a.Name, StringComparison.OrdinalIgnoreCase);
+                });
+
+                int limit = Math.Min(infos.Count, 30);
+                for (int i = 0; i < limit; i++)
+                {
+                    FileInfo fi = infos[i];
+                    string archiveType = "companion-cold-archive";
+                    int itemCount = 0;
+                    string mode = string.Empty;
+                    try
+                    {
+                        using (FileStream fs = new FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                        using (ZipArchive zip = new ZipArchive(fs, ZipArchiveMode.Read))
+                        {
+                            ZipArchiveEntry man = zip.GetEntry("manifest.json");
+                            if (man != null)
+                            {
+                                using (StreamReader sr = new StreamReader(man.Open(), Encoding.UTF8))
+                                {
+                                    object parsed;
+                                    if (UnifiedJson.TryParse(sr.ReadToEnd(), out parsed))
+                                    {
+                                        Dictionary<string, object> dict = UnifiedJson.AsDict(parsed);
+                                        if (dict != null)
+                                        {
+                                            archiveType = UnifiedJson.GetString(dict, "archive_type", archiveType);
+                                            itemCount = UnifiedJson.GetInt(dict, "count", 0);
+                                            mode = UnifiedJson.GetString(dict, "mode", string.Empty);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+
+                    Dictionary<string, object> row = new Dictionary<string, object>();
+                    row["fileName"] = fi.Name;
+                    row["filePath"] = fi.FullName;
+                    row["sizeBytes"] = fi.Length;
+                    row["sizeMegabytes"] = Math.Round(fi.Length / (1024.0 * 1024.0), 2);
+                    row["createdUtc"] = fi.LastWriteTimeUtc.ToString("o", CultureInfo.InvariantCulture);
+                    row["archiveType"] = archiveType;
+                    row["itemCount"] = itemCount;
+                    row["mode"] = mode;
+                    list.Add(row);
+                }
+            }
+            catch { }
+            return list;
         }
 
         private static bool DeleteDirectoryQuiet(string dirPath)

@@ -25,6 +25,18 @@ namespace AntigravityCompanion
             return d;
         }
 
+        public static Dictionary<string, object> BuildIdeStatusDict(LocalWebHost host)
+        {
+            if (host == null) return BuildIdeStatusDict();
+            int p, ls;
+            host.GetIdeProcessCounts(out p, out ls);
+            Dictionary<string, object> d = new Dictionary<string, object>();
+            d["running"] = (p > 0 || ls > 0);
+            d["parentCount"] = p;
+            d["lsCount"] = ls;
+            return d;
+        }
+
         public static Dictionary<string, object> BuildJobStatusDict(bool busy, string jobType, string msg, int pct)
         {
             Dictionary<string, object> d = new Dictionary<string, object>();
@@ -42,6 +54,8 @@ namespace AntigravityCompanion
             d["totalItems"] = scan.TotalOrphanItems;
             d["sessionCount"] = scan.OrphanSessionIds.Count;
             d["dbFilesCount"] = scan.OrphanDbFiles.Count;
+            d["orphanDbBakCount"] = scan.OrphanDbBakCount;
+            d["orphanDbJournalCount"] = scan.OrphanDbJournalCount;
             d["brainDirsCount"] = scan.OrphanBrainDirs.Count;
             d["annotationFilesCount"] = scan.OrphanAnnotationFiles.Count;
             d["totalMegabytes"] = Math.Round(scan.TotalOrphanMegabytes, 2);
@@ -59,7 +73,11 @@ namespace AntigravityCompanion
         public static Dictionary<string, object> BuildOverviewPayload(LocalWebHost host)
         {
             // FIX P2-3: Enumerate Win32 IDE processes strictly OUTSIDE _stateLock
-            Dictionary<string, object> ideStatus = BuildIdeStatusDict();
+            Dictionary<string, object> ideStatus = BuildIdeStatusDict(host);
+            int pendingPbCount = TrashAndBackupService.GetPendingPbSyncCount(host.GeminiPath);
+            Dictionary<string, object> trashSummary = TrashAndBackupService.ListTrashPayload(host.GeminiPath);
+            int trashCount = UnifiedJson.GetInt(trashSummary, "totalCount", 0);
+            object trashMbObj = trashSummary.ContainsKey("totalMegabytes") ? trashSummary["totalMegabytes"] : 0.0;
 
             Dictionary<string, object> d = new Dictionary<string, object>();
             lock (host.StateLock)
@@ -122,6 +140,9 @@ namespace AntigravityCompanion
                 counts["untaggedActionableCount"] = untaggedActionableCount;
                 counts["untaggedLockedActiveCount"] = untaggedLockedActiveCount;
                 counts["lockedSessionsCount"] = lockedSessions.Count;
+                counts["pendingPbSyncCount"] = pendingPbCount;
+                counts["trashCount"] = trashCount;
+                counts["trashMegabytes"] = trashMbObj;
 
                 // FIX P3: Separate local missing paths vs vault missing paths accurately
                 int aligned = 0, remoteOnly = 0, localOnly = 0, remoteNewer = 0, localNewer = 0, bothMod = 0, conflict = 0;
@@ -301,9 +322,10 @@ namespace AntigravityCompanion
 
         public static Dictionary<string, object> BuildRenameCandidatesPayload(LocalWebHost host)
         {
-            Dictionary<string, object> ideStatus = BuildIdeStatusDict();
+            Dictionary<string, object> ideStatus = BuildIdeStatusDict(host);
             List<SessionRenameCandidate> cands = BuildAllCandidateObjects(host);
             List<RenameSnapshotInfo> snaps = RenameBackupManager.ListSnapshots(host.GeminiPath);
+            int pendingPbCount = TrashAndBackupService.GetPendingPbSyncCount(host.GeminiPath);
 
             List<object> items = new List<object>(cands.Count);
             List<object> lockedList = new List<object>();
@@ -382,6 +404,7 @@ namespace AntigravityCompanion
             resp["lockedActiveCount"] = lockedActiveCount;
             resp["lockedSessions"] = lockedList;
             resp["ide"] = ideStatus;
+            resp["pendingPbSyncCount"] = pendingPbCount;
             return resp;
         }
 
@@ -521,6 +544,9 @@ namespace AntigravityCompanion
                 d["backupTime"] = backupIndex.BackupTime ?? string.Empty;
                 d["version"] = backupIndex.Version ?? string.Empty;
                 d["backupTier"] = backupIndex.BackupTier ?? string.Empty;
+                d["isColdArchive"] = backupIndex.IsColdArchive;
+                d["coldArchiveType"] = backupIndex.ColdArchiveType ?? string.Empty;
+                d["hasLegacyCliSummaryDb"] = backupIndex.HasLegacyCliSummaryDb;
                 d["sizeMegabytes"] = Math.Round(backupIndex.TotalZipSizeBytes / (1024.0 * 1024.0), 2);
                 d["capabilitiesCount"] = backupIndex.Capabilities != null ? backupIndex.Capabilities.Count : 0;
                 d["projectsCount"] = backupIndex.Projects != null ? backupIndex.Projects.Count : 0;

@@ -54,17 +54,29 @@ namespace AntigravityCompanion
 
             _dispatcher.Register("gc.scan", delegate(Dictionary<string, object> args)
             {
-                OperationResult<OrphanScanResult> scanRes = SessionLifecycleService.ScanOrphanedDataResult(_host.GeminiPath);
-                if (!scanRes.Ok)
-                    return OperationResult<Dictionary<string, object>>.Fail(scanRes.ErrorMessage, scanRes.Warnings);
-
-                lock (_host.StateLock)
+                try
                 {
-                    _host.LastOrphanScanUnsafe = scanRes.Data;
+                    List<ConversationSummaryInfo> sumsSnap;
+                    lock (_host.StateLock)
+                    {
+                        sumsSnap = new List<ConversationSummaryInfo>(_host.LocalSummariesUnsafe);
+                    }
+                    List<string> warns = new List<string>();
+                    OrphanGcInventory inv = StorageSlimService.ScanCompleteOrphans(_host.GeminiPath, sumsSnap, warns);
+                    OrphanScanResult unified = ConvertInventoryToOrphanScan(inv);
+
+                    lock (_host.StateLock)
+                    {
+                        _host.LastOrphanScanUnsafe = unified;
+                    }
+                    _host.AppendLog("info", string.Format("残留垃圾文件只读扫描完成：发现 {0} 项可清理（{1:F2} MB）。",
+                        unified.TotalOrphanItems, unified.TotalOrphanMegabytes));
+                    return OperationResult<Dictionary<string, object>>.Success(OverviewBuilder.SerializeOrphanScan(unified), warns);
                 }
-                _host.AppendLog("info", string.Format("孤儿只读体检完成：发现 {0} 个可清理项（{1:F2} MB）。",
-                    scanRes.Data.TotalOrphanItems, scanRes.Data.TotalOrphanMegabytes));
-                return OperationResult<Dictionary<string, object>>.Success(OverviewBuilder.SerializeOrphanScan(scanRes.Data));
+                catch (Exception ex)
+                {
+                    return OperationResult<Dictionary<string, object>>.Fail(ex.Message);
+                }
             });
 
             _dispatcher.Register("sessions.search", delegate(Dictionary<string, object> args)
@@ -232,6 +244,45 @@ namespace AntigravityCompanion
             {
                 return ExecuteBackupImportCommand(args);
             });
+
+            // Unified Trash, Config Backups & Pending Layer-3 Auto-Flush Commands
+            _dispatcher.Register("trash.list", delegate(Dictionary<string, object> args)
+            {
+                return OperationResult<Dictionary<string, object>>.Success(TrashAndBackupService.ListTrashPayload(_host.GeminiPath));
+            });
+
+            _dispatcher.Register("trash.restore", delegate(Dictionary<string, object> args)
+            {
+                return ExecuteTrashRestoreCommand(args);
+            });
+
+            _dispatcher.Register("trash.purge", delegate(Dictionary<string, object> args)
+            {
+                return ExecuteTrashPurgeCommand(args);
+            });
+
+            _dispatcher.Register("config.backups.list", delegate(Dictionary<string, object> args)
+            {
+                string filterPath = UnifiedJson.GetString(args, "path", string.Empty);
+                List<Dictionary<string, object>> list = TrashAndBackupService.ListConfigBackups(
+                    _host.GeminiPath, _host.HomePath, _host.RepoPath, filterPath);
+                List<object> objList = new List<object>(list.Count);
+                for (int i = 0; i < list.Count; i++) objList.Add(list[i]);
+                Dictionary<string, object> resp = new Dictionary<string, object>();
+                resp["items"] = objList;
+                resp["count"] = list.Count;
+                return OperationResult<Dictionary<string, object>>.Success(resp);
+            });
+
+            _dispatcher.Register("config.backups.restore", delegate(Dictionary<string, object> args)
+            {
+                return ExecuteConfigBackupRestoreCommand(args);
+            });
+
+            _dispatcher.Register("rename.flush_pending", delegate(Dictionary<string, object> args)
+            {
+                return ExecuteRenameFlushPendingCommand(args);
+            });
         }
 
         public void RouteApi(NetworkStream stream, ParsedHttpRequest req, string path)
@@ -247,23 +298,38 @@ namespace AntigravityCompanion
             }
             if (path == "/api/ide/status" && req.Method == "GET")
             {
-                HttpProtocolHelper.WriteJsonResponse(stream, 200, OverviewBuilder.BuildIdeStatusDict());
+                HttpProtocolHelper.WriteJsonResponse(stream, 200, OverviewBuilder.BuildIdeStatusDict(_host));
                 return;
             }
             if (path == "/api/ide/close" && req.Method == "POST")
             {
-                // FIX P2-4: Graceful close only unless forceKill: true is explicitly passed
+                // FIX P2-4 + Phase 1: Graceful close first; return structured 409 IDE_CLOSE_TIMEOUT when unresponsive unless forceKill: true
                 bool forceKill = UnifiedJson.GetBool(body, "forceKill", false);
+                int pBefore, lsBefore;
+                _host.GetIdeProcessCounts(out pBefore, out lsBefore);
                 string closeErr;
-                bool ok = ProcessGuardService.CloseAntigravityProcesses(forceKill,
+                bool ok = _host.TryCloseAntigravityProcesses(forceKill,
                     delegate(string msg) { _host.AppendLog("info", msg); }, out closeErr);
                 if (!ok)
                 {
-                    HttpProtocolHelper.WriteJsonError(stream, 409, closeErr ?? "无法完全关闭 Antigravity 进程。");
+                    int pAfter, lsAfter;
+                    _host.GetIdeProcessCounts(out pAfter, out lsAfter);
+                    Dictionary<string, object> errDict = new Dictionary<string, object>();
+                    errDict["ok"] = false;
+                    errDict["error"] = closeErr ?? "无法完全关闭 Antigravity 主窗口进程。";
+                    errDict["parentCount"] = pAfter > 0 ? pAfter : pBefore;
+                    errDict["lsCount"] = lsAfter > 0 ? lsAfter : lsBefore;
+                    if (!forceKill)
+                    {
+                        errDict["code"] = "IDE_CLOSE_TIMEOUT";
+                        errDict["canForceKill"] = true;
+                    }
+                    HttpProtocolHelper.WriteJsonResponse(stream, 409, errDict);
                     return;
                 }
-                _host.AppendLog("success", "已安全关闭 Antigravity 相关进程。");
-                Dictionary<string, object> d = OverviewBuilder.BuildIdeStatusDict();
+                _host.AppendLog("success", "已安全关闭 Antigravity 主窗口进程。");
+                _host.CheckIdeStatusAndAutoFlushNow();
+                Dictionary<string, object> d = OverviewBuilder.BuildIdeStatusDict(_host);
                 d["ok"] = true;
                 HttpProtocolHelper.WriteJsonResponse(stream, 200, d);
                 return;
@@ -494,6 +560,7 @@ namespace AntigravityCompanion
             {
                 roots.Add(_host.GeminiPath);
                 roots.Add(Path.Combine(_host.GeminiPath, "companion-cold-archives"));
+                roots.Add(TrashAndBackupService.GetTrashRoot(_host.GeminiPath));
             }
             if (!string.IsNullOrEmpty(_host.RepoPath)) roots.Add(_host.RepoPath);
             if (_host.SnapshotService != null)
@@ -543,36 +610,37 @@ namespace AntigravityCompanion
             errPayload = null;
 
             int p, ls;
-            if (_host.IdeRunningOverride != null)
-            {
-                if (!_host.IdeRunningOverride()) return true;
-                p = 1;
-                ls = 0;
-            }
-            else
-            {
-                ProcessGuardService.GetRunningAntigravityProcessCounts(out p, out ls);
-                if (p == 0 && ls == 0) return true;
-            }
+            _host.GetIdeProcessCounts(out p, out ls);
+            if (p == 0 && ls == 0) return true;
+
             if (!closeIde)
             {
                 errHttpCode = 409;
                 errPayload = new Dictionary<string, object>();
                 errPayload["ok"] = false;
-                errPayload["error"] = string.Format("检测到 {0} 个 Antigravity 主进程与 {1} 个语言服务进程正在运行，请确认关闭 IDE 后重试。", p, ls);
+                errPayload["error"] = string.Format("检测到 {0} 个 Antigravity 主窗口与 {1} 个语言服务进程正在运行，请确认关闭后再继续。", p, ls);
                 errPayload["code"] = "IDE_RUNNING";
                 errPayload["parentCount"] = p;
                 errPayload["lsCount"] = ls;
                 return false;
             }
             string closeErr;
-            // FIX P1-11 & P2-4: Graceful close only unless forceKill == true!
-            if (!ProcessGuardService.CloseAntigravityProcesses(forceKill, delegate(string m) { _host.AppendLog("info", m); }, out closeErr))
+            // FIX P1-11, P2-4 & Phase 1: Graceful close first; structured 409 IDE_CLOSE_TIMEOUT escape hatch when unresponsive
+            if (!_host.TryCloseAntigravityProcesses(forceKill, delegate(string m) { _host.AppendLog("info", m); }, out closeErr))
             {
+                int pAfter, lsAfter;
+                _host.GetIdeProcessCounts(out pAfter, out lsAfter);
                 errHttpCode = 409;
                 errPayload = new Dictionary<string, object>();
                 errPayload["ok"] = false;
-                errPayload["error"] = closeErr ?? "无法关闭 Antigravity 进程。";
+                errPayload["error"] = closeErr ?? "Antigravity 主窗口未在限定时间内关闭。";
+                errPayload["parentCount"] = pAfter > 0 ? pAfter : p;
+                errPayload["lsCount"] = lsAfter > 0 ? lsAfter : ls;
+                if (!forceKill)
+                {
+                    errPayload["code"] = "IDE_CLOSE_TIMEOUT";
+                    errPayload["canForceKill"] = true;
+                }
                 return false;
             }
             return true;
@@ -595,19 +663,11 @@ namespace AntigravityCompanion
             errMsg = null;
 
             int p, ls;
-            if (_host.IdeRunningOverride != null)
-            {
-                if (!_host.IdeRunningOverride()) return true;
-                p = 1;
-                ls = 0;
-            }
-            else
-            {
-                ProcessGuardService.GetRunningAntigravityProcessCounts(out p, out ls);
-                if (p == 0 && ls == 0) return true;
-            }
+            _host.GetIdeProcessCounts(out p, out ls);
+            if (p == 0 && ls == 0) return true;
 
-            if (string.Equals(strategyStr, "HotWritePersistentLayers", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(strategyStr, "HotWritePersistentLayers", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(strategyStr, "SmartAuto", StringComparison.OrdinalIgnoreCase))
             {
                 hotWriteOnly = true;
                 return true;
@@ -615,11 +675,14 @@ namespace AntigravityCompanion
             if (string.Equals(strategyStr, "CloseAndFullWrite", StringComparison.OrdinalIgnoreCase))
             {
                 string closeErr;
-                // FIX P1-11 & P2-4: Graceful close only unless forceKill == true!
-                if (!ProcessGuardService.CloseAntigravityProcesses(forceKill, delegate(string m) { _host.AppendLog("info", m); }, out closeErr))
+                // FIX P1-11, P2-4 & Phase 1: Graceful close only unless forceKill == true; emit IDE_CLOSE_TIMEOUT if unresponsive
+                if (!_host.TryCloseAntigravityProcesses(forceKill, delegate(string m) { _host.AppendLog("info", m); }, out closeErr))
                 {
                     errCode = 409;
-                    errMsg = closeErr ?? "无法关闭 Antigravity 进程。";
+                    if (!forceKill)
+                        errMsg = string.Format("IDE_CLOSE_TIMEOUT:{0}:{1}:{2}", p, ls, closeErr ?? "Antigravity 主窗口未响应优雅关闭。");
+                    else
+                        errMsg = closeErr ?? "无法关闭 Antigravity 主窗口进程。";
                     return false;
                 }
                 hotWriteOnly = false;
@@ -647,8 +710,27 @@ namespace AntigravityCompanion
                 d["code"] = "IDE_RUNNING";
                 d["parentCount"] = p;
                 d["lsCount"] = ls;
-                d["error"] = string.Format("检测到 {0} 个 Antigravity 主进程与 {1} 个语言服务进程正在运行，请选择写入模式。", p, ls);
+                d["error"] = string.Format("检测到 {0} 个 Antigravity 主窗口与 {1} 个语言服务进程正在运行，请选择写入模式。", p, ls);
                 return FailCommandPayload(errCode > 0 ? errCode : 409, d, d["error"] as string);
+            }
+            if (!string.IsNullOrEmpty(errMsg) && errMsg.StartsWith("IDE_CLOSE_TIMEOUT:", StringComparison.Ordinal))
+            {
+                string[] parts = errMsg.Split(new char[] { ':' }, 4);
+                int p = 0, ls = 0;
+                string detail = parts.Length >= 4 ? parts[3] : "Antigravity 主窗口未能及时响应关闭请求。";
+                if (parts.Length >= 3)
+                {
+                    int.TryParse(parts[1], out p);
+                    int.TryParse(parts[2], out ls);
+                }
+                Dictionary<string, object> d = new Dictionary<string, object>();
+                d["ok"] = false;
+                d["code"] = "IDE_CLOSE_TIMEOUT";
+                d["canForceKill"] = true;
+                d["parentCount"] = p;
+                d["lsCount"] = ls;
+                d["error"] = detail;
+                return FailCommandPayload(errCode > 0 ? errCode : 409, d, detail);
             }
             if (errCode == 409 && !string.IsNullOrEmpty(errMsg) && errMsg.IndexOf("其他后台任务", StringComparison.Ordinal) >= 0)
             {
@@ -668,7 +750,7 @@ namespace AntigravityCompanion
             result = null;
             errCode = 0;
             errMsg = null;
-            if (!_host.TryAcquireJob("rename_execute", "正在执行三层会话重命名与快照保护..."))
+            if (!_host.TryAcquireJob("rename_execute", "正在保存对话新标题与改名撤销记录..."))
             {
                 errCode = 409;
                 errMsg = "当前有其他后台任务正在执行，请稍后再试。";
@@ -680,29 +762,87 @@ namespace AntigravityCompanion
                 if (!ResolveStrategyExecution(strategyStr, forceKill, out hotOnly, out errCode, out errMsg))
                     return false;
 
+                bool deferPb = hotOnly && _host.IsIdeRunning();
                 OperationResult<RenameBatchResult> opRes;
                 lock (_host.MutationLock)
                 {
-                    opRes = SessionRenameService.ApplyRenameBatch(_host.GeminiPath, cidToNewTitle, hotOnly);
-                    if (opRes.Ok) _host.ReloadAllLocalStateLocked();
+                    opRes = SessionRenameService.ApplyRenameBatch(_host.GeminiPath, cidToNewTitle, hotOnly, deferPb);
+                    if (opRes.Ok && opRes.Data != null)
+                    {
+                        HashSet<string> skippedSet = new HashSet<string>(opRes.Data.SkippedRunningIds ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+                        Dictionary<string, string> appliedMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                        foreach (KeyValuePair<string, string> kvp in cidToNewTitle)
+                        {
+                            if (!skippedSet.Contains(kvp.Key))
+                                appliedMap[kvp.Key] = kvp.Value;
+                        }
+                        if (deferPb || !opRes.Data.Layer3Updated)
+                        {
+                            TrashAndBackupService.EnqueuePendingPbSync(_host.GeminiPath, appliedMap);
+                        }
+                        else
+                        {
+                            TrashAndBackupService.RemovePendingPbSync(_host.GeminiPath, appliedMap.Keys);
+                        }
+                        _host.ReloadAllLocalStateLocked();
+                    }
                 }
 
                 result = opRes.Data;
                 if (!opRes.Ok || result == null)
                 {
                     errCode = 400;
-                    errMsg = !string.IsNullOrEmpty(opRes.ErrorMessage) ? opRes.ErrorMessage : "重命名未能更新任何会话，请检查会话状态或标题格式。";
+                    errMsg = !string.IsNullOrEmpty(opRes.ErrorMessage) ? opRes.ErrorMessage : "改名未能更新任何对话，请检查对话状态或标题格式。";
                     return false;
                 }
 
-                _host.AppendLog("success", string.Format("会话重命名完成：请求 {0} 条，实际 {1} 条，跳过运行中 {2} 条（L1={3}, L2={4}, L3={5}）。",
-                    cidToNewTitle.Count, result.RenamedCount, result.SkippedRunningIds.Count, result.Layer1Updated, result.Layer2Updated, result.Layer3Updated));
+                string deferHint = (hotOnly || !result.Layer3Updated)
+                    ? "（已在主窗口运行时安全保存，关闭 Antigravity 主窗口后将自动同步到侧边栏）"
+                    : string.Empty;
+                _host.AppendLog("success", string.Format("对话改名完成：请求 {0} 条，实际 {1} 条，跳过进行中 {2} 条{3}。",
+                    cidToNewTitle.Count, result.RenamedCount, result.SkippedRunningIds.Count, deferHint));
                 return true;
             }
             finally
             {
                 _host.ReleaseJob();
             }
+        }
+
+        private static OrphanScanResult ConvertInventoryToOrphanScan(OrphanGcInventory inv)
+        {
+            OrphanScanResult res = new OrphanScanResult();
+            if (inv == null) return res;
+            res.OrphanDbFiles.AddRange(inv.OrphanDbFiles);
+            res.OrphanDbFiles.AddRange(inv.OrphanDbBakFiles);
+            res.OrphanDbFiles.AddRange(inv.OrphanDbJournalFiles);
+            res.OrphanBrainDirs.AddRange(inv.OrphanBrainDirs);
+            res.OrphanAnnotationFiles.AddRange(inv.OrphanAnnotationFiles);
+            res.OrphanDbBakCount = inv.OrphanDbBakFiles.Count;
+            res.OrphanDbJournalCount = inv.OrphanDbJournalFiles.Count;
+            res.TotalOrphanBytes = inv.TotalOrphanBytes;
+
+            for (int i = 0; i < res.OrphanDbFiles.Count; i++)
+            {
+                string fn = Path.GetFileName(res.OrphanDbFiles[i]);
+                if (!string.IsNullOrEmpty(fn))
+                {
+                    int dot = fn.IndexOf('.');
+                    string stem = dot > 0 ? fn.Substring(0, dot) : fn;
+                    if (SessionMetadataExtractor.IsLikelyConversationId(stem)) res.OrphanSessionIds.Add(stem);
+                }
+            }
+            for (int i = 0; i < res.OrphanBrainDirs.Count; i++)
+            {
+                string dn = Path.GetFileName(res.OrphanBrainDirs[i]);
+                if (SessionMetadataExtractor.IsLikelyConversationId(dn)) res.OrphanSessionIds.Add(dn);
+            }
+            for (int i = 0; i < res.OrphanAnnotationFiles.Count; i++)
+            {
+                string stem = Path.GetFileNameWithoutExtension(res.OrphanAnnotationFiles[i]);
+                if (SessionMetadataExtractor.IsLikelyConversationId(stem)) res.OrphanSessionIds.Add(stem);
+            }
+            return res;
         }
 
         // ── Shared Selection & Parsing Helpers ──

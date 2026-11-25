@@ -8,7 +8,7 @@
 </head>
 <body>
   <div id="appShell" class="app-shell">
-    <!-- Left Primary Navigation (6 Views) -->
+    <!-- Left Primary Navigation (5 Main + Bottom Utilities) -->
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-logo" aria-hidden="true">A</div>
@@ -21,37 +21,38 @@
       <nav class="nav-list" id="navList" aria-label="主导航">
         <button class="nav-item active" data-view="overview" type="button">
           <span class="nav-icon" data-icon="home"></span>
-          <span class="nav-label">概览</span>
-        </button>
-        <button class="nav-item" data-view="cockpit" type="button">
-          <span class="nav-icon" data-icon="sliders"></span>
-          <span class="nav-label">驾驶舱</span>
+          <span class="nav-label">工作台</span>
         </button>
         <button class="nav-item" data-view="sessions" type="button">
           <span class="nav-icon" data-icon="message"></span>
-          <span class="nav-label">会话管理</span>
+          <span class="nav-label">对话管理</span>
+          <span class="nav-pill nav-pill-accent" id="navCountUntagged" title="待整理标题的主对话数">0</span>
         </button>
-        <button class="nav-item" data-view="rename" type="button">
-          <span class="nav-icon" data-icon="sparkles"></span>
-          <span class="nav-label">智能重命名</span>
-          <span class="nav-pill nav-pill-accent" id="navCountUntagged" title="可整理未标前缀会话">0</span>
+        <button class="nav-item" data-view="cockpit" type="button">
+          <span class="nav-icon" data-icon="sliders"></span>
+          <span class="nav-label">扩展与配置</span>
+          <span class="nav-pill" id="navCountCapDiffs" title="配置同步库待处理差异数">0</span>
         </button>
-        <button class="nav-item" data-view="vault" type="button">
-          <span class="nav-icon" data-icon="layers"></span>
-          <span class="nav-label">能力与规则</span>
-          <span class="nav-pill" id="navCountCapDiffs" title="待同步能力差异">0</span>
+        <button class="nav-item" data-view="storage" type="button">
+          <span class="nav-icon" data-icon="harddrive"></span>
+          <span class="nav-label">空间清理</span>
         </button>
         <button class="nav-item" data-view="backup" type="button">
           <span class="nav-icon" data-icon="archive"></span>
-          <span class="nav-label">存储与备份</span>
+          <span class="nav-label">备份与同步</span>
         </button>
       </nav>
 
       <div class="sidebar-footer">
-        <div class="sidebar-meta muted" id="navSessionTotalLabel">会话总数: 0</div>
+        <div class="sidebar-meta muted" id="navSessionTotalLabel">主对话总数: 0</div>
+        <button class="sidebar-btn" id="btnOpenTrash" data-view="trash" type="button">
+          <span class="nav-icon" data-icon="trash"></span>
+          <span style="flex:1;text-align:left">回收站</span>
+          <span class="nav-pill" id="navCountTrash" title="回收站可恢复项目数">0</span>
+        </button>
         <button class="sidebar-btn" id="btnOpenSettings" data-view="settings" type="button">
           <span class="nav-icon" data-icon="settings"></span>
-          <span>⚙ 系统设置</span>
+          <span>应用设置</span>
         </button>
         <button class="sidebar-btn" id="btnToggleTheme" type="button">
           <span class="nav-icon" data-icon="moon"></span>
@@ -59,7 +60,7 @@
         </button>
         <button class="sidebar-btn" id="btnGlobalRefresh" type="button">
           <span class="nav-icon" data-icon="refresh"></span>
-          <span>刷新环境</span>
+          <span>刷新数据</span>
         </button>
       </div>
     </aside>
@@ -69,14 +70,14 @@
       <!-- Minimal Top Bar -->
       <header class="topbar">
         <div class="topbar-left">
-          <h1 class="page-title" id="pageTitle">概览</h1>
-          <span class="page-subtitle" id="pageSubtitle">查看本机状态、工程入口、同步差异与存储健康度</span>
+          <h1 class="page-title" id="pageTitle">工作台</h1>
+          <span class="page-subtitle" id="pageSubtitle">查看本机状态、常用项目入口与安全提醒</span>
         </div>
         <div class="topbar-right">
-          <div class="ide-pill" id="ideStatusPill" title="点击可查看或安全关闭运行中的 Antigravity IDE">
+          <div class="ide-pill" id="ideStatusPill" title="实时监测 Antigravity 主窗口运行状态">
             <span class="status-dot idle" id="ideStatusDot"></span>
             <span id="ideStatusText">检测中...</span>
-            <button class="btn-inline-link hidden" id="btnQuickCloseIde" type="button">安全关闭 IDE</button>
+            <button class="btn-inline-link hidden" id="btnQuickCloseIde" type="button">关闭主窗口</button>
           </div>
           <div id="topbarActions" class="topbar-actions"></div>
         </div>
@@ -87,6 +88,15 @@
         <div class="job-banner-text" id="jobBannerText">正在处理...</div>
         <div class="job-progress-track">
           <div class="job-progress-fill" id="jobProgressFill"></div>
+        </div>
+      </div>
+
+      <!-- Non-intrusive Stale Data Notice (shown when background refresh completes while user is editing) -->
+      <div class="stale-banner hidden" id="staleDataBanner">
+        <span id="staleDataText">后台数据已更新。为保护您当前正在编辑的内容，界面暂未自动覆盖。</span>
+        <div class="row gap-xs">
+          <button class="btn btn-xs btn-primary" id="btnApplyStaleRefresh" type="button">立即刷新视图</button>
+          <button class="btn btn-xs" id="btnDismissStaleNotice" type="button">稍后</button>
         </div>
       </div>
 
@@ -101,6 +111,17 @@
           <span class="activity-chevron" id="activityChevron">展开日志 ▴</span>
         </button>
       </footer>
+    </div>
+  </div>
+
+  <!-- Disconnect Overlay (shown when local companion backend stops responding) -->
+  <div class="disconnect-overlay hidden" id="disconnectBanner" role="alertdialog" aria-modal="true">
+    <div class="disconnect-card">
+      <div class="disconnect-title">与 Antigravity 伴侣后台服务连接已断开</div>
+      <div class="disconnect-desc" id="disconnectDesc">后台服务可能已退出或正在重启。重新启动 Antigravity 伴侣后会自动恢复，或点击下方手动重试。</div>
+      <div class="row gap-sm" style="justify-content:center;margin-top:14px">
+        <button class="btn btn-primary" id="btnRetryReconnect" type="button">重新连接</button>
+      </div>
     </div>
   </div>
 
@@ -160,6 +181,7 @@
   <script src="/js/views/vault.js"></script>
   <script src="/js/views/backup.js"></script>
   <script src="/js/views/settings.js"></script>
+  <script src="/js/views/trash.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

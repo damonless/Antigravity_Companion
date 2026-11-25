@@ -12,7 +12,38 @@
     stack.appendChild(node);
     setTimeout(function () {
       if (node.parentNode) node.parentNode.removeChild(node);
-    }, 3600);
+    }, 3800);
+  }
+
+  async function withButtonBusy(btn, busyLabel, asyncFn) {
+    if (typeof busyLabel === 'function') {
+      asyncFn = busyLabel;
+      busyLabel = '处理中...';
+    }
+    if (!btn) {
+      return await asyncFn();
+    }
+    if (btn.dataset && btn.dataset.agyBusy === '1') {
+      return undefined;
+    }
+    var origDisabled = !!btn.disabled;
+    var origText = btn.textContent;
+    if (btn.dataset) btn.dataset.agyBusy = '1';
+    btn.disabled = true;
+    btn.classList.add('btn-busy');
+    if (busyLabel && btn.children.length === 0) {
+      btn.textContent = busyLabel;
+    }
+    try {
+      return await asyncFn();
+    } finally {
+      if (btn.dataset) delete btn.dataset.agyBusy;
+      btn.classList.remove('btn-busy');
+      btn.disabled = origDisabled;
+      if (busyLabel && btn.children.length === 0) {
+        btn.textContent = origText;
+      }
+    }
   }
 
   async function apiFetch(url, opts) {
@@ -75,6 +106,12 @@
     var h = handlers || {};
     try {
       var es = new EventSource('/api/events');
+      es.onopen = function () {
+        if (h.onOpen) h.onOpen();
+      };
+      es.onerror = function () {
+        if (h.onError) h.onError();
+      };
       es.addEventListener('progress', function (ev) {
         try {
           var payload = JSON.parse(ev.data).payload;
@@ -85,6 +122,18 @@
         try {
           var item = JSON.parse(ev.data).payload;
           if (h.onLog) h.onLog(item);
+        } catch (_e) {}
+      });
+      es.addEventListener('ide_status', function (ev) {
+        try {
+          var payload = JSON.parse(ev.data).payload;
+          if (h.onIdeStatus) h.onIdeStatus(payload);
+        } catch (_e) {}
+      });
+      es.addEventListener('fs_changed', function (ev) {
+        try {
+          var payload = JSON.parse(ev.data).payload;
+          if (h.onFsChanged) h.onFsChanged(payload);
         } catch (_e) {}
       });
       es.addEventListener('job_done', function (ev) {
@@ -99,7 +148,7 @@
           if (done.warnings && done.warnings.length > 0) {
             var warnPreview = done.warnings.slice(0, 2).join('；');
             if (done.warnings.length > 2) warnPreview += '（共 ' + done.warnings.length + ' 条告警）';
-            showToast('告警：' + warnPreview, '');
+            showToast('提示：' + warnPreview, 'warn');
           }
           if (h.onJobDone) h.onJobDone(done);
         } catch (_e) {}
@@ -127,6 +176,7 @@
 
   AGY.api = {
     apiFetch: apiFetch,
+    withButtonBusy: withButtonBusy,
     connectSse: connectSse,
     showToast: showToast,
     copyToClipboard: copyToClipboard,

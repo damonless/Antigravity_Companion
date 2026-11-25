@@ -82,6 +82,7 @@ namespace AntigravityCompanion
 
             byte[] pbData = null;
             byte[] cliPbData = null;
+            string coldManifestJson = null;
             Dictionary<string, string> projectJsons = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             Dictionary<string, string> annotTitles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -110,6 +111,18 @@ namespace AntigravityCompanion
                             string json = sr.ReadToEnd();
                             ParseManifestMetadata(json, index);
                         }
+                    }
+                    else if (string.Equals(logical, "manifest.json", StringComparison.OrdinalIgnoreCase))
+                    {
+                        using (StreamReader sr = new StreamReader(entry.Open(), Encoding.UTF8))
+                        {
+                            coldManifestJson = sr.ReadToEnd();
+                        }
+                    }
+                    else if (string.Equals(logical, "antigravity-cli/conversation_summaries.db", StringComparison.OrdinalIgnoreCase))
+                    {
+                        index.HasCliSessions = true;
+                        index.HasLegacyCliSummaryDb = true;
                     }
                     else if (logical.StartsWith("config/projects/", StringComparison.OrdinalIgnoreCase) &&
                              logical.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
@@ -255,6 +268,12 @@ namespace AntigravityCompanion
                     }
                 }
 
+                // 支持读取存储清理生成的冷归档 .agy (companion-cold-archive / legacy-cli-summary-archive)
+                if (!string.IsNullOrEmpty(coldManifestJson))
+                {
+                    ParseColdArchiveManifest(coldManifestJson, index);
+                }
+
                 // 叠加备份包内 annotations/<cid>.pbtxt 真实自定义标题 (Layer 1 优先级最高)
                 if (annotTitles.Count > 0 && index.Conversations != null)
                 {
@@ -292,6 +311,98 @@ namespace AntigravityCompanion
             sw.Stop();
             index.ElapsedMilliseconds = sw.ElapsedMilliseconds;
             return index;
+        }
+
+        private static void ParseColdArchiveManifest(string json, BackupArchiveIndex index)
+        {
+            if (string.IsNullOrEmpty(json) || index == null) return;
+            object parsed;
+            if (!UnifiedJson.TryParse(json, out parsed)) return;
+
+            Dictionary<string, object> root = UnifiedJson.AsDict(parsed);
+            if (root == null) return;
+
+            string archiveType = UnifiedJson.GetString(root, "archive_type", string.Empty).Trim();
+            if (!string.Equals(archiveType, "companion-cold-archive", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(archiveType, "legacy-cli-summary-archive", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            index.IsColdArchive = true;
+            index.ColdArchiveType = archiveType;
+            if (string.IsNullOrEmpty(index.BackupTier))
+                index.BackupTier = "ColdArchive";
+            if (string.IsNullOrEmpty(index.Version))
+                index.Version = "1.0";
+
+            string createdAt = UnifiedJson.GetString(root, "created_at", string.Empty);
+            if (string.IsNullOrEmpty(index.BackupTime) && !string.IsNullOrEmpty(createdAt))
+                index.BackupTime = createdAt;
+
+            DateTime parsedTime = DateTime.MinValue;
+            if (!string.IsNullOrEmpty(createdAt))
+            {
+                DateTime dt;
+                if (DateTime.TryParse(createdAt, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out dt))
+                {
+                    parsedTime = dt.ToLocalTime();
+                }
+            }
+
+            if (string.Equals(archiveType, "legacy-cli-summary-archive", StringComparison.OrdinalIgnoreCase))
+            {
+                index.HasCliSessions = true;
+                index.HasLegacyCliSummaryDb = true;
+                return;
+            }
+
+            HashSet<string> existingCids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < index.Conversations.Count; i++)
+            {
+                if (index.Conversations[i] != null && !string.IsNullOrEmpty(index.Conversations[i].ConversationId))
+                    existingCids.Add(index.Conversations[i].ConversationId.Trim());
+            }
+
+            object itemsObj;
+            if (!root.TryGetValue("items", out itemsObj)) return;
+            List<object> items = UnifiedJson.AsList(itemsObj);
+            if (items == null) return;
+
+            for (int i = 0; i < items.Count; i++)
+            {
+                Dictionary<string, object> itemDict = UnifiedJson.AsDict(items[i]);
+                if (itemDict == null) continue;
+
+                string cid = UnifiedJson.GetString(itemDict, "cid", string.Empty).Trim();
+                if (!SessionMetadataExtractor.IsLikelyConversationId(cid) || existingCids.Contains(cid))
+                    continue;
+
+                string title = UnifiedJson.GetString(itemDict, "title", string.Empty).Trim();
+                bool isCli = UnifiedJson.GetBool(itemDict, "isCli", false);
+                string projName = UnifiedJson.GetString(itemDict, "projectName", string.Empty).Trim();
+                if (string.IsNullOrEmpty(projName)) projName = "清理前安全备份";
+
+                ConversationSummaryInfo conv = new ConversationSummaryInfo();
+                conv.ConversationId = cid;
+                conv.DisplayTitle = !string.IsNullOrEmpty(title) ? title : cid;
+                conv.AutoSummaryTitle = conv.DisplayTitle;
+                conv.ProjectName = projName;
+                conv.ProjectId = "companion-cold-archive";
+                conv.IsCliSession = isCli;
+                conv.IsSubagent = true;
+                conv.UpdatedTime = parsedTime > DateTime.MinValue ? parsedTime : DateTime.Now;
+                conv.StepCount = 1;
+
+                index.Conversations.Add(conv);
+                index.ExistingConvoDbFiles.Add(cid);
+                if (isCli)
+                {
+                    index.HasCliSessions = true;
+                    index.CliConversationIds.Add(cid);
+                }
+                existingCids.Add(cid);
+            }
         }
 
         private static void ParseManifestMetadata(string json, BackupArchiveIndex index)

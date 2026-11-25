@@ -2966,7 +2966,7 @@ namespace AntigravityCompanion
             SessionLifecycleService.WriteBytesAtomicWithBackup(destPath, rawBytes ?? new byte[0], null);
         }
 
-        private static void WriteRepositoryManifest(string repoPath)
+        internal static void WriteRepositoryManifest(string repoPath)
         {
             try
             {
@@ -3000,7 +3000,7 @@ namespace AntigravityCompanion
             catch { }
         }
 
-        private static string ResolveLocalRulePath(string geminiPath, string ruleId)
+        internal static string ResolveLocalRulePath(string geminiPath, string ruleId)
         {
             if (AllowedRootRuleNames.Contains(ruleId))
                 return CombineAndEnsureUnderRoot(geminiPath, ruleId);
@@ -3014,7 +3014,7 @@ namespace AntigravityCompanion
             throw new InvalidOperationException("非法的规则标识路径: " + ruleId);
         }
 
-        private static string ResolveRepoRulePath(string repoPath, string ruleId)
+        internal static string ResolveRepoRulePath(string repoPath, string ruleId)
         {
             if (AllowedRootRuleNames.Contains(ruleId))
                 return CombineAndEnsureUnderRoot(Path.Combine(repoPath, "rules", "_root"), ruleId);
@@ -3187,6 +3187,33 @@ namespace AntigravityCompanion
                 localApp = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) ?? Path.GetTempPath(), "AppData", "Local");
             }
             return Path.Combine(localApp, "AntigravityCompanion", "cap_sync_state.json");
+        }
+
+        public static string GetVaultScopedStorePath(string baseStorePath, string vaultPath)
+        {
+            string safeBase = string.IsNullOrEmpty(baseStorePath) ? GetDefaultStorePath() : baseStorePath;
+            if (string.IsNullOrWhiteSpace(vaultPath)) return safeBase;
+
+            string normVault = vaultPath.Trim();
+            try { normVault = Path.GetFullPath(normVault); } catch { }
+            normVault = normVault.TrimEnd('\\', '/').ToLowerInvariant();
+
+            string hashHex;
+            using (SHA256 sha = SHA256.Create())
+            {
+                byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(normVault));
+                StringBuilder sb = new StringBuilder(16);
+                for (int i = 0; i < 6 && i < hash.Length; i++)
+                    sb.Append(hash[i].ToString("x2", CultureInfo.InvariantCulture));
+                hashHex = sb.ToString();
+            }
+
+            string dir = Path.GetDirectoryName(safeBase);
+            string stem = Path.GetFileNameWithoutExtension(safeBase);
+            string ext = Path.GetExtension(safeBase);
+            if (string.IsNullOrEmpty(ext)) ext = ".json";
+            string fileName = stem + "." + hashHex + ext;
+            return string.IsNullOrEmpty(dir) ? fileName : Path.Combine(dir, fileName);
         }
 
         public static Dictionary<string, string> Load(string customPath)

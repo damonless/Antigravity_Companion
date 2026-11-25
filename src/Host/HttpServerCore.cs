@@ -102,7 +102,27 @@ namespace AntigravityCompanion
                 d["code"] = "IDE_RUNNING";
                 d["parentCount"] = p;
                 d["lsCount"] = ls;
-                d["error"] = string.Format("检测到 {0} 个 Antigravity 主进程与 {1} 个语言服务进程正在运行，请选择写入模式。", p, ls);
+                d["error"] = string.Format("检测到 {0} 个 Antigravity 主窗口与 {1} 个语言服务进程正在运行，请选择写入模式。", p, ls);
+                WriteJsonResponse(stream, code, d);
+                return;
+            }
+            if (!string.IsNullOrEmpty(errorMsg) && errorMsg.StartsWith("IDE_CLOSE_TIMEOUT:", StringComparison.Ordinal))
+            {
+                string[] parts = errorMsg.Split(new char[] { ':' }, 4);
+                int p = 0, ls = 0;
+                string detail = parts.Length >= 4 ? parts[3] : "Antigravity 主窗口未能及时响应关闭请求。";
+                if (parts.Length >= 3)
+                {
+                    int.TryParse(parts[1], out p);
+                    int.TryParse(parts[2], out ls);
+                }
+                Dictionary<string, object> d = new Dictionary<string, object>();
+                d["ok"] = false;
+                d["code"] = "IDE_CLOSE_TIMEOUT";
+                d["canForceKill"] = true;
+                d["parentCount"] = p;
+                d["lsCount"] = ls;
+                d["error"] = detail;
                 WriteJsonResponse(stream, code, d);
                 return;
             }
@@ -218,6 +238,18 @@ namespace AntigravityCompanion
         private int _currentJobPercent;
         private readonly List<Dictionary<string, object>> _activityLogs = new List<Dictionary<string, object>>();
 
+        private readonly object _monitorLock = new object();
+        private System.Threading.Timer _idePollTimer;
+        private System.Threading.Timer _fsDebounceTimer;
+        private readonly List<FileSystemWatcher> _fsWatchers = new List<FileSystemWatcher>();
+        private long _lastInternalReloadTicksUtc;
+        private bool _hasObservedIdeState;
+        private bool _lastIdeRunning;
+        private int _lastIdeParents;
+        private int _lastIdeLs;
+        private int _ideCheckInProgress;
+        private int _fsReloadInProgress;
+
         public LocalWebHost(string homePath, string geminiPath, string repoPath, int requestedPort, string explicitToken)
         {
             CapabilityVaultService.EnsureZipCapabilityHookRegistered();
@@ -267,17 +299,47 @@ namespace AntigravityCompanion
         internal string HomePath { get { return _homePath; } }
         internal string GeminiPath { get { return _geminiPath; } }
         internal string RepoPath { get { lock (_stateLock) { return _repoPath; } } }
-        internal string BaselinePath { get { return _baselinePath; } }
+        internal string BaselinePath { get { return GetEffectiveBaselinePath(); } }
         internal object StateLock { get { return _stateLock; } }
         internal object MutationLock { get { return _mutationLock; } }
         internal CompanionCommandDispatcher Dispatcher { get { return _apiRouter.Dispatcher; } }
         internal Func<bool> IdeRunningOverride { get; set; }
+        internal Func<bool, string> CloseIdeOverride { get; set; }
         internal Func<bool, string, bool> SetStartWithWindowsOverride { get; set; }
+
+        internal string GetEffectiveBaselinePath()
+        {
+            return CapabilitySyncBaselineStore.GetVaultScopedStorePath(_baselinePath, RepoPath);
+        }
 
         internal bool IsIdeRunning()
         {
             Func<bool> ov = IdeRunningOverride;
             return ov != null ? ov() : ProcessGuardService.IsAntigravityRunning();
+        }
+
+        internal void GetIdeProcessCounts(out int parentCount, out int lsCount)
+        {
+            Func<bool> ov = IdeRunningOverride;
+            if (ov != null)
+            {
+                parentCount = ov() ? 1 : 0;
+                lsCount = 0;
+                return;
+            }
+            ProcessGuardService.GetRunningAntigravityProcessCounts(out parentCount, out lsCount);
+        }
+
+        internal bool TryCloseAntigravityProcesses(bool forceKill, Action<string> onLog, out string errorMsg)
+        {
+            Func<bool, string> closeOv = CloseIdeOverride;
+            if (closeOv != null)
+            {
+                string err = closeOv(forceKill);
+                errorMsg = err;
+                return string.IsNullOrEmpty(err);
+            }
+            return ProcessGuardService.CloseAntigravityProcesses(forceKill, onLog, out errorMsg);
         }
 
         internal bool TryApplyStartWithWindows(bool enable, string exePath)
@@ -309,6 +371,12 @@ namespace AntigravityCompanion
         {
             ReloadAllLocalStateLocked();
 
+            // Auto-flush any pending Layer-3 .pb title updates immediately on startup if IDE is not running
+            if (!IsIdeRunning() && TrashAndBackupService.GetPendingPbSyncCount(_geminiPath) > 0)
+            {
+                TryFlushPendingPbSyncLocked();
+            }
+
             _listener = new TcpListener(IPAddress.Loopback, _requestedPort);
             _listener.Start();
             Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
@@ -316,6 +384,7 @@ namespace AntigravityCompanion
 
             _sseHub.Start();
             _snapshotService.Start();
+            StartLiveMonitors();
 
             _acceptThread = new Thread(AcceptLoop);
             _acceptThread.IsBackground = true;
@@ -327,6 +396,7 @@ namespace AntigravityCompanion
         {
             _running = false;
             _shutdownRequested = true;
+            StopLiveMonitors();
             try { _snapshotService.Stop(); } catch { }
             try { if (_listener != null) _listener.Stop(); } catch { }
             _sseHub.Stop();
@@ -367,6 +437,273 @@ namespace AntigravityCompanion
             {
                 _repoPath = newVaultPath.Trim();
             }
+            if (_running)
+            {
+                RestartFileWatchers();
+            }
+        }
+
+        private void StartLiveMonitors()
+        {
+            lock (_monitorLock)
+            {
+                int p, ls;
+                GetIdeProcessCounts(out p, out ls);
+                _lastIdeParents = p;
+                _lastIdeLs = ls;
+                _lastIdeRunning = (p > 0 || ls > 0);
+                _hasObservedIdeState = true;
+
+                if (_idePollTimer == null)
+                {
+                    _idePollTimer = new System.Threading.Timer(OnIdePollTimerTick, null, 2500, 2500);
+                }
+            }
+            RestartFileWatchers();
+        }
+
+        private void StopLiveMonitors()
+        {
+            lock (_monitorLock)
+            {
+                if (_idePollTimer != null)
+                {
+                    try { _idePollTimer.Dispose(); } catch { }
+                    _idePollTimer = null;
+                }
+                if (_fsDebounceTimer != null)
+                {
+                    try { _fsDebounceTimer.Dispose(); } catch { }
+                    _fsDebounceTimer = null;
+                }
+                DisposeWatchersLocked();
+            }
+        }
+
+        private void DisposeWatchersLocked()
+        {
+            for (int i = 0; i < _fsWatchers.Count; i++)
+            {
+                try
+                {
+                    _fsWatchers[i].EnableRaisingEvents = false;
+                    _fsWatchers[i].Dispose();
+                }
+                catch { }
+            }
+            _fsWatchers.Clear();
+        }
+
+        private void RestartFileWatchers()
+        {
+            lock (_monitorLock)
+            {
+                DisposeWatchersLocked();
+                if (!_running) return;
+
+                string[] dirsToWatch = new string[]
+                {
+                    Path.Combine(_geminiPath, "config"),
+                    Path.Combine(_geminiPath, "antigravity"),
+                    RepoPath
+                };
+                HashSet<string> added = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < dirsToWatch.Length; i++)
+                {
+                    string d = dirsToWatch[i];
+                    if (string.IsNullOrWhiteSpace(d) || !Directory.Exists(d)) continue;
+                    string full;
+                    try { full = Path.GetFullPath(d).TrimEnd('\\', '/'); }
+                    catch { continue; }
+                    if (!added.Add(full)) continue;
+
+                    try
+                    {
+                        FileSystemWatcher fsw = new FileSystemWatcher(full);
+                        fsw.IncludeSubdirectories = false;
+                        fsw.NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size;
+                        fsw.Changed += OnExternalFsEvent;
+                        fsw.Created += OnExternalFsEvent;
+                        fsw.Deleted += OnExternalFsEvent;
+                        fsw.Renamed += OnExternalFsRenamedEvent;
+                        fsw.EnableRaisingEvents = true;
+                        _fsWatchers.Add(fsw);
+                    }
+                    catch { }
+                }
+            }
+        }
+
+        private void OnExternalFsEvent(object sender, FileSystemEventArgs e)
+        {
+            ScheduleDebouncedFsReload(e != null ? e.FullPath : null);
+        }
+
+        private void OnExternalFsRenamedEvent(object sender, RenamedEventArgs e)
+        {
+            ScheduleDebouncedFsReload(e != null ? e.FullPath : null);
+        }
+
+        private void ScheduleDebouncedFsReload(string changedPath)
+        {
+            if (!_running || _shutdownRequested) return;
+            if (IsIgnoredWatchPath(changedPath)) return;
+
+            long lastReload = Interlocked.Read(ref _lastInternalReloadTicksUtc);
+            if ((DateTime.UtcNow.Ticks - lastReload) < TimeSpan.TicksPerMillisecond * 900)
+                return;
+
+            lock (_monitorLock)
+            {
+                if (!_running) return;
+                if (_fsDebounceTimer == null)
+                {
+                    _fsDebounceTimer = new System.Threading.Timer(OnFsDebounceElapsed, null, 1200, Timeout.Infinite);
+                }
+                else
+                {
+                    try { _fsDebounceTimer.Change(1200, Timeout.Infinite); } catch { }
+                }
+            }
+        }
+
+        private static bool IsIgnoredWatchPath(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return true;
+            string lower = path.ToLowerInvariant();
+            if (lower.Contains(".tmp.") || lower.Contains(".bak.") ||
+                lower.EndsWith("-wal", StringComparison.Ordinal) ||
+                lower.EndsWith("-shm", StringComparison.Ordinal) ||
+                lower.EndsWith("-journal", StringComparison.Ordinal) ||
+                lower.Contains("companion-trash") ||
+                lower.Contains("companion-snapshots") ||
+                lower.Contains("companion-cold-archives") ||
+                lower.Contains(".companion_"))
+                return true;
+            return false;
+        }
+
+        private void OnFsDebounceElapsed(object state)
+        {
+            if (!_running || _shutdownRequested) return;
+            if (Interlocked.CompareExchange(ref _jobBusyFlag, 0, 0) != 0) return;
+            if (Interlocked.CompareExchange(ref _fsReloadInProgress, 1, 0) != 0) return;
+            try
+            {
+                bool lockTaken = false;
+                try
+                {
+                    Monitor.TryEnter(_mutationLock, 200, ref lockTaken);
+                    if (!lockTaken) return;
+                    ReloadAllLocalStateLocked();
+                }
+                finally
+                {
+                    if (lockTaken) Monitor.Exit(_mutationLock);
+                }
+
+                Dictionary<string, object> evt = new Dictionary<string, object>();
+                evt["reason"] = "external_fs_change";
+                evt["pendingPbSyncCount"] = TrashAndBackupService.GetPendingPbSyncCount(_geminiPath);
+                evt["timestampUtc"] = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
+                BroadcastSse("fs_changed", evt);
+            }
+            catch { }
+            finally
+            {
+                Interlocked.Exchange(ref _fsReloadInProgress, 0);
+            }
+        }
+
+        private void OnIdePollTimerTick(object state)
+        {
+            if (!_running || _shutdownRequested) return;
+            CheckIdeStatusAndAutoFlushNow();
+        }
+
+        internal void CheckIdeStatusAndAutoFlushNow()
+        {
+            if (!_running || _shutdownRequested) return;
+            if (Interlocked.CompareExchange(ref _ideCheckInProgress, 1, 0) != 0) return;
+            try
+            {
+                int p, ls;
+                GetIdeProcessCounts(out p, out ls);
+                bool nowRunning = (p > 0 || ls > 0);
+                bool changed = false;
+                bool exitedNow = false;
+
+                lock (_monitorLock)
+                {
+                    if (!_hasObservedIdeState || nowRunning != _lastIdeRunning || p != _lastIdeParents || ls != _lastIdeLs)
+                    {
+                        changed = true;
+                        exitedNow = _hasObservedIdeState && _lastIdeRunning && !nowRunning;
+                        _hasObservedIdeState = true;
+                        _lastIdeRunning = nowRunning;
+                        _lastIdeParents = p;
+                        _lastIdeLs = ls;
+                    }
+                }
+
+                if (changed)
+                {
+                    Dictionary<string, object> ideDict = new Dictionary<string, object>();
+                    ideDict["running"] = nowRunning;
+                    ideDict["parentCount"] = p;
+                    ideDict["lsCount"] = ls;
+                    BroadcastSse("ide_status", ideDict);
+                }
+
+                if (exitedNow || (!nowRunning && TrashAndBackupService.GetPendingPbSyncCount(_geminiPath) > 0))
+                {
+                    if (Interlocked.CompareExchange(ref _jobBusyFlag, 0, 0) == 0)
+                    {
+                        int flushed = TryFlushPendingPbSyncLocked();
+                        if (flushed > 0)
+                        {
+                            Dictionary<string, object> evt = new Dictionary<string, object>();
+                            evt["reason"] = "pending_pb_flushed";
+                            evt["flushedCount"] = flushed;
+                            evt["pendingPbSyncCount"] = TrashAndBackupService.GetPendingPbSyncCount(_geminiPath);
+                            BroadcastSse("fs_changed", evt);
+                        }
+                    }
+                }
+            }
+            catch { }
+            finally
+            {
+                Interlocked.Exchange(ref _ideCheckInProgress, 0);
+            }
+        }
+
+        internal int TryFlushPendingPbSyncLocked()
+        {
+            int pendingCount = TrashAndBackupService.GetPendingPbSyncCount(_geminiPath);
+            if (pendingCount == 0) return 0;
+
+            int flushed = 0;
+            List<string> warns = null;
+            bool ok = false;
+            lock (_mutationLock)
+            {
+                if (IsIdeRunning()) return 0;
+                ok = TrashAndBackupService.TryFlushPendingPbSync(_geminiPath, out flushed, out warns);
+                if (ok && flushed > 0)
+                {
+                    ReloadAllLocalStateLocked();
+                }
+            }
+            if (ok && flushed > 0)
+            {
+                AppendLog("success", string.Format("检测到 Antigravity 主窗口已退出，已自动补刷 {0} 条改名记录到侧边栏索引。", flushed));
+            }
+            else if (!ok && warns != null && warns.Count > 0)
+            {
+                AppendLog("warn", string.Join("; ", warns.ToArray()));
+            }
+            return flushed;
         }
 
         private static string GenerateRandomToken()
@@ -445,7 +782,9 @@ namespace AntigravityCompanion
             List<CapabilityItem> lCaps, rCaps;
             List<CapabilityDiffNode> diffs;
             Dictionary<string, string> baseMap;
-            WorkspaceService.LoadCapabilityMatrix(_geminiPath, _homePath, _repoPath, _baselinePath, out lCaps, out rCaps, out diffs, out baseMap);
+            string currentRepo = RepoPath;
+            string scopedBaselinePath = GetEffectiveBaselinePath();
+            WorkspaceService.LoadCapabilityMatrix(_geminiPath, _homePath, currentRepo, scopedBaselinePath, out lCaps, out rCaps, out diffs, out baseMap);
 
             lock (_stateLock)
             {
@@ -457,6 +796,7 @@ namespace AntigravityCompanion
                 _capDiffs = diffs ?? new List<CapabilityDiffNode>();
                 _capBaseline = baseMap ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             }
+            Interlocked.Exchange(ref _lastInternalReloadTicksUtc, DateTime.UtcNow.Ticks);
 
             if (warnings != null)
             {
@@ -504,7 +844,7 @@ namespace AntigravityCompanion
                 }
                 baselineCopy = new Dictionary<string, string>(_capBaseline, StringComparer.OrdinalIgnoreCase);
             }
-            CapabilitySyncBaselineStore.Save(_baselinePath, baselineCopy);
+            CapabilitySyncBaselineStore.Save(GetEffectiveBaselinePath(), baselineCopy);
         }
 
         internal bool TryAcquireJob(string jobType, string message)
@@ -532,13 +872,16 @@ namespace AntigravityCompanion
 
         internal void ReleaseJob()
         {
+            string finishedType;
             lock (_stateLock)
             {
+                finishedType = _currentJobType;
                 _currentJobType = null;
                 _currentJobMessage = null;
                 _currentJobPercent = 0;
             }
             Interlocked.Exchange(ref _jobBusyFlag, 0);
+            BroadcastSse("progress", OverviewBuilder.BuildJobStatusDict(false, finishedType ?? string.Empty, string.Empty, 100));
         }
 
         internal void StartBackgroundJob(string jobType, Func<Dictionary<string, object>> work)
@@ -907,6 +1250,7 @@ namespace AntigravityCompanion
             map["/js/views/vault.js"] = new string[] { "js/views/vault.js", "application/javascript; charset=utf-8" };
             map["/js/views/backup.js"] = new string[] { "js/views/backup.js", "application/javascript; charset=utf-8" };
             map["/js/views/settings.js"] = new string[] { "js/views/settings.js", "application/javascript; charset=utf-8" };
+            map["/js/views/trash.js"] = new string[] { "js/views/trash.js", "application/javascript; charset=utf-8" };
             return map;
         }
 

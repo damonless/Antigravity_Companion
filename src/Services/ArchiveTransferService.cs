@@ -40,6 +40,7 @@ namespace AntigravityCompanion
         public Dictionary<string, ProjectDiffNode> ConvProjDiffMap;
         public bool IncludeUserSettings;
         public bool RestoreUserSettings;
+        public bool RestoreLegacyCliArchive;
     }
 
     public sealed class SelectiveImportResult
@@ -79,10 +80,19 @@ namespace AntigravityCompanion
 
             List<CapabilityItem> selectedCaps = req.SelectedCapabilities ?? new List<CapabilityItem>();
             List<ConversationSummaryInfo> initialSelectedConvs = req.SelectedConversations ?? new List<ConversationSummaryInfo>();
-            if (selectedCaps.Count == 0 && initialSelectedConvs.Count == 0 && !req.IncludeUserSettings && !req.RestoreUserSettings)
+            bool isColdArchive = req.BackupIndex != null && req.BackupIndex.IsColdArchive;
+            if (selectedCaps.Count == 0 && initialSelectedConvs.Count == 0 && !req.IncludeUserSettings && !req.RestoreUserSettings && !req.RestoreLegacyCliArchive)
             {
                 workRes.ErrorMessage = "未选择任何能力配置或会话。";
                 return workRes;
+            }
+
+            if (isColdArchive &&
+                req.SourceMode == RightPaneSourceMode.BackupArchive &&
+                !string.IsNullOrEmpty(req.LoadedBackupPath) &&
+                File.Exists(req.LoadedBackupPath))
+            {
+                return PerformColdArchiveRestore(req, initialSelectedConvs, onProgress);
             }
 
             string geminiSnap = req.GeminiPath;
@@ -853,6 +863,107 @@ namespace AntigravityCompanion
 
             if (onProgress != null) onProgress("选择性导入已完成。", 100);
             return workRes;
+        }
+
+        private static SelectiveImportResult PerformColdArchiveRestore(
+            SelectiveImportRequest req,
+            List<ConversationSummaryInfo> selectedConvs,
+            Action<string, int> onProgress)
+        {
+            SelectiveImportResult res = new SelectiveImportResult();
+            string geminiSnap = req.GeminiPath;
+            string ideConvDir = Path.Combine(geminiSnap, "antigravity", "conversations");
+            string cliConvDir = Path.Combine(geminiSnap, "antigravity-cli", "conversations");
+
+            HashSet<string> targetCids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (selectedConvs != null)
+            {
+                for (int i = 0; i < selectedConvs.Count; i++)
+                {
+                    if (selectedConvs[i] != null && SessionMetadataExtractor.IsLikelyConversationId(selectedConvs[i].ConversationId))
+                        targetCids.Add(selectedConvs[i].ConversationId.Trim());
+                }
+            }
+
+            bool restoreLegacyCli = req.RestoreLegacyCliArchive ||
+                (req.BackupIndex != null && string.Equals(req.BackupIndex.ColdArchiveType, "legacy-cli-summary-archive", StringComparison.OrdinalIgnoreCase));
+
+            if (targetCids.Count == 0 && !restoreLegacyCli)
+            {
+                res.ErrorMessage = "请先选择要从安全备份中恢复的后台子任务数据库。";
+                return res;
+            }
+
+            if (onProgress != null) onProgress("正在从清理前安全备份恢复数据库文件...", 30);
+
+            HashSet<string> restoredCids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (FileStream fs = new FileStream(req.LoadedBackupPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (ZipArchive archive = new ZipArchive(fs, ZipArchiveMode.Read))
+            {
+                for (int i = 0; i < archive.Entries.Count; i++)
+                {
+                    ZipArchiveEntry entry = archive.Entries[i];
+                    if (!StreamingZipIndexReader.IsSafeZipEntryPath(entry.FullName)) continue;
+
+                    string rawNorm = (entry.FullName ?? string.Empty).Replace('\\', '/').TrimStart('/');
+                    if (string.IsNullOrEmpty(rawNorm) || rawNorm.EndsWith("/", StringComparison.Ordinal)) continue;
+                    string norm = rawNorm.StartsWith("data/", StringComparison.OrdinalIgnoreCase) ? rawNorm.Substring(5) : rawNorm;
+
+                    if (restoreLegacyCli && string.Equals(norm, "antigravity-cli/conversation_summaries.db", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string cliDir = Path.Combine(geminiSnap, "antigravity-cli");
+                        if (!Directory.Exists(cliDir)) Directory.CreateDirectory(cliDir);
+                        string destLegacy = Path.Combine(cliDir, "conversation_summaries.db");
+                        if (File.Exists(destLegacy)) UnifiedJson.CreateTimestampedBackup(destLegacy, 5);
+                        DeleteFileIfExistsQuiet(destLegacy + "-wal");
+                        DeleteFileIfExistsQuiet(destLegacy + "-shm");
+                        ExtractZipEntrySafe(entry, destLegacy);
+                        res.FilesImported++;
+                        continue;
+                    }
+
+                    string targetDir = null;
+                    string fn = null;
+                    if (norm.StartsWith("antigravity/conversations/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        targetDir = ideConvDir;
+                        fn = norm.Substring("antigravity/conversations/".Length);
+                    }
+                    else if (norm.StartsWith("antigravity-cli/conversations/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        targetDir = cliConvDir;
+                        fn = norm.Substring("antigravity-cli/conversations/".Length);
+                    }
+
+                    if (targetDir == null || string.IsNullOrEmpty(fn) || fn.IndexOf('/') >= 0) continue;
+                    if (!fn.EndsWith(".db", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    string cid = fn.Substring(0, fn.Length - 3).Trim();
+                    if (!SessionMetadataExtractor.IsLikelyConversationId(cid) || !targetCids.Contains(cid)) continue;
+
+                    if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
+                    string destDb = CapabilityVaultService.CombineAndEnsureUnderRoot(targetDir, cid + ".db");
+                    if (File.Exists(destDb)) UnifiedJson.CreateTimestampedBackup(destDb, 5);
+                    DeleteFileIfExistsQuiet(destDb + "-wal");
+                    DeleteFileIfExistsQuiet(destDb + "-shm");
+                    DeleteFileIfExistsQuiet(destDb + "-journal");
+                    ExtractZipEntrySafe(entry, destDb);
+
+                    res.FilesImported++;
+                    if (restoredCids.Add(cid))
+                        res.ImportedConvIds.Add(cid);
+                }
+            }
+
+            res.ConversationsImported = restoredCids.Count;
+            if (res.FilesImported == 0)
+            {
+                res.ErrorMessage = "安全备份包中未找到匹配的数据库文件。";
+                return res;
+            }
+
+            if (onProgress != null) onProgress("清理前安全备份恢复完成。", 100);
+            return res;
         }
 
         private static string PatchImportedProjectJson(string remappedJson, ResolvedImportProjectInfo matchedInfo)

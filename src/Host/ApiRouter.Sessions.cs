@@ -124,10 +124,11 @@ namespace AntigravityCompanion
                 string cid = UnifiedJson.GetString(body, "cid", string.Empty).Trim();
                 string newTitle = UnifiedJson.GetString(body, "newTitle", string.Empty).Trim();
                 string strategyStr = UnifiedJson.GetString(body, "strategy", "auto");
+                bool preferHotWrite = UnifiedJson.GetBool(body, "preferHotWrite", false);
                 bool forceKill = UnifiedJson.GetBool(body, "forceKill", false);
                 if (!SessionMetadataExtractor.IsLikelyConversationId(cid) || string.IsNullOrWhiteSpace(newTitle))
                 {
-                    HttpProtocolHelper.WriteJsonError(stream, 400, "会话 ID 或新标题不能为空。");
+                    HttpProtocolHelper.WriteJsonError(stream, 400, "对话 ID 或新标题不能为空。");
                     return true;
                 }
                 Dictionary<string, object> itemRow = new Dictionary<string, object>();
@@ -135,6 +136,7 @@ namespace AntigravityCompanion
                 itemRow["newTitle"] = newTitle;
                 Dictionary<string, object> cmdArgs = new Dictionary<string, object>();
                 cmdArgs["strategy"] = strategyStr;
+                cmdArgs["preferHotWrite"] = preferHotWrite;
                 cmdArgs["forceKill"] = forceKill;
                 cmdArgs["items"] = new List<object> { itemRow };
                 WriteDispatcherResult(stream, _dispatcher.Execute("rename.commit", cmdArgs));
@@ -221,6 +223,7 @@ namespace AntigravityCompanion
                     if (!EnsureIdeClosedIfNeeded(closeIde, forceKill, stream)) return true;
 
                     OperationResult<DeletionResult> delOp;
+                    string trashId = string.Empty;
                     lock (_host.MutationLock)
                     {
                         List<ConversationSummaryInfo> sumsSnap;
@@ -233,8 +236,8 @@ namespace AntigravityCompanion
                         HashSet<string> cidSet = new HashSet<string>(cidArr, StringComparer.OrdinalIgnoreCase);
                         HashSet<string> pIdSet = new HashSet<string>(projIdArr, StringComparer.OrdinalIgnoreCase);
                         HashSet<string> ghostSet = new HashSet<string>(ghostArr, StringComparer.OrdinalIgnoreCase);
-                        delOp = SessionLifecycleService.DeleteSessionsAndProjectsResult(
-                            _host.GeminiPath, sumsSnap, projsSnap, cidSet, null, pIdSet, ghostSet);
+                        delOp = TrashAndBackupService.SoftDeleteSessionsAndProjects(
+                            _host.GeminiPath, sumsSnap, projsSnap, cidSet, null, pIdSet, ghostSet, out trashId);
                         if (delOp.Ok) _host.ReloadAllLocalStateLocked();
                     }
                     if (!delOp.Ok)
@@ -246,11 +249,12 @@ namespace AntigravityCompanion
                     string warn = (delOp.Warnings != null && delOp.Warnings.Count > 0)
                         ? string.Join("; ", delOp.Warnings.ToArray())
                         : string.Empty;
-                    _host.AppendLog("success", string.Format("已物理删除 {0} 条会话（含子任务），释放 {1:F2} MB。", delRes.DeletedSessionCount, delRes.FreedMegabytes));
+                    _host.AppendLog("success", string.Format("已将 {0} 条对话（含后台子任务）移入回收站，释放 {1:F2} MB。", delRes.DeletedSessionCount, delRes.FreedMegabytes));
                     Dictionary<string, object> resp = new Dictionary<string, object>();
                     resp["ok"] = true;
                     resp["deletedSessions"] = delRes.DeletedSessionCount;
                     resp["freedMegabytes"] = Math.Round(delRes.FreedMegabytes, 2);
+                    resp["trashId"] = trashId ?? string.Empty;
                     resp["warning"] = warn;
                     HttpProtocolHelper.WriteJsonResponse(stream, 200, resp);
                 }
@@ -327,6 +331,11 @@ namespace AntigravityCompanion
             if (path == "/api/rename/execute" && req.Method == "POST")
             {
                 WriteDispatcherResult(stream, _dispatcher.Execute("rename.commit", body));
+                return true;
+            }
+            if (path == "/api/rename/flush-pending" && req.Method == "POST")
+            {
+                WriteDispatcherResult(stream, _dispatcher.Execute("rename.flush_pending", body));
                 return true;
             }
             if (path == "/api/rename/ai-prompt" && req.Method == "POST")
@@ -620,6 +629,9 @@ namespace AntigravityCompanion
             {
                 string snapshotDir = UnifiedJson.GetString(body, "snapshotDir", string.Empty).Trim();
                 string strategyStr = UnifiedJson.GetString(body, "strategy", "auto");
+                bool preferHotWrite = UnifiedJson.GetBool(body, "preferHotWrite", false);
+                if (preferHotWrite && string.Equals(strategyStr, "auto", StringComparison.OrdinalIgnoreCase))
+                    strategyStr = "SmartAuto";
                 bool forceKill = UnifiedJson.GetBool(body, "forceKill", false);
                 if (string.IsNullOrEmpty(snapshotDir) || !Directory.Exists(snapshotDir))
                 {
@@ -650,18 +662,64 @@ namespace AntigravityCompanion
                         return true;
                     }
 
+                    bool deferPbRollback = hotOnly && _host.IsIdeRunning();
                     RenameRollbackResult rbRes;
                     bool ok;
                     lock (_host.MutationLock)
                     {
-                        ok = RenameBackupManager.RollbackSnapshot(_host.GeminiPath, snapshotDir, hotOnly, out rbRes);
-                        if (ok) _host.ReloadAllLocalStateLocked();
+                        ok = RenameBackupManager.RollbackSnapshot(_host.GeminiPath, snapshotDir, hotOnly, deferPbRollback, out rbRes);
+                        if (ok)
+                        {
+                            try
+                            {
+                                List<RenameSnapshotInfo> snaps = RenameBackupManager.ListSnapshots(_host.GeminiPath);
+                                RenameSnapshotInfo matchedSnap = null;
+                                for (int si = 0; si < snaps.Count; si++)
+                                {
+                                    if (string.Equals(snaps[si].SnapshotDir, snapshotDir, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        matchedSnap = snaps[si];
+                                        break;
+                                    }
+                                }
+                                if (matchedSnap != null && matchedSnap.Items != null && matchedSnap.Items.Count > 0)
+                                {
+                                    if (rbRes.PbSkippedDueToLock)
+                                    {
+                                        Dictionary<string, string> pendingRollback = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                                        for (int ri = 0; ri < matchedSnap.Items.Count; ri++)
+                                        {
+                                            RenameSnapshotItem it = matchedSnap.Items[ri];
+                                            if (it != null && !string.IsNullOrEmpty(it.ConversationId) && !string.IsNullOrEmpty(it.OldTitle))
+                                                pendingRollback[it.ConversationId] = it.OldTitle;
+                                        }
+                                        if (pendingRollback.Count > 0)
+                                            TrashAndBackupService.EnqueuePendingPbSync(_host.GeminiPath, pendingRollback);
+                                    }
+                                    else
+                                    {
+                                        List<string> clearedCids = new List<string>();
+                                        for (int ri = 0; ri < matchedSnap.Items.Count; ri++)
+                                        {
+                                            RenameSnapshotItem it = matchedSnap.Items[ri];
+                                            if (it != null && !string.IsNullOrEmpty(it.ConversationId))
+                                                clearedCids.Add(it.ConversationId);
+                                        }
+                                        if (clearedCids.Count > 0)
+                                            TrashAndBackupService.RemovePendingPbSync(_host.GeminiPath, clearedCids);
+                                    }
+                                }
+                            }
+                            catch { }
+                            _host.ReloadAllLocalStateLocked();
+                        }
                     }
                     if (!ok)
                     {
                         HttpProtocolHelper.WriteJsonError(stream, 500, rbRes != null ? rbRes.ErrorMessage : "回滚失败。");
                         return true;
                     }
+                    int pendingCntAfterRb = TrashAndBackupService.GetPendingPbSyncCount(_host.GeminiPath);
                     _host.AppendLog("success", string.Format("回滚完成：恢复 .pbtxt {0} 条、删除新建 .pbtxt {1} 条，Layer 2 DB {2} 条，Layer 3 PB {3} 条。",
                         rbRes.RestoredPbtxtCount, rbRes.DeletedPbtxtCount, rbRes.RestoredDbCount, rbRes.RestoredPbCount));
                     Dictionary<string, object> resp = new Dictionary<string, object>();
@@ -672,6 +730,8 @@ namespace AntigravityCompanion
                     resp["restoredDb"] = rbRes.RestoredDbCount;
                     resp["restoredPb"] = rbRes.RestoredPbCount;
                     resp["pbSkippedDueToLock"] = rbRes.PbSkippedDueToLock;
+                    resp["deferredToPbFlush"] = rbRes.PbSkippedDueToLock && pendingCntAfterRb > 0;
+                    resp["pendingPbSyncCount"] = pendingCntAfterRb;
                     resp["layer2Restored"] = rbRes.RestoredDbCount > 0;
                     resp["layer3Restored"] = rbRes.RestoredPbCount > 0;
                     resp["warnings"] = new List<object>(OverviewBuilder.ToObjList(rbRes.Warnings));
@@ -790,6 +850,11 @@ namespace AntigravityCompanion
         private OperationResult<Dictionary<string, object>> ExecuteRenameCommitCommand(Dictionary<string, object> args)
         {
             string strategyStr = UnifiedJson.GetString(args, "strategy", "auto");
+            bool preferHotWrite = UnifiedJson.GetBool(args, "preferHotWrite", false);
+            if (preferHotWrite && string.Equals(strategyStr, "auto", StringComparison.OrdinalIgnoreCase))
+            {
+                strategyStr = "SmartAuto";
+            }
             bool forceKill = UnifiedJson.GetBool(args, "forceKill", false);
             Dictionary<string, string> cidMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -835,7 +900,60 @@ namespace AntigravityCompanion
                 return BuildStrategyOrErrorFailure(errCode, errMsg);
             }
 
-            return OperationResult<Dictionary<string, object>>.Success(SerializeBatchRenameResult(res));
+            Dictionary<string, object> resp = SerializeBatchRenameResult(res);
+            int pendingCnt = TrashAndBackupService.GetPendingPbSyncCount(_host.GeminiPath);
+            resp["deferredToPbFlush"] = res != null && !res.Layer3Updated && pendingCnt > 0;
+            resp["pendingPbSyncCount"] = pendingCnt;
+            return OperationResult<Dictionary<string, object>>.Success(resp);
+        }
+
+        private OperationResult<Dictionary<string, object>> ExecuteRenameFlushPendingCommand(Dictionary<string, object> args)
+        {
+            bool closeIde = UnifiedJson.GetBool(args, "closeIdeIfRunning", false);
+            bool forceKill = UnifiedJson.GetBool(args, "forceKill", false);
+
+            if (!_host.TryAcquireJob("rename_flush_pending", "正在将待补刷的改名记录同步到侧边栏索引..."))
+            {
+                return FailJobBusy("当前有其他后台任务正在执行，请稍后再试。");
+            }
+            try
+            {
+                int errHttpCode;
+                Dictionary<string, object> errPayload;
+                if (!EnsureIdeClosedIfNeededResult(closeIde, forceKill, out errHttpCode, out errPayload))
+                {
+                    return FailCommandPayload(errHttpCode, errPayload, UnifiedJson.GetString(errPayload, "error", "Antigravity 主窗口正在运行。"));
+                }
+
+                int flushed = 0;
+                List<string> warns = null;
+                bool ok;
+                lock (_host.MutationLock)
+                {
+                    ok = TrashAndBackupService.TryFlushPendingPbSync(_host.GeminiPath, out flushed, out warns);
+                    if (ok && flushed > 0) _host.ReloadAllLocalStateLocked();
+                }
+
+                if (!ok)
+                {
+                    string err = (warns != null && warns.Count > 0) ? string.Join("; ", warns.ToArray()) : "同步侧边栏索引失败。";
+                    return FailCommand(500, err);
+                }
+
+                if (flushed > 0)
+                    _host.AppendLog("success", string.Format("已将 {0} 条待补刷改名记录同步到侧边栏索引。", flushed));
+
+                Dictionary<string, object> resp = new Dictionary<string, object>();
+                resp["ok"] = true;
+                resp["flushedCount"] = flushed;
+                resp["remainingCount"] = TrashAndBackupService.GetPendingPbSyncCount(_host.GeminiPath);
+                resp["warnings"] = new List<object>(OverviewBuilder.ToObjList(warns));
+                return OperationResult<Dictionary<string, object>>.Success(resp);
+            }
+            finally
+            {
+                _host.ReleaseJob();
+            }
         }
 
         // ── Session & Rename Lookup/Serialization Helpers ──
