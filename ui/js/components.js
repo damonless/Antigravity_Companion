@@ -35,6 +35,27 @@
     return k;
   }
 
+  function capDirectionLabel(direction, source, fallbackBadge) {
+    var isBackup = source === 'backup';
+    if (direction === 'Aligned') return '已一致';
+    if (direction === 'RemoteOnly') return isBackup ? '仅备份有' : '仅同步库有';
+    if (direction === 'RemoteNewer') return isBackup ? '备份较新' : '同步库较新';
+    if (direction === 'LocalOnly') return '仅本机有';
+    if (direction === 'LocalNewer') return '本机较新';
+    if (direction === 'BothModified') return '两边均有改动';
+    if (direction === 'NeedsReview' || direction === 'Conflict') return '需人工确认';
+    return fallbackBadge || direction || '-';
+  }
+
+  function diffFileStatusLabel(status, source) {
+    var isBackup = source === 'backup';
+    if (status === 'equal') return '';
+    if (status === 'modified') return '已修改';
+    if (status === 'remote_only') return isBackup ? '仅备份' : '仅同步库';
+    if (status === 'local_only') return '仅本机';
+    return String(status || '');
+  }
+
   function escapeHtml(str) {
     if (str === null || str === undefined) return '';
     return String(str)
@@ -660,7 +681,8 @@
         }
 
         var fileTabs = files.map(function (f, i) {
-          var badge = f.status === 'equal' ? '' : (' · ' + f.status);
+          var statusText = diffFileStatusLabel(f.status, source);
+          var badge = statusText ? (' · ' + statusText) : '';
           return '<button class="filter-pill ' + (i === activeFileIdx ? 'active' : '') + '" data-dfidx="' + i + '">' + escapeHtml(f.path + badge) + '</button>';
         }).join('');
 
@@ -692,12 +714,13 @@
       }
 
       var isAlignedDiff = data.direction === 'Aligned';
+      var dirLabelText = capDirectionLabel(data.direction, source, data.directionBadge);
       var hdrBtns =
         (!isAlignedDiff && data.remoteExists ? '<button class="btn btn-sm btn-primary" id="btnDiffAdoptRemote" type="button">← 同步到本机</button>' : '') +
         (!isAlignedDiff && data.localExists && source !== 'backup' ? '<button class="btn btn-sm" id="btnDiffPushLocal" type="button">存入配置同步库 →</button>' : '');
 
       openDrawer('源码差异对比 — [' + kindLabel(data.kind) + '] ' + data.id,
-        '左侧为本机 (-)，右侧为' + (source === 'backup' ? '备份文件 (.agy) (+)' : '配置同步库 (+)') + ' · ' + data.directionBadge,
+        '左侧为本机 (-)，右侧为' + (source === 'backup' ? '备份文件 (.agy) (+)' : '配置同步库 (+)') + ' · ' + dirLabelText,
         buildDiffBody(), hdrBtns, bindDiffEvents);
 
       function bindDiffEvents(db, ha) {
@@ -770,7 +793,7 @@
           if (dir === 'NeedsReview' || dir === 'Conflict' || dir === 'BothModified' || dir === 'LocalNewer') {
             openModal(
               '确认用' + (source === 'backup' ? '备份文件' : '配置同步库') + '覆盖本机版本？',
-              '<div class="alert-banner" style="margin-bottom:8px"><strong>⚠ 覆盖提示：</strong>[' + escapeHtml(kindLabel(data.kind)) + '] <strong>' + escapeHtml(data.id) + '</strong> 当前状态为 <strong>' + escapeHtml(data.directionBadge || dir) + '</strong>，同步到本机将覆盖本机现有改动（覆盖前自动保留 .bak 备份）。</div>',
+              '<div class="alert-banner" style="margin-bottom:8px"><strong>⚠ 覆盖提示：</strong>[' + escapeHtml(kindLabel(data.kind)) + '] <strong>' + escapeHtml(data.id) + '</strong> 当前状态为 <strong>' + escapeHtml(dirLabelText) + '</strong>，同步到本机将覆盖本机现有改动（覆盖前自动保留 .bak 备份）。</div>',
               '<button class="btn" data-act="cancel">取消</button><button class="btn btn-danger" data-act="go">确认覆盖本机</button>',
               function (_mb, mf) {
                 mf.querySelector('[data-act="cancel"]').addEventListener('click', closeModal);
@@ -796,7 +819,7 @@
           if (dir === 'NeedsReview' || dir === 'Conflict' || dir === 'BothModified' || dir === 'RemoteNewer') {
             openModal(
               '确认用本机版本覆盖配置同步库？',
-              '<div class="alert-banner" style="margin-bottom:8px"><strong>⚠ 覆盖提示：</strong>[' + escapeHtml(kindLabel(data.kind)) + '] <strong>' + escapeHtml(data.id) + '</strong> 当前状态为 <strong>' + escapeHtml(data.directionBadge || dir) + '</strong>，存入同步库将覆盖同步库中较新或存在冲突的版本。</div>',
+              '<div class="alert-banner" style="margin-bottom:8px"><strong>⚠ 覆盖提示：</strong>[' + escapeHtml(kindLabel(data.kind)) + '] <strong>' + escapeHtml(data.id) + '</strong> 当前状态为 <strong>' + escapeHtml(dirLabelText) + '</strong>，存入同步库将覆盖同步库中较新或存在冲突的版本。</div>',
               '<button class="btn" data-act="cancel">取消</button><button class="btn btn-danger" data-act="go">确认覆盖同步库</button>',
               function (_mb, mf) {
                 mf.querySelector('[data-act="cancel"]').addEventListener('click', closeModal);
@@ -816,6 +839,8 @@
   AGY.ui = {
     ICONS: ICONS,
     kindLabel: kindLabel,
+    capDirectionLabel: capDirectionLabel,
+    diffFileStatusLabel: diffFileStatusLabel,
     escapeHtml: escapeHtml,
     sanitizeUrl: sanitizeUrl,
     formatBytes: formatBytes,

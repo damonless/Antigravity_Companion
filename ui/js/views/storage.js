@@ -147,7 +147,10 @@
         ? '<span class="badge badge-green">可安全清理</span>'
         : '<span class="badge badge-neutral" title="' + esc(cnReason) + '">' + esc(cnReason) + '</span>';
 
-      var statusBadge = (o.status && o.status !== 'IDLE')
+      var statusUpper = String(o.status || '').trim().toUpperCase();
+      var isIdleStatus = !statusUpper || statusUpper === 'IDLE' || statusUpper === 'CASCADE_RUN_STATUS_IDLE';
+      var isRunningRow = !!o.notFullyIdle || !isIdleStatus;
+      var statusBadge = isRunningRow
         ? '<span class="badge badge-amber">进行中 (自动跳过)</span>'
         : '<span class="badge badge-neutral">空闲 (可操作)</span>';
 
@@ -177,7 +180,7 @@
     }
   }
 
-  function confirmMode5AColdArchiveModal(cids, offenders) {
+  function confirmMode5AColdArchiveModal(cids, offenders, triggerBtn) {
     var esc = AGY.ui.escapeHtml;
     var fmt = AGY.ui.formatBytes;
     var list = offenders || [];
@@ -211,18 +214,19 @@
         mf.querySelector('[data-act="cancel"]').addEventListener('click', AGY.ui.closeModal);
         mf.querySelector('[data-act="confirm"]').addEventListener('click', function () {
           AGY.ui.closeModal();
-          executeStorageSlimRequest('coldArchivePrune', cids, false, false, false, false, null);
+          executeStorageSlimRequest('coldArchivePrune', cids, false, false, false, false, triggerBtn || null);
         });
       }
     );
   }
 
-  function confirmOrphanGcModal(orph, leg, pruneLegacy) {
+  function confirmOrphanGcModal(orph, leg, pruneLegacy, triggerBtn) {
     var esc = AGY.ui.escapeHtml;
     var fmt = AGY.ui.formatBytes;
     var totalItems = (orph && orph.totalItems) || 0;
     var totalBytes = (orph && orph.totalBytes) || 0;
     var willPruneLegacy = !!(pruneLegacy && leg && leg.exists);
+    var legacyOnly = totalItems === 0 && willPruneLegacy;
 
     var bullets = [];
     if (totalItems > 0) {
@@ -232,22 +236,30 @@
       bullets.push('<li>旧版 CLI 历史摘要库：<strong>' + esc(leg.entryCount || 0) + '</strong> 条（<strong>' + esc(fmt(leg.totalBytes)) + '</strong>）— 将先生成 <strong>清理前安全备份 (.agy)</strong> 再清理</li>');
     }
 
+    var modalTitle = legacyOnly ? '确认备份并清理旧版 CLI 历史摘要库？' : '确认清理残留垃圾文件？';
+    var bannerText = legacyOnly
+      ? '🛡 <strong>安全备份保障：</strong>清理前会先将旧版 CLI 历史摘要库打包为 <strong>清理前安全备份 (.agy)</strong> 留存，随时可在本页或「备份与同步」中一键还原，不会影响正常对话与项目源码。'
+      : ('🛡 <strong>可撤销清理：</strong>所有残留垃圾文件都会先移入 <strong>回收站</strong>' +
+         (willPruneLegacy ? '，旧版 CLI 摘要库会先生成清理前安全备份' : '') +
+         '，不会删除您的正常对话或项目源码。');
+    var confirmLabel = legacyOnly ? '确认备份并清理' : '确认移入回收站并清理';
+
     AGY.ui.openModal(
-      '确认清理残留垃圾文件？',
-      '<div class="alert-banner success" style="margin-bottom:10px">🛡 <strong>可撤销清理：</strong>所有残留垃圾文件都会先移入 <strong>回收站</strong>，旧版 CLI 摘要库会先生成清理前安全备份，不会删除您的正常对话或项目源码。</div>' +
+      modalTitle,
+      '<div class="alert-banner success" style="margin-bottom:10px">' + bannerText + '</div>' +
       '<ul style="margin:6px 0 8px 18px;line-height:1.75">' + bullets.join('') + '</ul>',
-      '<button class="btn" data-act="cancel">取消</button><button class="btn btn-danger" data-act="confirm">确认移入回收站并清理</button>',
+      '<button class="btn" data-act="cancel">取消</button><button class="btn btn-danger" data-act="confirm">' + confirmLabel + '</button>',
       function (_mb, mf) {
         mf.querySelector('[data-act="cancel"]').addEventListener('click', AGY.ui.closeModal);
         mf.querySelector('[data-act="confirm"]').addEventListener('click', function () {
           AGY.ui.closeModal();
-          executeStorageSlimRequest('orphanGcOnly', [], true, willPruneLegacy, false, false, null);
+          executeStorageSlimRequest('orphanGcOnly', [], totalItems > 0, willPruneLegacy, false, false, triggerBtn || null);
         });
       }
     );
   }
 
-  function confirmMode5CLiposuctionModal(cids) {
+  function confirmMode5CLiposuctionModal(cids, triggerBtn) {
     var esc = AGY.ui.escapeHtml;
     var st = AGY.state;
     AGY.ui.openModal(
@@ -265,7 +277,7 @@
         mf.querySelector('[data-act="cancel"]').addEventListener('click', AGY.ui.closeModal);
         mf.querySelector('[data-act="confirm"]').addEventListener('click', function () {
           AGY.ui.closeModal();
-          executeStorageSlimRequest('liposuction', cids, false, false, false, false, null);
+          executeStorageSlimRequest('liposuction', cids, false, false, false, false, triggerBtn || null);
         });
       }
     );
@@ -394,7 +406,9 @@
       : '<span class="badge badge-green">无需清理</span>';
 
     var orphanBtnClass = canCleanOrphan ? 'btn btn-danger-outline' : 'btn';
-    var orphanBtnLabel = (!hasOrphans && !hasLegacy) ? '暂无残留可清理' : '清理残留垃圾文件';
+    var orphanBtnLabel = (!hasOrphans && !hasLegacy)
+      ? '暂无残留可清理'
+      : ((!hasOrphans && hasLegacy) ? '备份并清理旧版 CLI 库' : '清理残留垃圾文件');
 
     host.innerHTML =
       resultBannerHtml +
@@ -566,7 +580,7 @@
       }
       var cids = Object.keys(st.storageCheckedCids).filter(function (k) { return st.storageCheckedCids[k]; });
       if (cids.length === 0) return;
-      confirmMode5AColdArchiveModal(cids, rep.topOffenders || []);
+      confirmMode5AColdArchiveModal(cids, rep.topOffenders || [], this);
     });
 
     el('btnRunMode5C').addEventListener('click', function () {
@@ -576,12 +590,12 @@
       }
       var cids = Object.keys(st.storageCheckedCids).filter(function (k) { return st.storageCheckedCids[k]; });
       if (cids.length === 0) return;
-      confirmMode5CLiposuctionModal(cids);
+      confirmMode5CLiposuctionModal(cids, this);
     });
 
     el('btnRunCompleteOrphanGc').addEventListener('click', function () {
       if (!hasOrphans && !(hasLegacy && st.storagePruneLegacyCli)) return;
-      confirmOrphanGcModal(orph, leg, !!st.storagePruneLegacyCli);
+      confirmOrphanGcModal(orph, leg, !!st.storagePruneLegacyCli, this);
     });
 
     function bindOffenderChks() {

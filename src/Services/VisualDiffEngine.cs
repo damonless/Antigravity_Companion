@@ -113,14 +113,14 @@ namespace AntigravityCompanion
             switch (Direction)
             {
                 case CapabilityDiffDirection.Aligned: return "已一致";
-                case CapabilityDiffDirection.RemoteOnly: return "仅仓库";
-                case CapabilityDiffDirection.LocalOnly: return "仅本机";
-                case CapabilityDiffDirection.RemoteNewer: return "仓库较新";
+                case CapabilityDiffDirection.RemoteOnly: return "仅同步库有";
+                case CapabilityDiffDirection.LocalOnly: return "仅本机有";
+                case CapabilityDiffDirection.RemoteNewer: return "同步库较新";
                 case CapabilityDiffDirection.LocalNewer: return "本机较新";
-                case CapabilityDiffDirection.BothModified: return "双方差异";
+                case CapabilityDiffDirection.BothModified: return "两边均有改动";
                 case CapabilityDiffDirection.Conflict:
                 case CapabilityDiffDirection.NeedsReview:
-                    return "需确认差异";
+                    return "需人工确认";
                 default: return "未知";
             }
         }

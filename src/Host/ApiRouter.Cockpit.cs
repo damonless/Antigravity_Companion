@@ -189,7 +189,7 @@ namespace AntigravityCompanion
                     _host.ReloadAllLocalStateLocked();
                     afterSnap = AntigravityConfigService.ScanCockpit(_host.GeminiPath, _host.HomePath, _host.RepoPath, refThreshold);
                 }
-                _host.AppendLog("success", "已无损更新 config.json userSettings 配置。");
+                _host.AppendLog("success", "已保存 Antigravity 全局运行配置。");
                 Dictionary<string, object> serialized = AntigravityConfigService.SerializeCockpitSummary(afterSnap, _host.GeminiPath, refThreshold);
                 bool ideRunning = _host.IsIdeRunning();
                 Dictionary<string, object> resp = new Dictionary<string, object>();
@@ -262,7 +262,13 @@ namespace AntigravityCompanion
                     }
                     _host.ReloadAllLocalStateLocked();
                 }
-                _host.AppendLog("success", string.Format("已切换 [{0}] {1} -> {2}", kind, id, resultingEnabled ? "启用" : "禁用"));
+                string kindCn = kind;
+                if (string.Equals(kind, "plugin", StringComparison.OrdinalIgnoreCase)) kindCn = "插件";
+                else if (string.Equals(kind, "mcp", StringComparison.OrdinalIgnoreCase)) kindCn = "MCP";
+                else if (string.Equals(kind, "hook", StringComparison.OrdinalIgnoreCase)) kindCn = "钩子";
+                else if (string.Equals(kind, "skill", StringComparison.OrdinalIgnoreCase)) kindCn = "技能";
+                else if (string.Equals(kind, "rule", StringComparison.OrdinalIgnoreCase)) kindCn = "规则";
+                _host.AppendLog("success", string.Format("已{0} [{1}] {2}", resultingEnabled ? "启用" : "停用", kindCn, id));
                 bool ideRunning = _host.IsIdeRunning();
                 Dictionary<string, object> resp = new Dictionary<string, object>();
                 resp["ok"] = true;

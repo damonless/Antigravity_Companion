@@ -195,16 +195,18 @@
     var inspectorHtml = '<div class="empty-state">在左侧点击任意对话即可逐条微调新标题</div>';
     if (focused) {
       var curEdit = getEffectiveNewTitle(focused);
+      var focusLocked = !!focused.isRunning;
       inspectorHtml =
+        (focusLocked ? '<div class="alert-banner" style="margin-bottom:0">🔒 该对话正在运行中，整理标题时会自动跳过，当前仅可只读查看。</div>' : '') +
         '<div class="between">' +
           '<div class="row gap-sm"><span class="badge badge-neutral">' + esc(focused.projectName === 'Outside of Project' ? '未关联项目' : focused.projectName) + '</span><span class="muted">' + esc(focused.stepCount) + ' 步 · ' + esc(focused.updatedTime) + '</span></div>' +
-          '<button class="btn btn-xs" id="btnRestoreRuleTitle" type="button">恢复规则建议</button>' +
+          '<button class="btn btn-xs" id="btnRestoreRuleTitle" type="button"' + (focusLocked ? ' disabled' : '') + '>恢复规则建议</button>' +
         '</div>' +
         '<div>' +
           '<div class="between" style="margin-bottom:5px"><label style="font-weight:600">新标题（实时生效）</label><span class="muted" id="lblNewTitleLen">' + curEdit.length + ' 字</span></div>' +
-          '<textarea class="textarea" id="txtEditNewTitle" rows="3">' + esc(curEdit) + '</textarea>' +
+          '<textarea class="textarea" id="txtEditNewTitle" rows="3"' + (focusLocked ? ' disabled' : '') + '>' + esc(curEdit) + '</textarea>' +
           '<div class="row gap-xs wrap" style="margin-top:6px">' +
-            '<button class="btn btn-xs" id="btnChipApplyPrefix" type="button">应用建议前缀: ' + esc(focused.suggestedPrefix) + '</button>' +
+            '<button class="btn btn-xs" id="btnChipApplyPrefix" type="button"' + (focusLocked ? ' disabled' : '') + '>应用建议前缀: ' + esc(focused.suggestedPrefix) + '</button>' +
           '</div>' +
         '</div>' +
         '<div>' +
@@ -475,17 +477,20 @@
     if (focused) {
       var ta = el('txtEditNewTitle');
       ta.addEventListener('input', function () {
+        if (focused.isRunning) return;
         st.renameEdits[focused.cid] = this.value;
         AGY.dom.setText('lblNewTitleLen', this.value.length + ' 字');
         var listTitleEl = root.querySelector('[data-cand-new-cid="' + focused.cid + '"]');
         if (listTitleEl) listTitleEl.textContent = '新：' + this.value;
       });
       el('btnRestoreRuleTitle').addEventListener('click', function () {
+        if (focused.isRunning) return;
         delete st.renameEdits[focused.cid];
         delete st.renameAiModified[focused.cid];
         AGY.dom.preserveScroll('#renStep2List', function () { renderRenameWizard(root); });
       });
       el('btnChipApplyPrefix').addEventListener('click', function () {
+        if (focused.isRunning) return;
         var cur = getEffectiveNewTitle(focused);
         var stripped = cur.replace(/^【[^】]{1,34}】\s*/, '');
         st.renameEdits[focused.cid] = (focused.suggestedPrefix || '') + stripped;

@@ -9143,38 +9143,64 @@ namespace AntigravityCompanion.Tests
                     AssertTrue(idx.BodyText.Contains("<div class=\"brand-ver\">V1.1</div>"), "T90: index.html shows V1.1 brand version");
 
                     RawHttpTestResponse appJs = SendRawTcpHttp(host.Port, null, "GET", "/app.js", apiHdr, null);
-                    AssertTrue(appJs.BodyText.Contains("setNavBadgeCount") && appJs.BodyText.Contains("prependSingleLogToDrawer") && appJs.BodyText.Contains("btnBootRetry"),
-                        "T90: app.js has nav badge hider, incremental log drawer, and boot retry button");
+                    AssertTrue(appJs.BodyText.Contains("setNavBadgeCount") && appJs.BodyText.Contains("prependSingleLogToDrawer") &&
+                        appJs.BodyText.Contains("appendOlderLogsToDrawerBottom") && appJs.BodyText.Contains("mergeOverviewWithLiveLogs") &&
+                        appJs.BodyText.Contains("btnBootRetry"),
+                        "T90: app.js has nav badge hider, race-safe incremental log drawer, and boot retry button");
 
                     RawHttpTestResponse ovJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/overview.js", apiHdr, null);
-                    AssertTrue(ovJs.BodyText.Contains("ov-proj-reloc-inline") && ovJs.BodyText.Contains("修复目录位置"),
-                        "T90: overview.js replaces broken launch buttons with inline relocate action");
+                    AssertTrue(ovJs.BodyText.Contains("ov-proj-reloc-inline") && ovJs.BodyText.Contains("修复目录位置") &&
+                        ovJs.BodyText.Contains("confirmAndExecuteGcClean"),
+                        "T90: overview.js replaces broken launch buttons with inline relocate action and confirms orphan clean");
+
+                    RawHttpTestResponse sessJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/sessions.js", apiHdr, null);
+                    AssertTrue(sessJs.BodyText.Contains("st.selectedBucketKey === '__LEGACY_CLI__'"),
+                        "T90: sessions.js hides write batch bar on read-only legacy CLI bucket");
 
                     RawHttpTestResponse renJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/rename.js", apiHdr, null);
-                    AssertTrue(renJs.BodyText.Contains("btnRenExitScoped") && renJs.BodyText.Contains("包含简短对话") && !renJs.BodyText.Contains("包含简短水话"),
-                        "T90: rename.js hides invalid scoped toggles and removes '包含简短水话'");
+                    AssertTrue(renJs.BodyText.Contains("btnRenExitScoped") && renJs.BodyText.Contains("包含简短对话") &&
+                        !renJs.BodyText.Contains("包含简短水话") && renJs.BodyText.Contains("focusLocked"),
+                        "T90: rename.js hides invalid scoped toggles, locks running Step 2 inspector, and removes '包含简短水话'");
 
                     RawHttpTestResponse stoJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/storage.js", apiHdr, null);
                     AssertTrue(stoJs.BodyText.Contains("translateIneligibleReason") && stoJs.BodyText.Contains("confirmMode5AColdArchiveModal") &&
                         stoJs.BodyText.Contains("confirmOrphanGcModal") && stoJs.BodyText.Contains("stoThresholdDirtyNotice") &&
+                        stoJs.BodyText.Contains("CASCADE_RUN_STATUS_IDLE") && stoJs.BodyText.Contains("notFullyIdle") &&
                         stoJs.BodyText.Contains("体积较小，无需拆解") && !stoJs.BodyText.Contains("未拆表"),
-                        "T90: storage.js includes Chinese reason mapping, confirmation modals, dirty threshold guard, and no jargon");
+                        "T90: storage.js handles CASCADE_RUN_STATUS_IDLE/notFullyIdle, Chinese reasons, modals, dirty guard, and no jargon");
 
                     RawHttpTestResponse vltJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/vault.js", apiHdr, null);
-                    AssertTrue(vltJs.BodyText.Contains("confirmAndExecuteCapSync") && vltJs.BodyText.Contains("del-manifest-list"),
-                        "T90: vault.js includes overwrite confirmation modal and item manifest in delete modal");
+                    AssertTrue(vltJs.BodyText.Contains("confirmAndExecuteCapSync") && vltJs.BodyText.Contains("del-manifest-list") &&
+                        vltJs.BodyText.Contains("getActionableCapKeys"),
+                        "T90: vault.js includes overwrite confirmation modal, actionable batch gating, and item manifest in delete modal");
+
+                    RawHttpTestResponse compJs = SendRawTcpHttp(host.Port, null, "GET", "/js/components.js", apiHdr, null);
+                    AssertTrue(compJs.BodyText.Contains("capDirectionLabel") && compJs.BodyText.Contains("diffFileStatusLabel"),
+                        "T90: components.js localizes diff file status tabs and unified V1.1 direction labels");
 
                     RawHttpTestResponse cpJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/cockpit.js", apiHdr, null);
                     AssertTrue(!cpJs.BodyText.Contains("(OFF)") && !cpJs.BodyText.Contains("(TURBO)") && !cpJs.BodyText.Contains("(INHERIT)"),
                         "T90: cockpit.js strips uppercase English enum suffixes");
 
                     RawHttpTestResponse bkJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/backup.js", apiHdr, null);
-                    AssertTrue(bkJs.BodyText.Contains("patchArchiveReviewPartial"),
-                        "T90: backup.js performs partial archive review updates without full rerender");
+                    AssertTrue(bkJs.BodyText.Contains("patchArchiveReviewPartial") && bkJs.BodyText.Contains("st.backupRestoreUserSettings = false"),
+                        "T90: backup.js performs partial archive review updates and resets restoreUserSettings on clear");
 
                     RawHttpTestResponse setJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/settings.js", apiHdr, null);
                     AssertTrue(setJs.BodyText.Contains("formatLocalDateTime"),
                         "T90: settings.js formats lastRunUtc as local readable time");
+
+                    // 6. Verify VisualDiffEngine directional badges match unified V1.1 terminology
+                    CapabilityDiffNode dnRem = new CapabilityDiffNode();
+                    dnRem.Direction = CapabilityDiffDirection.RemoteNewer;
+                    AssertEqual("同步库较新", dnRem.GetDirectionalBadge(), "T90: RemoteNewer badge uses V1.1 terminology");
+                    dnRem.Direction = CapabilityDiffDirection.NeedsReview;
+                    AssertEqual("需人工确认", dnRem.GetDirectionalBadge(), "T90: NeedsReview badge uses V1.1 terminology");
+                    dnRem.Direction = CapabilityDiffDirection.BothModified;
+                    AssertEqual("两边均有改动", dnRem.GetDirectionalBadge(), "T90: BothModified badge uses V1.1 terminology");
+
+                    // 7. Verify cockpit settings log uses clean Chinese terminology
+                    AssertTrue(ovResp.BodyText.Contains("已保存 Antigravity 全局运行配置"), "T90: Cockpit settings log avoids raw userSettings jargon");
 
                     host.Stop();
                 }

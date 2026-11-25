@@ -20,6 +20,7 @@
     if (it.direction === 'NeedsReview' || it.direction === 'Conflict') {
       return '<span class="badge badge-red">需人工确认</span>';
     }
+    if (it.direction === 'BothModified') return '<span class="badge badge-accent">两边均有改动</span>';
     if (it.direction === 'RemoteOnly') return '<span class="badge badge-blue">仅备份有</span>';
     if (it.direction === 'RemoteNewer') return '<span class="badge badge-blue">备份较新</span>';
     if (it.direction === 'LocalOnly') return '<span class="badge badge-amber">仅本机有</span>';
@@ -161,8 +162,10 @@
     for (var bi = 0; bi < subBtns.length; bi++) {
       subBtns[bi].addEventListener('click', function () {
         var pid = this.getAttribute('data-parent');
+        var prevTop = host.scrollTop;
         st.backupExpandedParents[pid] = !st.backupExpandedParents[pid];
         host.innerHTML = renderArchiveInnerTableHtml(bd);
+        host.scrollTop = prevTop;
         bindArchiveTableEvents(bd);
       });
     }
@@ -419,6 +422,7 @@
       el('btnBkClearPick').addEventListener('click', function () {
         st.backupCheckedCaps = {};
         st.backupCheckedConvs = {};
+        st.backupRestoreUserSettings = false;
         st.backupRestoreLegacyCli = false;
         patchArchiveReviewPartial(false);
       });

@@ -85,13 +85,29 @@
     });
   }
 
+  function getActionableCapKeys(actionType) {
+    var selKeys = Object.keys(AGY.state.capChecked).filter(function (k) { return AGY.state.capChecked[k]; });
+    var isImport = actionType === 'import';
+    var out = [];
+    for (var i = 0; i < selKeys.length; i++) {
+      var it = findCapItemByKey(selKeys[i]);
+      if (!it) continue;
+      if (it.direction === 'Aligned') continue;
+      if (isImport && it.remoteExists) out.push(selKeys[i]);
+      else if (!isImport && it.localExists) out.push(selKeys[i]);
+    }
+    return out;
+  }
+
   function updateCapBatchButtons() {
     var selKeys = Object.keys(AGY.state.capChecked).filter(function (k) { return AGY.state.capChecked[k]; });
+    var pushable = getActionableCapKeys('push');
+    var importable = getActionableCapKeys('import');
     var pushBtn = AGY.dom.el('btnCapPushSel');
     var impBtn = AGY.dom.el('btnCapImportSel');
     var delBtn = AGY.dom.el('btnCapDeleteMenu');
-    if (pushBtn) { pushBtn.disabled = selKeys.length === 0; pushBtn.textContent = '存入配置同步库 (' + selKeys.length + ')'; }
-    if (impBtn) { impBtn.disabled = selKeys.length === 0; impBtn.textContent = '同步到本机 (' + selKeys.length + ')'; }
+    if (pushBtn) { pushBtn.disabled = pushable.length === 0; pushBtn.textContent = '存入配置同步库 (' + pushable.length + ')'; }
+    if (impBtn) { impBtn.disabled = importable.length === 0; impBtn.textContent = '同步到本机 (' + importable.length + ')'; }
     if (delBtn) delBtn.disabled = selKeys.length === 0;
   }
 
@@ -406,12 +422,12 @@
     });
 
     el('btnCapPushSel').addEventListener('click', function () {
-      var keys = Object.keys(st.capChecked).filter(function (k) { return st.capChecked[k]; });
+      var keys = getActionableCapKeys('push');
       if (keys.length === 0) return;
       confirmAndExecuteCapSync('push', keys, this);
     });
     el('btnCapImportSel').addEventListener('click', function () {
-      var keys = Object.keys(st.capChecked).filter(function (k) { return st.capChecked[k]; });
+      var keys = getActionableCapKeys('import');
       if (keys.length === 0) return;
       confirmAndExecuteCapSync('import', keys, this);
     });
@@ -478,7 +494,7 @@
         mf.querySelector('[data-act="cancel"]').addEventListener('click', AGY.ui.closeModal);
         mf.querySelector('[data-act="confirm"]').addEventListener('click', function () {
           AGY.ui.closeModal();
-          runNow(null);
+          runNow(btn || null);
         });
       }
     );

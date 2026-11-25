@@ -306,7 +306,33 @@
 
     el('btnOverviewGcScan').addEventListener('click', function () { handleReadOnlyGcScan(this); });
     var btnClean = el('btnOverviewGcClean');
-    if (btnClean) btnClean.addEventListener('click', function () { promptAndExecuteGcClean(false, false, this); });
+    if (btnClean) btnClean.addEventListener('click', function () { confirmAndExecuteGcClean(gc, this); });
+  }
+
+  function confirmAndExecuteGcClean(gc, triggerBtn) {
+    var esc = AGY.ui.escapeHtml;
+    var res = gc || {};
+    var tmpCnt = (res.orphanDbBakCount || 0) + (res.orphanDbJournalCount || 0);
+    AGY.ui.openModal(
+      '确认清理残留垃圾文件？',
+      '<div class="alert-banner success" style="margin-bottom:10px">🛡 <strong>可撤销清理：</strong>所有残留垃圾文件都会先移入 <strong>回收站</strong>，30 天内随时可一键还原，不会影响正常对话或项目源码。</div>' +
+      '<ul style="margin:6px 0 8px 18px;line-height:1.7">' +
+        '<li>残留对话数：<strong>' + esc(res.sessionCount || 0) + '</strong> 个</li>' +
+        '<li>残留数据库文件：<strong>' + esc(res.dbFilesCount || 0) + '</strong> 个</li>' +
+        (tmpCnt > 0 ? '<li>残留备份/临时文件 (.bak / -journal)：<strong>' + esc(tmpCnt) + '</strong> 个</li>' : '') +
+        '<li>残留产物目录：<strong>' + esc(res.brainDirsCount || 0) + '</strong> 个</li>' +
+        '<li>残留标题记录 (.pbtxt)：<strong>' + esc(res.annotationFilesCount || 0) + '</strong> 个</li>' +
+        '<li>预计释放空间：<strong>' + esc(res.totalMegabytes || 0) + ' MB</strong></li>' +
+      '</ul>',
+      '<button class="btn" data-act="cancel">取消</button><button class="btn btn-danger" data-act="confirm">确认移入回收站并清理</button>',
+      function (_b, mf) {
+        mf.querySelector('[data-act="cancel"]').addEventListener('click', AGY.ui.closeModal);
+        mf.querySelector('[data-act="confirm"]').addEventListener('click', function () {
+          AGY.ui.closeModal();
+          promptAndExecuteGcClean(false, false, triggerBtn || null);
+        });
+      }
+    );
   }
 
   async function flushPendingPbFromOverview(btn, closeIde, forceKill) {

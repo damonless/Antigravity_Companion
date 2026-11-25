@@ -103,13 +103,20 @@
     }
   }
 
-  var renderedLogKeys = [];
+  var renderedLogEntries = [];
+  var renderedLogKeySet = {};
   var logDrawerInitialized = false;
 
   function logItemKey(l) {
     if (!l) return '';
     if (l.seq !== undefined && l.seq !== null) return 'seq:' + l.seq;
     return (l.time || '') + '|' + (l.level || '') + '|' + (l.message || '');
+  }
+
+  function logItemSeq(l) {
+    if (!l || l.seq === undefined || l.seq === null) return null;
+    var n = Number(l.seq);
+    return (!isNaN(n) && isFinite(n)) ? n : null;
   }
 
   function createLogLineElement(l) {
@@ -127,27 +134,61 @@
     if (aDot) aDot.className = 'activity-dot' + (latest.level === 'warn' ? ' warn' : (latest.level === 'error' ? ' error' : ''));
   }
 
+  function trimRenderedLogsToCap(body) {
+    while (renderedLogEntries.length > 300) {
+      var oldest = renderedLogEntries.shift();
+      delete renderedLogKeySet[oldest.key];
+      if (oldest.node && oldest.node.parentNode === body) {
+        body.removeChild(oldest.node);
+      }
+    }
+  }
+
   function prependSingleLogToDrawer(item) {
     var body = AGY.dom.el('logDrawerBody');
     if (!body || !item) return;
     var k = logItemKey(item);
-    if (renderedLogKeys.length > 0 && renderedLogKeys[renderedLogKeys.length - 1] === k) {
-      return;
-    }
+    if (!k || renderedLogKeySet[k]) return;
+
     var emptyEl = body.querySelector('.log-empty-placeholder');
     if (emptyEl && emptyEl.parentNode) emptyEl.parentNode.removeChild(emptyEl);
 
     var node = createLogLineElement(item);
     var prevScrollTop = body.scrollTop;
     body.insertBefore(node, body.firstChild);
-    renderedLogKeys.push(k);
+    renderedLogEntries.push({ key: k, seq: logItemSeq(item), node: node });
+    renderedLogKeySet[k] = true;
 
-    while (renderedLogKeys.length > 300) {
-      renderedLogKeys.shift();
-      if (body.lastChild) body.removeChild(body.lastChild);
-    }
+    trimRenderedLogsToCap(body);
     if (prevScrollTop > 0) {
       body.scrollTop = prevScrollTop + (node.offsetHeight || 0);
+    }
+    logDrawerInitialized = true;
+  }
+
+  function appendOlderLogsToDrawerBottom(olderItems) {
+    var body = AGY.dom.el('logDrawerBody');
+    if (!body || !olderItems || olderItems.length === 0) return;
+    var emptyEl = body.querySelector('.log-empty-placeholder');
+    if (emptyEl && emptyEl.parentNode) emptyEl.parentNode.removeChild(emptyEl);
+
+    // olderItems are in ascending chronological order; DOM shows newest at top -> oldest at bottom
+    var frag = document.createDocumentFragment();
+    var addedEntries = [];
+    for (var i = olderItems.length - 1; i >= 0; i--) {
+      var item = olderItems[i];
+      var k = logItemKey(item);
+      if (!k || renderedLogKeySet[k]) continue;
+      var node = createLogLineElement(item);
+      frag.appendChild(node);
+      addedEntries.push({ key: k, seq: logItemSeq(item), node: node });
+      renderedLogKeySet[k] = true;
+    }
+    if (addedEntries.length > 0) {
+      body.appendChild(frag);
+      addedEntries.reverse(); // restore ascending order
+      renderedLogEntries = addedEntries.concat(renderedLogEntries);
+      trimRenderedLogsToCap(body);
     }
     logDrawerInitialized = true;
   }
@@ -158,44 +199,101 @@
     var list = Array.isArray(logs) ? logs : [];
 
     if (list.length === 0) {
-      if (!logDrawerInitialized || renderedLogKeys.length > 0) {
+      if (!logDrawerInitialized) {
         body.innerHTML = '<div class="muted log-empty-placeholder">暂无活动记录</div>';
-        renderedLogKeys = [];
+        renderedLogEntries = [];
+        renderedLogKeySet = {};
         logDrawerInitialized = true;
       }
       return;
     }
 
-    if (logDrawerInitialized && renderedLogKeys.length > 0) {
-      var lastRenderedKey = renderedLogKeys[renderedLogKeys.length - 1];
-      var matchIdx = -1;
-      for (var m = list.length - 1; m >= 0; m--) {
-        if (logItemKey(list[m]) === lastRenderedKey) {
-          matchIdx = m;
-          break;
-        }
+    if (!logDrawerInitialized || renderedLogEntries.length === 0) {
+      var frag = document.createDocumentFragment();
+      renderedLogEntries = [];
+      renderedLogKeySet = {};
+      var entriesDesc = [];
+      for (var i = list.length - 1; i >= 0; i--) {
+        var kInit = logItemKey(list[i]);
+        if (!kInit || renderedLogKeySet[kInit]) continue;
+        var nodeInit = createLogLineElement(list[i]);
+        frag.appendChild(nodeInit);
+        entriesDesc.push({ key: kInit, seq: logItemSeq(list[i]), node: nodeInit });
+        renderedLogKeySet[kInit] = true;
       }
-      if (matchIdx >= 0) {
-        if (matchIdx < list.length - 1) {
-          for (var n = matchIdx + 1; n < list.length; n++) {
-            prependSingleLogToDrawer(list[n]);
-          }
-        }
-        return;
+      entriesDesc.reverse();
+      renderedLogEntries = entriesDesc;
+      body.innerHTML = '';
+      body.appendChild(frag);
+      trimRenderedLogsToCap(body);
+      logDrawerInitialized = true;
+      return;
+    }
+
+    // Incremental reconciliation: NEVER wipe existing DOM nodes!
+    var oldestRendered = renderedLogEntries[0];
+    var newestRendered = renderedLogEntries[renderedLogEntries.length - 1];
+    var oldestSeq = oldestRendered.seq;
+    var newestSeq = newestRendered.seq;
+
+    var firstRenderedIdxInList = -1;
+    var lastRenderedIdxInList = -1;
+    for (var idx = 0; idx < list.length; idx++) {
+      var lk = logItemKey(list[idx]);
+      if (renderedLogKeySet[lk]) {
+        if (firstRenderedIdxInList < 0) firstRenderedIdxInList = idx;
+        lastRenderedIdxInList = idx;
       }
     }
 
-    var frag = document.createDocumentFragment();
-    renderedLogKeys = [];
-    for (var i = list.length - 1; i >= 0; i--) {
-      frag.appendChild(createLogLineElement(list[i]));
-    }
+    var olderToBackfill = [];
+    var newerToPrepend = [];
     for (var j = 0; j < list.length; j++) {
-      renderedLogKeys.push(logItemKey(list[j]));
+      var item = list[j];
+      var key = logItemKey(item);
+      if (!key || renderedLogKeySet[key]) continue;
+      var s = logItemSeq(item);
+      if (s !== null && oldestSeq !== null && newestSeq !== null) {
+        if (s < oldestSeq) olderToBackfill.push(item);
+        else if (s > newestSeq) newerToPrepend.push(item);
+      } else if (firstRenderedIdxInList >= 0) {
+        if (j < firstRenderedIdxInList) olderToBackfill.push(item);
+        else if (j > lastRenderedIdxInList) newerToPrepend.push(item);
+      } else {
+        newerToPrepend.push(item);
+      }
     }
-    body.innerHTML = '';
-    body.appendChild(frag);
-    logDrawerInitialized = true;
+
+    if (olderToBackfill.length > 0) {
+      appendOlderLogsToDrawerBottom(olderToBackfill);
+    }
+    for (var n = 0; n < newerToPrepend.length; n++) {
+      prependSingleLogToDrawer(newerToPrepend[n]);
+    }
+  }
+
+  function mergeOverviewWithLiveLogs(prevOverview, incomingOverview) {
+    if (!incomingOverview) return prevOverview;
+    var prevLogs = (prevOverview && Array.isArray(prevOverview.logs)) ? prevOverview.logs : [];
+    var nextLogs = Array.isArray(incomingOverview.logs) ? incomingOverview.logs.slice() : [];
+    if (prevLogs.length > 0 && nextLogs.length > 0) {
+      var maxNextSeq = -1;
+      for (var i = 0; i < nextLogs.length; i++) {
+        var ns = logItemSeq(nextLogs[i]);
+        if (ns !== null && ns > maxNextSeq) maxNextSeq = ns;
+      }
+      if (maxNextSeq >= 0) {
+        for (var p = 0; p < prevLogs.length; p++) {
+          var ps = logItemSeq(prevLogs[p]);
+          if (ps !== null && ps > maxNextSeq) {
+            nextLogs.push(prevLogs[p]);
+          }
+        }
+        if (nextLogs.length > 300) nextLogs = nextLogs.slice(nextLogs.length - 300);
+        incomingOverview.logs = nextLogs;
+      }
+    }
+    return incomingOverview;
   }
 
   function setNavBadgeCount(id, count) {
@@ -417,7 +515,7 @@
       fetchViewDataOnly(active)
     ]);
     if (settled[0].status === 'fulfilled') {
-      st.overview = settled[0].value;
+      st.overview = mergeOverviewWithLiveLogs(st.overview, settled[0].value);
     }
     if (settled[1].status === 'fulfilled') {
       st.companionSettings = settled[1].value;
@@ -723,7 +821,7 @@
         updateShellBars();
         if (wasRunning && !payload.running) {
           AGY.api.apiFetch('/api/overview').then(function (ov) {
-            st.overview = ov;
+            st.overview = mergeOverviewWithLiveLogs(st.overview, ov);
             updateShellBars();
             if (!hasUnsavedWork() && st.view === 'overview') renderCurrentView();
           }).catch(function () {});
@@ -734,7 +832,7 @@
           markNonActiveDirty(null);
           showStaleDataNotice('检测到本机或配置同步库文件发生变化。为保护您的未保存修改，已暂缓刷新。');
           AGY.api.apiFetch('/api/overview').then(function (ov) {
-            st.overview = ov;
+            st.overview = mergeOverviewWithLiveLogs(st.overview, ov);
             updateShellBars();
           }).catch(function () {});
         } else {
@@ -748,7 +846,7 @@
           markNonActiveDirty(null);
           showStaleDataNotice('后台任务已完成。您当前有未保存的编辑内容，保存后点击「立即刷新视图」即可看到最新结果。');
           AGY.api.apiFetch('/api/overview').then(function (ov) {
-            st.overview = ov;
+            st.overview = mergeOverviewWithLiveLogs(st.overview, ov);
             updateShellBars();
           }).catch(function () {});
         } else {

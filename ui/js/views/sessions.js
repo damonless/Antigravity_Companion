@@ -148,7 +148,7 @@
     var checkedCids = Object.keys(st.checkedSessions).filter(function (id) { return st.checkedSessions[id]; });
     var bar = el('sessBatchBar');
     if (!bar) return;
-    if (checkedCids.length === 0) {
+    if (st.selectedBucketKey === '__LEGACY_CLI__' || checkedCids.length === 0) {
       bar.classList.add('hidden');
     } else {
       bar.classList.remove('hidden');

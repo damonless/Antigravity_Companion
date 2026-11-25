@@ -720,7 +720,7 @@ namespace AntigravityCompanion
                         return true;
                     }
                     int pendingCntAfterRb = TrashAndBackupService.GetPendingPbSyncCount(_host.GeminiPath);
-                    _host.AppendLog("success", string.Format("回滚完成：恢复 .pbtxt {0} 条、删除新建 .pbtxt {1} 条，Layer 2 DB {2} 条，Layer 3 PB {3} 条。",
+                    _host.AppendLog("success", string.Format("已撤销批量改名：恢复标题记录 {0} 条、清理新建记录 {1} 条、同步摘要库 {2} 条、侧边栏索引 {3} 条。",
                         rbRes.RestoredPbtxtCount, rbRes.DeletedPbtxtCount, rbRes.RestoredDbCount, rbRes.RestoredPbCount));
                     Dictionary<string, object> resp = new Dictionary<string, object>();
                     resp["ok"] = true;

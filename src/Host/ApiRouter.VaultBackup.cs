@@ -216,7 +216,7 @@ namespace AntigravityCompanion
                         HttpProtocolHelper.WriteJsonError(stream, 400, "未在目标配置中匹配到原路径，或新旧路径一致。");
                         return true;
                     }
-                    _host.AppendLog("success", string.Format("已重定向能力路径: {0} -> {1}", oldPath, newPath));
+                    _host.AppendLog("success", string.Format("已修复扩展依赖路径：{0} -> {1}", oldPath, newPath));
                     Dictionary<string, object> resp = new Dictionary<string, object>();
                     resp["ok"] = true;
                     HttpProtocolHelper.WriteJsonResponse(stream, 200, resp);
@@ -505,7 +505,7 @@ namespace AntigravityCompanion
                     migrated = CapabilityVaultService.MigrateLegacyRepositoryToVault(legacyRepoDir, _host.RepoPath);
                     _host.ReloadAllLocalStateLocked();
                 }
-                _host.AppendLog("success", string.Format("已从旧版 ./Repository 迁移 {0} 个文件到当前 Vault。", migrated));
+                _host.AppendLog("success", string.Format("已从旧版 ./Repository 迁移 {0} 个文件到当前配置同步库。", migrated));
                 Dictionary<string, object> resp = BuildVaultStatusPayload();
                 resp["ok"] = true;
                 resp["migratedFiles"] = migrated;
@@ -671,11 +671,11 @@ namespace AntigravityCompanion
             bool fromBackup = string.Equals(source, "backup", StringComparison.OrdinalIgnoreCase);
             if (keys.Count == 0)
             {
-                return FailCommand(400, "请选择要导入本地的能力项。");
+                return FailCommand(400, "请选择要同步到本机的扩展配置项。");
             }
 
             // FIX P1-11: Acquire job lock
-            if (!_host.TryAcquireJob("capabilities_import", "正在按 Key 级无损导入能力配置..."))
+            if (!_host.TryAcquireJob("capabilities_import", "正在将扩展配置同步到本机..."))
             {
                 return FailJobBusy("当前有其他后台任务正在执行，请稍后再试。");
             }
@@ -697,13 +697,13 @@ namespace AntigravityCompanion
                     List<CapabilityItem> selected = SelectCapsByKeys(poolSnap, keys);
                     if (selected.Count == 0)
                     {
-                        return FailCommand(404, "目标来源未找到所选能力项。");
+                        return FailCommand(404, "目标来源未找到所选扩展配置项。");
                     }
                     written = CapabilityVaultService.ImportCapabilitiesToLocal(_host.GeminiPath, _host.HomePath, selected);
                     if (!fromBackup) _host.UpdateBaselineForCapabilities(selected);
                     _host.ReloadAllLocalStateLocked();
                 }
-                _host.AppendLog("success", string.Format("已按 Key 级无损导入 {0} 项能力至本机 .gemini 目录。", keys.Count));
+                _host.AppendLog("success", string.Format("已将 {0} 项扩展配置同步到本机。", keys.Count));
                 Dictionary<string, object> resp = new Dictionary<string, object>();
                 resp["ok"] = true;
                 resp["written"] = written;
@@ -1086,7 +1086,7 @@ namespace AntigravityCompanion
                 _host.NotifySettingsChanged();
             }
 
-            _host.AppendLog("success", "已保存 Companion 伴侣运行与快照设置。");
+            _host.AppendLog("success", "已保存应用设置与自动备份计划。");
             Dictionary<string, object> resp = BuildCompanionSettingsPayload();
             resp["ok"] = true;
             if (startupRollback)
