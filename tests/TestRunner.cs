@@ -21,7 +21,7 @@ namespace AntigravityCompanion.Tests
         {
             Console.OutputEncoding = Encoding.UTF8;
             Console.WriteLine("===============================================================================");
-            Console.WriteLine("  Antigravity Companion V1.0 - Production Code Verification Suite");
+            Console.WriteLine("  Antigravity Companion V1.1 - Production Code Verification Suite");
             Console.WriteLine("===============================================================================");
 
             Stopwatch sw = Stopwatch.StartNew();
@@ -115,6 +115,7 @@ namespace AntigravityCompanion.Tests
             Run("T87_Phase2_OnlineHotBackupSmartAutoFlushAndLiveSse", T87_Phase2_OnlineHotBackupSmartAutoFlushAndLiveSse);
             Run("T88_Phase2_TrayDebounceUnifiedOrphanEngineAndUiParity", T88_Phase2_TrayDebounceUnifiedOrphanEngineAndUiParity);
             Run("T89_Phase2_ReviewHardening_TrashVaultSafetySubdirWatchAndShellMatch", T89_Phase2_ReviewHardening_TrashVaultSafetySubdirWatchAndShellMatch);
+            Run("T90_Phase2_UxPolish_ConversationWidthResetChineseLogsAndUiInvariants", T90_Phase2_UxPolish_ConversationWidthResetChineseLogsAndUiInvariants);
 
             sw.Stop();
             Console.WriteLine("-------------------------------------------------------------------------------");
@@ -3748,7 +3749,7 @@ namespace AntigravityCompanion.Tests
                     AssertTrue(boot.Headers.TryGetValue("Content-Security-Policy", out csp) &&
                         csp.Contains("script-src 'self'") && csp.Contains("style-src 'self' 'unsafe-inline'"),
                         "Sends hardened CSP header allowing inline styles but blocking inline scripts");
-                    AssertTrue(boot.BodyText.Contains("Antigravity Companion"), "Serves embedded index.html");
+                    AssertTrue(boot.BodyText.Contains("Antigravity 伴侣"), "Serves embedded index.html");
 
                     // 5. Cookie-only reload (F5) + static CSS/JS + /api/auth/session
                     Dictionary<string, string> cookieHdr = new Dictionary<string, string> { { "Cookie", sidName + "=" + token } };
@@ -6656,7 +6657,7 @@ namespace AntigravityCompanion.Tests
 
                     RawHttpTestResponse boot = SendRawTcpHttp(host.Port, null, "GET", "/?t=" + token, null, null);
                     AssertEqual(200, boot.StatusCode, "T72: GET /?t=token returns 200");
-                    AssertTrue(boot.BodyText.Contains("Antigravity Companion V1.0"), "T72: index.html has V1.0 title");
+                    AssertTrue(boot.BodyText.Contains("Antigravity 伴侣 V1.1"), "T72: index.html has V1.1 title");
                     AssertTrue(boot.BodyText.Contains("/js/views/backup.js"), "T72: index.html references modular views");
 
                     string sidName = "agy_sid_" + host.Port;
@@ -6677,7 +6678,8 @@ namespace AntigravityCompanion.Tests
                         "/js/views/storage.js",
                         "/js/views/vault.js",
                         "/js/views/backup.js",
-                        "/js/views/settings.js"
+                        "/js/views/settings.js",
+                        "/js/views/trash.js"
                     };
 
                     for (int i = 0; i < assetPaths.Length; i++)
@@ -6738,10 +6740,11 @@ namespace AntigravityCompanion.Tests
                 {
                     string[] items = tray.MenuItemTexts;
                     AssertEqual(4, items.Length, "T73: Tray menu exposes 4 action items");
-                    AssertEqual("打开驾驶舱", items[0], "T73: Menu item 0 matches");
-                    AssertEqual("立即执行极速快照", items[1], "T73: Menu item 1 matches");
-                    AssertEqual("开机自启动", items[2], "T73: Menu item 2 matches");
+                    AssertEqual("打开主窗口", items[0], "T73: Menu item 0 matches");
+                    AssertEqual("立即创建自动备份", items[1], "T73: Menu item 1 matches");
+                    AssertEqual("开机自动启动", items[2], "T73: Menu item 2 matches");
                     AssertEqual("退出", items[3], "T73: Menu item 3 matches");
+                    AssertEqual("Antigravity 伴侣 V1.1", tray.NotifyIconText, "T73: Tray tooltip matches V1.1 unified branding");
                     AssertTrue(!tray.StartupMenuChecked, "T73: Startup menu initially unchecked");
 
                     CompanionSettings cfg = host.SnapshotService.GetSettings();
@@ -9039,6 +9042,139 @@ namespace AntigravityCompanion.Tests
                         string fsEv2 = ReadSseUntilEvent(sseStream, "fs_changed", 4500);
                         AssertTrue(fsEv2.Contains("event: fs_changed"), "T89: FileSystemWatcher detects subdirectory edits under Vault/rules/");
                     }
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // T90: V1.1 UX Polish — conversationWidth Explicit Clear/Reset,
+        //      Chinese Storage Slim Logs + Monotonic Log Seq, V1.1 WebShell
+        //      Window Match & Embedded UI Invariants
+        // ══════════════════════════════════════════════════════════════════════
+        private static void T90_Phase2_UxPolish_ConversationWidthResetChineseLogsAndUiInvariants()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t90_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string agyDir = Path.Combine(geminiDir, "antigravity");
+                string convDir = Path.Combine(agyDir, "conversations");
+                string cfgDir = Path.Combine(geminiDir, "config");
+                string vaultDir = Path.Combine(sb, "Vault");
+                Directory.CreateDirectory(convDir);
+                Directory.CreateDirectory(cfgDir);
+                Directory.CreateDirectory(vaultDir);
+
+                // 1. WebShellLauncher matches V1.1 Chinese title and rejects tabbed browser titles
+                AssertTrue(WebShellLauncher.IsMatchingWebShellWindow("msedge", "Chrome_WidgetWin_1", "Antigravity 伴侣 V1.1"),
+                    "T90: Matches Edge --app V1.1 title");
+                AssertTrue(!WebShellLauncher.IsMatchingWebShellWindow("msedge", "Chrome_WidgetWin_1", "Antigravity 伴侣 V1.1 - Personal - Microsoft Edge"),
+                    "T90: Rejects tabbed Edge V1.1 title");
+
+                // 2. Seed config.json with JSONC comment + conversationWidth
+                string cfgPath = Path.Combine(cfgDir, "config.json");
+                File.WriteAllText(cfgPath,
+                    "{\r\n" +
+                    "  // T90 comment preserved\r\n" +
+                    "  \"userSettings\": {\r\n" +
+                    "    \"themeMode\": \"THEME_MODE_LIGHT\",\r\n" +
+                    "    \"conversationWidth\": \"480\"\r\n" +
+                    "  }\r\n" +
+                    "}\r\n",
+                    Encoding.UTF8);
+
+                // Seed 1 orphan .db so /api/storage/slim orphanGcOnly logs cleanly
+                CreateMinimalValidSqliteDb(Path.Combine(convDir, "90000000-0000-0000-0000-000000000090.db"), "orph90");
+
+                string token = "t90_tok_ux";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, vaultDir, 0, token))
+                {
+                    host.IdeRunningOverride = delegate() { return false; };
+                    host.Start();
+
+                    // 3. Reset conversationWidth via null in POST /api/cockpit/settings
+                    RawHttpTestResponse clearNull = SendRawTcpHttp(host.Port, null, "POST", "/api/cockpit/settings", apiHdr,
+                        "{\"userSettings\":{\"themeMode\":\"THEME_MODE_LIGHT\",\"conversationWidth\":null}}");
+                    AssertEqual(200, clearNull.StatusCode, "T90: Reset conversationWidth via null returns 200");
+                    Dictionary<string, object> usAfterNull = UnifiedJson.AsDict(UnifiedJson.AsDict(UnifiedJson.Parse(clearNull.BodyText))["userSettings"]);
+                    AssertEqual(string.Empty, UnifiedJson.GetString(usAfterNull, "conversationWidth", "NONEMPTY"),
+                        "T90: conversationWidth cleared to empty string in response");
+                    string cfgText1 = File.ReadAllText(cfgPath, Encoding.UTF8);
+                    AssertTrue(cfgText1.Contains("// T90 comment preserved"), "T90: JSONC comment preserved after conversationWidth reset");
+                    AssertTrue(!cfgText1.Contains("conversationWidth"), "T90: conversationWidth key cleanly removed from config.json");
+                    AssertTrue(cfgText1.Contains("THEME_MODE_LIGHT"), "T90: Sibling themeMode preserved");
+
+                    // Re-set conversationWidth to 600, then clear via empty string ""
+                    RawHttpTestResponse set600 = SendRawTcpHttp(host.Port, null, "POST", "/api/cockpit/settings", apiHdr,
+                        "{\"userSettings\":{\"conversationWidth\":\"600\"}}");
+                    AssertEqual(200, set600.StatusCode, "T90: Re-set conversationWidth to 600 returns 200");
+                    AssertTrue(File.ReadAllText(cfgPath, Encoding.UTF8).Contains("\"600\""), "T90: conversationWidth=600 persisted");
+
+                    RawHttpTestResponse clearEmpty = SendRawTcpHttp(host.Port, null, "POST", "/api/cockpit/settings", apiHdr,
+                        "{\"userSettings\":{\"conversationWidth\":\"\"}}");
+                    AssertEqual(200, clearEmpty.StatusCode, "T90: Reset conversationWidth via empty string returns 200");
+                    AssertTrue(!File.ReadAllText(cfgPath, Encoding.UTF8).Contains("conversationWidth"),
+                        "T90: conversationWidth key removed when set to empty string");
+
+                    // 4. Storage slim log uses Chinese mode name and never leaks C# enum or old jargon
+                    RawHttpTestResponse slimResp = SendRawTcpHttp(host.Port, null, "POST", "/api/storage/slim", apiHdr,
+                        "{\"mode\":\"orphanGcOnly\",\"cleanOrphans\":true}");
+                    AssertEqual(200, slimResp.StatusCode, "T90: /api/storage/slim orphanGcOnly returns 200");
+
+                    RawHttpTestResponse ovResp = SendRawTcpHttp(host.Port, null, "GET", "/api/overview", apiHdr, null);
+                    AssertEqual(200, ovResp.StatusCode, "T90: GET /api/overview returns 200");
+                    AssertTrue(ovResp.BodyText.Contains("空间清理完成（残留垃圾清理"), "T90: Overview logs contain Chinese storage clean mode");
+                    AssertTrue(!ovResp.BodyText.Contains("存储瘦身"), "T90: Overview logs contain zero legacy jargon '存储瘦身'");
+                    AssertTrue(!ovResp.BodyText.Contains("OrphanGcOnly"), "T90: Overview logs never leak raw C# enum name");
+                    AssertTrue(ovResp.BodyText.Contains("\"seq\":"), "T90: Activity log entries include monotonic seq");
+
+                    // 5. Embedded UI structural checks for all V1.1 UX polish items
+                    RawHttpTestResponse idx = SendRawTcpHttp(host.Port, null, "GET", "/?t=" + token, null, null);
+                    AssertTrue(idx.BodyText.Contains("id=\"navCountUntagged\"") && idx.BodyText.Contains("nav-pill-accent hidden"),
+                        "T90: index.html hides zero-count nav pills initially");
+                    AssertTrue(idx.BodyText.Contains("<div class=\"brand-ver\">V1.1</div>"), "T90: index.html shows V1.1 brand version");
+
+                    RawHttpTestResponse appJs = SendRawTcpHttp(host.Port, null, "GET", "/app.js", apiHdr, null);
+                    AssertTrue(appJs.BodyText.Contains("setNavBadgeCount") && appJs.BodyText.Contains("prependSingleLogToDrawer") && appJs.BodyText.Contains("btnBootRetry"),
+                        "T90: app.js has nav badge hider, incremental log drawer, and boot retry button");
+
+                    RawHttpTestResponse ovJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/overview.js", apiHdr, null);
+                    AssertTrue(ovJs.BodyText.Contains("ov-proj-reloc-inline") && ovJs.BodyText.Contains("修复目录位置"),
+                        "T90: overview.js replaces broken launch buttons with inline relocate action");
+
+                    RawHttpTestResponse renJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/rename.js", apiHdr, null);
+                    AssertTrue(renJs.BodyText.Contains("btnRenExitScoped") && renJs.BodyText.Contains("包含简短对话") && !renJs.BodyText.Contains("包含简短水话"),
+                        "T90: rename.js hides invalid scoped toggles and removes '包含简短水话'");
+
+                    RawHttpTestResponse stoJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/storage.js", apiHdr, null);
+                    AssertTrue(stoJs.BodyText.Contains("translateIneligibleReason") && stoJs.BodyText.Contains("confirmMode5AColdArchiveModal") &&
+                        stoJs.BodyText.Contains("confirmOrphanGcModal") && stoJs.BodyText.Contains("stoThresholdDirtyNotice") &&
+                        stoJs.BodyText.Contains("体积较小，无需拆解") && !stoJs.BodyText.Contains("未拆表"),
+                        "T90: storage.js includes Chinese reason mapping, confirmation modals, dirty threshold guard, and no jargon");
+
+                    RawHttpTestResponse vltJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/vault.js", apiHdr, null);
+                    AssertTrue(vltJs.BodyText.Contains("confirmAndExecuteCapSync") && vltJs.BodyText.Contains("del-manifest-list"),
+                        "T90: vault.js includes overwrite confirmation modal and item manifest in delete modal");
+
+                    RawHttpTestResponse cpJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/cockpit.js", apiHdr, null);
+                    AssertTrue(!cpJs.BodyText.Contains("(OFF)") && !cpJs.BodyText.Contains("(TURBO)") && !cpJs.BodyText.Contains("(INHERIT)"),
+                        "T90: cockpit.js strips uppercase English enum suffixes");
+
+                    RawHttpTestResponse bkJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/backup.js", apiHdr, null);
+                    AssertTrue(bkJs.BodyText.Contains("patchArchiveReviewPartial"),
+                        "T90: backup.js performs partial archive review updates without full rerender");
+
+                    RawHttpTestResponse setJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/settings.js", apiHdr, null);
+                    AssertTrue(setJs.BodyText.Contains("formatLocalDateTime"),
+                        "T90: settings.js formats lastRunUtc as local readable time");
 
                     host.Stop();
                 }

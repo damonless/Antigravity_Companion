@@ -26,6 +26,15 @@
     return '<span class="badge badge-amber">未检测到 CLI</span> <span class="muted" style="font-size:11.5px">' + esc(cliStat.versionOrHint || '') + '</span>';
   }
 
+  function formatLocalDateTime(iso) {
+    if (!iso) return '';
+    try {
+      var d = new Date(iso);
+      if (!isNaN(d.getTime())) return d.toLocaleString();
+    } catch (_e) {}
+    return String(iso);
+  }
+
   function renderSettings() {
     var el = AGY.dom.el;
     var st = AGY.state;
@@ -35,7 +44,7 @@
     var vs = st.vaultStatus || { vaultPath: cfg.vaultPath || '' };
 
     var snapLastInfo = snap.lastRunUtc
-      ? ('上次执行：' + esc(snap.lastRunUtc) + ' · 大小：' + esc(snap.lastSizeMegabytes || 0) + ' MB' +
+      ? ('上次执行：' + esc(formatLocalDateTime(snap.lastRunUtc)) + ' · 大小：' + esc(snap.lastSizeMegabytes || 0) + ' MB' +
          (snap.lastFilePath ? (' · 文件：' + esc(snap.lastFilePath)) : '') +
          (snap.lastError ? (' · <span style="color:var(--red-text)">错误：' + esc(snap.lastError) + '</span>') : ''))
       : '尚未执行过自动备份';

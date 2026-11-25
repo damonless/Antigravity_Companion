@@ -114,26 +114,29 @@
         '</div>';
     }
     return visible.map(function (row) {
-      var isChecked = !!st.checkedSessions[row.cid];
+      var isReadOnly = !!row.isLegacyCli;
+      var isChecked = !isReadOnly && !!st.checkedSessions[row.cid];
       var projText = (row.projectName === 'Outside of Project' || !row.projectName) ? '未关联项目' : row.projectName;
       return '<div class="session-row ' + (isChecked ? 'selected' : '') + '" data-cid="' + esc(row.cid) + '">' +
-        '<input type="checkbox" class="sess-chk" data-cid="' + esc(row.cid) + '"' + (isChecked ? ' checked' : '') + ' />' +
+        (isReadOnly
+          ? ''
+          : '<input type="checkbox" class="sess-chk" data-cid="' + esc(row.cid) + '"' + (isChecked ? ' checked' : '') + ' />') +
         '<div class="session-main" data-preview-cid="' + esc(row.cid) + '">' +
           '<div class="session-title">' + esc(row.title) + '</div>' +
           '<div class="session-meta">' +
             '<span class="badge badge-neutral">' + esc(projText) + '</span>' +
             (row.isCli ? '<span class="badge badge-blue">CLI 对话</span>' : '') +
-            (row.isLegacyCli ? '<span class="badge badge-neutral">旧版 CLI 历史</span>' : '') +
+            (isReadOnly ? '<span class="badge badge-neutral">旧版 CLI 历史 (只读)</span>' : '') +
             (row.isRunning ? '<span class="badge badge-amber">进行中 (自动跳过)</span>' : '') +
             '<span>' + esc(row.stepCount) + ' 步</span>' +
             '<span>' + esc(row.updatedTime) + '</span>' +
           '</div>' +
         '</div>' +
         '<div class="session-actions">' +
-          '<button class="btn-icon" data-sess-act="preview" data-cid="' + esc(row.cid) + '" title="阅读对话内容">' + ICONS.eye + '</button>' +
-          '<button class="btn-icon" data-sess-act="rename" data-cid="' + esc(row.cid) + '" title="修改标题">' + ICONS.edit + '</button>' +
-          '<button class="btn-icon" data-sess-act="move" data-cid="' + esc(row.cid) + '" title="移动到其他项目">' + ICONS.folder + '</button>' +
-          '<button class="btn-icon" data-sess-act="exportmd" data-cid="' + esc(row.cid) + '" title="导出为 Markdown (.md)">' + ICONS.download + '</button>' +
+          '<button class="btn-icon" data-sess-act="preview" data-cid="' + esc(row.cid) + '" title="阅读对话内容" type="button">' + ICONS.eye + '</button>' +
+          (!isReadOnly ? '<button class="btn-icon" data-sess-act="rename" data-cid="' + esc(row.cid) + '" title="修改标题" type="button">' + ICONS.edit + '</button>' : '') +
+          (!isReadOnly ? '<button class="btn-icon" data-sess-act="move" data-cid="' + esc(row.cid) + '" title="移动到其他项目" type="button">' + ICONS.folder + '</button>' : '') +
+          '<button class="btn-icon" data-sess-act="exportmd" data-cid="' + esc(row.cid) + '" title="导出为 Markdown (.md)" type="button">' + ICONS.download + '</button>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -219,18 +222,20 @@
     if (cids && cids.length > 0) {
       var newChecked = {};
       var newScoped = {};
+      var firstCid = '';
       for (var j = 0; j < cids.length; j++) {
-        newChecked[cids[j]] = true;
+        var sObj = findLocalSessionById(cids[j]);
+        if (sObj && sObj.isLegacyCli) continue;
+        if (!firstCid) firstCid = cids[j];
         newScoped[cids[j]] = true;
+        if (!sObj || !sObj.isRunning) {
+          newChecked[cids[j]] = true;
+        }
       }
       st.renameChecked = newChecked;
       st.renameScopedCids = newScoped;
       st.renameProjectFilter = '__SCOPED__';
-      st.renameShowTagged = true;
-      st.renameShowAux = true;
-      st.renameShowRunning = true;
-      st.renameShowLowValue = true;
-      st.renameFocusedCid = cids[0];
+      st.renameFocusedCid = firstCid || cids[0];
     } else {
       st.renameScopedCids = {};
       st.renameProjectFilter = (selectedGroupObj && selectedGroupObj.groupKind === 'formal' && selectedGroupObj.projectName)
@@ -376,6 +381,8 @@
       });
     }
 
+    var isLegacyCliBucket = st.selectedBucketKey === '__LEGACY_CLI__';
+
     host.innerHTML =
       '<div class="sessions-layout" style="flex:1;min-height:0">' +
         '<section class="project-pane">' +
@@ -391,8 +398,10 @@
             '</div>' +
             '<button class="filter-pill ' + (st.sessionSearchContent ? 'active' : '') + '" id="btnToggleSearchContent" type="button">搜正文内容</button>' +
             '<span class="muted" id="lblSessHitCount" style="font-size:12px">命中 ' + info.visible.length + ' 条</span>' +
-            '<button class="btn btn-sm" id="btnSessSelectVisible" type="button">全选当前</button>' +
-            '<button class="btn btn-sm" id="btnSessClearChecked" type="button">清空勾选</button>' +
+            (isLegacyCliBucket
+              ? '<span class="badge badge-neutral">只读历史记录（仅支持阅读与导出）</span>'
+              : '<button class="btn btn-sm" id="btnSessSelectVisible" type="button">全选当前</button>' +
+                '<button class="btn btn-sm" id="btnSessClearChecked" type="button">清空勾选</button>') +
             projMaintMenu +
           '</div>' +
           '<div class="session-scroll" id="sessScrollHost">' + renderSessionRowsHtml(info.visible) + '</div>' +
@@ -498,15 +507,21 @@
       patchSessionListPartial();
     });
 
-    el('btnSessSelectVisible').addEventListener('click', function () {
-      var curVis = collectVisibleSessions().visible;
-      for (var j = 0; j < curVis.length; j++) st.checkedSessions[curVis[j].cid] = true;
-      patchSessionListPartial();
-    });
-    el('btnSessClearChecked').addEventListener('click', function () {
-      st.checkedSessions = {};
-      patchSessionListPartial();
-    });
+    if (el('btnSessSelectVisible')) {
+      el('btnSessSelectVisible').addEventListener('click', function () {
+        var curVis = collectVisibleSessions().visible;
+        for (var j = 0; j < curVis.length; j++) {
+          if (!curVis[j].isLegacyCli) st.checkedSessions[curVis[j].cid] = true;
+        }
+        patchSessionListPartial();
+      });
+    }
+    if (el('btnSessClearChecked')) {
+      el('btnSessClearChecked').addEventListener('click', function () {
+        st.checkedSessions = {};
+        patchSessionListPartial();
+      });
+    }
 
     el('btnBatchGotoRename').addEventListener('click', function () {
       var cids = Object.keys(st.checkedSessions).filter(function (id) { return st.checkedSessions[id]; });

@@ -6,29 +6,29 @@
 
   var ENUM_OPTS = {
     autoExecutionPolicy: [
-      ['CASCADE_COMMANDS_AUTO_EXECUTION_OFF', '每次执行前都询问 (OFF)'],
-      ['CASCADE_COMMANDS_AUTO_EXECUTION_AUTO', '智能判断后自动执行 (AUTO)'],
-      ['CASCADE_COMMANDS_AUTO_EXECUTION_EAGER', '积极自动执行 (EAGER)']
+      ['CASCADE_COMMANDS_AUTO_EXECUTION_OFF', '每次执行前都询问'],
+      ['CASCADE_COMMANDS_AUTO_EXECUTION_AUTO', '智能判断后自动执行'],
+      ['CASCADE_COMMANDS_AUTO_EXECUTION_EAGER', '积极自动执行']
     ],
     artifactReviewMode: [
-      ['ARTIFACT_REVIEW_MODE_ALWAYS', '始终人工确认 (ALWAYS)'],
-      ['ARTIFACT_REVIEW_MODE_AUTO', '按需确认 (AUTO)'],
-      ['ARTIFACT_REVIEW_MODE_TURBO', '自动通过 (TURBO)']
+      ['ARTIFACT_REVIEW_MODE_ALWAYS', '始终人工确认'],
+      ['ARTIFACT_REVIEW_MODE_AUTO', '按需确认'],
+      ['ARTIFACT_REVIEW_MODE_TURBO', '自动通过']
     ],
     browserJsExecutionPolicy: [
-      ['BROWSER_JS_EXECUTION_POLICY_DISABLED', '禁用浏览器脚本 (DISABLED)'],
-      ['BROWSER_JS_EXECUTION_POLICY_ASK', '运行前询问 (ASK)'],
-      ['BROWSER_JS_EXECUTION_POLICY_TURBO', '自动允许 (TURBO)']
+      ['BROWSER_JS_EXECUTION_POLICY_DISABLED', '禁用浏览器脚本'],
+      ['BROWSER_JS_EXECUTION_POLICY_ASK', '运行前询问'],
+      ['BROWSER_JS_EXECUTION_POLICY_TURBO', '自动允许']
     ],
     nonWorkspaceFileAccessPolicy: [
-      ['AGENT_SETTING_POLICY_DENY', '禁止访问项目外文件 (DENY)'],
-      ['AGENT_SETTING_POLICY_ASK', '访问前询问 (ASK)'],
-      ['AGENT_SETTING_POLICY_ALLOW', '允许访问项目外文件 (ALLOW)']
+      ['AGENT_SETTING_POLICY_DENY', '禁止访问项目外文件'],
+      ['AGENT_SETTING_POLICY_ASK', '访问前询问'],
+      ['AGENT_SETTING_POLICY_ALLOW', '允许访问项目外文件']
     ],
     themeMode: [
-      ['THEME_MODE_INHERIT', '跟随系统/主窗口 (INHERIT)'],
-      ['THEME_MODE_LIGHT', '浅色外观 (LIGHT)'],
-      ['THEME_MODE_DARK', '深色外观 (DARK)']
+      ['THEME_MODE_INHERIT', '跟随系统/主窗口'],
+      ['THEME_MODE_LIGHT', '浅色外观'],
+      ['THEME_MODE_DARK', '深色外观']
     ]
   };
 
@@ -336,7 +336,7 @@
           '<div><label class="field-label">浏览器脚本执行策略</label><select class="select" id="selUsBrowserJs">' + buildEnumOptionsHtml('browserJsExecutionPolicy', us.browserJsExecutionPolicy) + '</select></div>' +
           '<div><label class="field-label">项目外文件访问权限</label><select class="select" id="selUsNonWs">' + buildEnumOptionsHtml('nonWorkspaceFileAccessPolicy', us.nonWorkspaceFileAccessPolicy) + '</select></div>' +
           '<div><label class="field-label">Antigravity 主窗口主题</label><select class="select" id="selUsTheme">' + buildEnumOptionsHtml('themeMode', us.themeMode) + '</select></div>' +
-          '<div><label class="field-label">对话栏宽度</label><input class="input" id="txtUsConvWidth" value="' + esc(us.conversationWidth || '') + '" placeholder="留空表示保持原配置" /></div>' +
+          '<div><label class="field-label">对话栏宽度</label><input class="input" id="txtUsConvWidth" value="' + esc(us.conversationWidth || '') + '" placeholder="留空表示恢复默认" /></div>' +
         '</div>' +
         '<div class="cockpit-grid" style="margin-top:12px;margin-bottom:0" id="cpSettingsSwitches">' +
           '<label class="switch-row" style="cursor:pointer"><span>启用终端沙盒隔离</span><input type="checkbox" id="chkUsSandbox"' + (us.enableTerminalSandbox ? ' checked' : '') + ' /></label>' +
@@ -405,7 +405,8 @@
         var vJs = el('selUsBrowserJs').value; if (vJs) updates.browserJsExecutionPolicy = vJs;
         var vNon = el('selUsNonWs').value; if (vNon) updates.nonWorkspaceFileAccessPolicy = vNon;
         var vTheme = el('selUsTheme').value; if (vTheme) updates.themeMode = vTheme;
-        var vWidth = el('txtUsConvWidth').value.trim(); if (vWidth) updates.conversationWidth = vWidth;
+        var vWidth = el('txtUsConvWidth').value.trim();
+        updates.conversationWidth = vWidth ? vWidth : null;
 
         try {
           var res = await AGY.api.apiFetch('/api/cockpit/settings', {
@@ -413,6 +414,9 @@
             body: JSON.stringify({ userSettings: updates })
           });
           st.cockpitData.userSettings = res.userSettings;
+          if (el('txtUsConvWidth')) {
+            el('txtUsConvWidth').value = (res.userSettings && res.userSettings.conversationWidth) || '';
+          }
           st.formDirty.cockpit = false;
           AGY.api.showToast('全局配置已保存（并自动留存 .bak 历史版本）✓', 'success');
           applyCockpitIdeWarning(res);

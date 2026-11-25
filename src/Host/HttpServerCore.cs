@@ -213,6 +213,7 @@ namespace AntigravityCompanion
         private volatile bool _hasEverConnected;
         private long _lastActivityTicksUtc;
         private int _jobBusyFlag;
+        private long _logSeq;
 
         private readonly object _stateLock = new object();
         private readonly object _mutationLock = new object();
@@ -761,6 +762,7 @@ namespace AntigravityCompanion
         internal void AppendLog(string level, string message)
         {
             Dictionary<string, object> item = new Dictionary<string, object>();
+            item["seq"] = Interlocked.Increment(ref _logSeq);
             item["time"] = DateTime.Now.ToString("HH:mm:ss");
             item["level"] = level ?? "info";
             item["message"] = message ?? string.Empty;

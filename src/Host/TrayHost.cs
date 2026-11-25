@@ -140,9 +140,9 @@ namespace AntigravityCompanion
             HotkeyError = string.Empty;
 
             _menu = new ContextMenuStrip();
-            _itemOpen = new ToolStripMenuItem("打开驾驶舱");
-            _itemSnapshot = new ToolStripMenuItem("立即执行极速快照");
-            _itemStartup = new ToolStripMenuItem("开机自启动");
+            _itemOpen = new ToolStripMenuItem("打开主窗口");
+            _itemSnapshot = new ToolStripMenuItem("立即创建自动备份");
+            _itemStartup = new ToolStripMenuItem("开机自动启动");
             _itemExit = new ToolStripMenuItem("退出");
 
             _itemOpen.Click += delegate(object sender, EventArgs e) { OpenCockpit(); };
@@ -157,7 +157,7 @@ namespace AntigravityCompanion
             _menu.Items.Add(_itemExit);
 
             _notifyIcon = new NotifyIcon();
-            _notifyIcon.Text = "Antigravity Companion V1.0";
+            _notifyIcon.Text = "Antigravity 伴侣 V1.1";
             _notifyIcon.ContextMenuStrip = _menu;
             _notifyIcon.Icon = ResolveTrayIcon(out _ownedAppIcon);
             _notifyIcon.MouseClick += delegate(object sender, MouseEventArgs e)
@@ -200,6 +200,11 @@ namespace AntigravityCompanion
         public bool StartupMenuChecked
         {
             get { return _itemStartup.Checked; }
+        }
+
+        public string NotifyIconText
+        {
+            get { return _notifyIcon != null ? (_notifyIcon.Text ?? string.Empty) : string.Empty; }
         }
 
         public string[] MenuItemTexts
@@ -375,16 +380,16 @@ namespace AntigravityCompanion
                         {
                             _notifyIcon.ShowBalloonTip(
                                 2500,
-                                "Antigravity Companion",
-                                string.Format("极速快照完成（{0:F2} MB）", res.SizeBytes / (1024.0 * 1024.0)),
+                                "Antigravity 伴侣",
+                                string.Format("自动备份完成（{0:F2} MB）", res.SizeBytes / (1024.0 * 1024.0)),
                                 ToolTipIcon.Info);
                         }
                         else if (!res.SkippedBusy)
                         {
                             _notifyIcon.ShowBalloonTip(
                                 3000,
-                                "Antigravity Companion",
-                                "快照失败: " + (res.ErrorMessage ?? "未知错误"),
+                                "Antigravity 伴侣",
+                                "自动备份失败: " + (res.ErrorMessage ?? "未知错误"),
                                 ToolTipIcon.Warning);
                         }
                     }
@@ -416,7 +421,7 @@ namespace AntigravityCompanion
             }
             _host.NotifySettingsChanged();
             RefreshMenuState();
-            _host.AppendLog("info", next ? "已开启开机自启动（--tray-only 托盘常驻）。" : "已关闭开机自启动。");
+            _host.AppendLog("info", next ? "已开启开机自动启动（后台托盘常驻）。" : "已关闭开机自动启动。");
         }
 
         private void RequestExit()

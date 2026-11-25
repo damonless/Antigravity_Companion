@@ -17,20 +17,83 @@
     return AGY.state.view === 'storage';
   }
 
+  function translateIneligibleReason(reason) {
+    var r = String(reason || '').trim();
+    if (!r) return '受保护跳过';
+    if (r === 'Not a subagent session') return '主对话（自动保护）';
+    if (r === 'CLI session') return 'CLI 对话（自动保留）';
+    if (r === 'not_fully_idle != 0') return '进行中（自动跳过）';
+    if (r === 'Missing summary metadata') return '缺少摘要信息（跳过）';
+    if (r.indexOf('Status is not IDLE') === 0) return '非空闲状态（跳过）';
+    var mAge = /^Age\s+([\d.]+)d\s*<\s*([\d.]+)d$/i.exec(r);
+    if (mAge) return '静置未满 ' + mAge[2] + ' 天（当前 ' + mAge[1] + ' 天）';
+    var mSize = /^Size\s+([\d.]+)MB\s*<\s*([\d.]+)MB$/i.exec(r);
+    if (mSize) return '体积未达 ' + mSize[2] + ' MB（当前 ' + mSize[1] + ' MB）';
+    if (/^[\x20-\x7E]+$/.test(r)) return '暂不满足清理条件';
+    return r;
+  }
+
+  function isStorageThresholdDirty() {
+    var ageInp = AGY.dom.el('numStoAge');
+    var sizeInp = AGY.dom.el('numStoSize');
+    if (!ageInp || !sizeInp) return false;
+    var curAge = numOrDefault(ageInp.value, 7);
+    var curSize = numOrDefault(sizeInp.value, 5);
+    var scannedAge = AGY.state.storageScannedAgeDays !== undefined
+      ? AGY.state.storageScannedAgeDays
+      : numOrDefault(AGY.state.storageMinAgeDays, 7);
+    var scannedSize = AGY.state.storageScannedSizeMb !== undefined
+      ? AGY.state.storageScannedSizeMb
+      : numOrDefault(AGY.state.storageMinSizeMb, 5);
+    return curAge !== scannedAge || curSize !== scannedSize;
+  }
+
+  function syncStorageThresholdDirtyNotice() {
+    var dirty = isStorageThresholdDirty();
+    var notice = AGY.dom.el('stoThresholdDirtyNotice');
+    if (notice) notice.classList.toggle('hidden', !dirty);
+    var btnRescan = AGY.dom.el('btnReanalyzeStorage');
+    if (btnRescan) btnRescan.classList.toggle('btn-primary', dirty);
+  }
+
+  function promptRescanForChangedThresholds() {
+    AGY.ui.openModal(
+      '筛选条件已修改，请先重新扫描',
+      '<div style="line-height:1.7">您修改了「静置天数」或「单文件体积」筛选条件，当前列表仍为旧条件下的扫描结果。为避免误按旧列表执行清理，请先按新条件重新扫描。</div>',
+      '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="rescan">按新条件重新扫描</button>',
+      function (_mb, mf) {
+        mf.querySelector('[data-act="cancel"]').addEventListener('click', AGY.ui.closeModal);
+        mf.querySelector('[data-act="rescan"]').addEventListener('click', function () {
+          AGY.ui.closeModal();
+          var ageInp = AGY.dom.el('numStoAge');
+          var sizeInp = AGY.dom.el('numStoSize');
+          if (ageInp) AGY.state.storageMinAgeDays = numOrDefault(ageInp.value, 7);
+          if (sizeInp) AGY.state.storageMinSizeMb = numOrDefault(sizeInp.value, 5);
+          AGY.state.storageCheckedCids = {};
+          runStorageAnalyze(false).catch(function () {});
+        });
+      }
+    );
+  }
+
   async function runStorageAnalyze(skipRender) {
     var st = AGY.state;
     if (st._storageAnalyzePromise) return st._storageAnalyzePromise;
     st._storageAnalyzePromise = (async function () {
       try {
+        var reqAge = numOrDefault(st.storageMinAgeDays, 7);
+        var reqSize = numOrDefault(st.storageMinSizeMb, 5);
         var res = await AGY.api.apiFetch('/api/storage/analyze', {
           method: 'POST',
           body: JSON.stringify({
             topN: 30,
-            minAgeDays: numOrDefault(st.storageMinAgeDays, 7),
-            minSizeMb: numOrDefault(st.storageMinSizeMb, 5)
+            minAgeDays: reqAge,
+            minSizeMb: reqSize
           })
         });
         st.storageData = res;
+        st.storageScannedAgeDays = reqAge;
+        st.storageScannedSizeMb = reqSize;
         st.storageAnalyzeError = '';
         if (st.dirty) st.dirty.storage = false;
         if (Object.keys(st.storageCheckedCids).length === 0 && res.topOffenders) {
@@ -77,11 +140,12 @@
              '<div class="ratio-track"><div class="ratio-exec" style="width:' + execPct + '%"></div><div class="ratio-steps" style="width:' + stepsPct + '%"></div></div>' +
              '<span class="mono" style="font-size:11px">' + execPct + '%</span>' +
            '</div>')
-        : '<span class="muted" style="font-size:11.5px">&lt;2MB 未拆表</span>';
+        : '<span class="muted" style="font-size:11.5px">体积较小，无需拆解</span>';
 
+      var cnReason = translateIneligibleReason(o.ineligibleReason);
       var eligBadge = o.eligibleForSlim
         ? '<span class="badge badge-green">可安全清理</span>'
-        : '<span class="badge badge-neutral" title="' + esc(o.ineligibleReason) + '">' + esc(o.ineligibleReason || '受保护跳过') + '</span>';
+        : '<span class="badge badge-neutral" title="' + esc(cnReason) + '">' + esc(cnReason) + '</span>';
 
       var statusBadge = (o.status && o.status !== 'IDLE')
         ? '<span class="badge badge-amber">进行中 (自动跳过)</span>'
@@ -111,6 +175,76 @@
       btn5c.disabled = cnt === 0;
       btn5c.textContent = '执行高级原位压缩 (' + cnt + ')';
     }
+  }
+
+  function confirmMode5AColdArchiveModal(cids, offenders) {
+    var esc = AGY.ui.escapeHtml;
+    var fmt = AGY.ui.formatBytes;
+    var list = offenders || [];
+    var byCid = {};
+    for (var i = 0; i < list.length; i++) byCid[list[i].cid] = list[i];
+    var totalBytes = 0;
+    var rows = [];
+    for (var j = 0; j < cids.length; j++) {
+      var o = byCid[cids[j]];
+      if (o) totalBytes += (o.totalBytes || 0);
+      if (j < 8) {
+        rows.push(
+          '<div class="del-manifest-row">' +
+            '<span>' + esc(o ? o.title : cids[j]) + '</span>' +
+            '<span class="mono muted" style="white-space:nowrap">' + esc(o ? fmt(o.totalBytes) : '-') + '</span>' +
+          '</div>'
+        );
+      }
+    }
+    if (cids.length > 8) {
+      rows.push('<div class="muted" style="padding-top:4px">……以及其他 ' + (cids.length - 8) + ' 个后台子任务</div>');
+    }
+
+    AGY.ui.openModal(
+      '确认备份并清理 ' + cids.length + ' 个后台子任务？',
+      '<div class="alert-banner success" style="margin-bottom:10px">🛡 <strong>安全备份保障：</strong>清理前会先将所选后台子任务完整打包为 <strong>清理前安全备份 (.agy)</strong> 并校验可读，随时可从本页历史列表一键还原；主对话与进行中任务不受影响。</div>' +
+      '<div style="line-height:1.7;margin-bottom:8px">待清理条目：<strong>' + esc(cids.length) + '</strong> 个 · 预计释放空间：<strong>' + esc(fmt(totalBytes)) + '</strong></div>' +
+      (rows.length ? '<div class="del-manifest-list">' + rows.join('') + '</div>' : ''),
+      '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="confirm">确认备份并清理</button>',
+      function (_mb, mf) {
+        mf.querySelector('[data-act="cancel"]').addEventListener('click', AGY.ui.closeModal);
+        mf.querySelector('[data-act="confirm"]').addEventListener('click', function () {
+          AGY.ui.closeModal();
+          executeStorageSlimRequest('coldArchivePrune', cids, false, false, false, false, null);
+        });
+      }
+    );
+  }
+
+  function confirmOrphanGcModal(orph, leg, pruneLegacy) {
+    var esc = AGY.ui.escapeHtml;
+    var fmt = AGY.ui.formatBytes;
+    var totalItems = (orph && orph.totalItems) || 0;
+    var totalBytes = (orph && orph.totalBytes) || 0;
+    var willPruneLegacy = !!(pruneLegacy && leg && leg.exists);
+
+    var bullets = [];
+    if (totalItems > 0) {
+      bullets.push('<li>残留垃圾文件：<strong>' + esc(totalItems) + '</strong> 项（预计释放 <strong>' + esc(fmt(totalBytes)) + '</strong>）— 将先移入 <strong>回收站</strong>，30 天内随时可一键还原</li>');
+    }
+    if (willPruneLegacy) {
+      bullets.push('<li>旧版 CLI 历史摘要库：<strong>' + esc(leg.entryCount || 0) + '</strong> 条（<strong>' + esc(fmt(leg.totalBytes)) + '</strong>）— 将先生成 <strong>清理前安全备份 (.agy)</strong> 再清理</li>');
+    }
+
+    AGY.ui.openModal(
+      '确认清理残留垃圾文件？',
+      '<div class="alert-banner success" style="margin-bottom:10px">🛡 <strong>可撤销清理：</strong>所有残留垃圾文件都会先移入 <strong>回收站</strong>，旧版 CLI 摘要库会先生成清理前安全备份，不会删除您的正常对话或项目源码。</div>' +
+      '<ul style="margin:6px 0 8px 18px;line-height:1.75">' + bullets.join('') + '</ul>',
+      '<button class="btn" data-act="cancel">取消</button><button class="btn btn-danger" data-act="confirm">确认移入回收站并清理</button>',
+      function (_mb, mf) {
+        mf.querySelector('[data-act="cancel"]').addEventListener('click', AGY.ui.closeModal);
+        mf.querySelector('[data-act="confirm"]').addEventListener('click', function () {
+          AGY.ui.closeModal();
+          executeStorageSlimRequest('orphanGcOnly', [], true, willPruneLegacy, false, false, null);
+        });
+      }
+    );
   }
 
   function confirmMode5CLiposuctionModal(cids) {
@@ -240,6 +374,28 @@
           }).join('') +
         '</div>';
 
+    var hasOrphans = (orph.totalItems || 0) > 0;
+    var hasLegacy = !!leg.exists;
+    var canCleanOrphan = hasOrphans || (hasLegacy && !!st.storagePruneLegacyCli);
+
+    var orphanCardBodyHtml = (!hasOrphans && !hasLegacy)
+      ? '<div class="muted" style="font-size:12px;line-height:1.7;margin-bottom:10px">未发现脱离记录的残留数据库、产物目录或临时文件，本机空间干净。</div>'
+      : ('<div class="muted" style="font-size:12px;line-height:1.7;margin-bottom:10px">' +
+          (hasOrphans
+            ? ('残留数据库：' + esc(orph.orphanDbFilesCount || 0) + ' · 残留 .db.bak：' + esc(orph.orphanDbBakCount || 0) + ' · 残留临时日志：' + esc(orph.orphanDbJournalCount || 0) + '<br>' +
+               '残留产物目录：' + esc(orph.orphanBrainDirsCount || 0) + ' · 残留标题文件：' + esc(orph.orphanAnnotationsCount || 0) + '（共 ' + esc(fmt(orph.totalBytes || 0)) + '）<br>' +
+               '🛡 清理前先移入 <strong>回收站</strong>，30 天内随时可还原。')
+            : '当前无残留垃圾文件；下方可按需先备份再清理旧版 CLI 历史摘要库。') +
+          (hasLegacy ? ('<br>旧版 CLI 历史摘要库：' + esc(leg.entryCount || 0) + ' 条 (' + fmt(leg.totalBytes) + ')') : '') +
+        '</div>');
+
+    var orphanBadgeHtml = hasOrphans
+      ? '<span class="badge badge-amber">' + esc(orph.totalItems) + ' 项残留 · ' + esc(fmt(orph.totalBytes || 0)) + '</span>'
+      : '<span class="badge badge-green">无需清理</span>';
+
+    var orphanBtnClass = canCleanOrphan ? 'btn btn-danger-outline' : 'btn';
+    var orphanBtnLabel = (!hasOrphans && !hasLegacy) ? '暂无残留可清理' : '清理残留垃圾文件';
+
     host.innerHTML =
       resultBannerHtml +
       '<div class="card" style="margin-bottom:16px">' +
@@ -251,6 +407,7 @@
             '<button class="btn btn-sm" id="btnReanalyzeStorage" type="button">重新扫描</button>' +
           '</div>' +
         '</div>' +
+        '<div class="alert-banner hidden" id="stoThresholdDirtyNotice" style="margin-top:10px;margin-bottom:0">筛选条件已修改，请先点击「重新扫描」更新下方可清理列表后再执行清理。</div>' +
         '<div class="storage-bar-track">' +
           '<div class="storage-seg seg-root" style="width:' + pct(rep.rootDbsBytes) + '%" title="主对话: ' + fmt(rep.rootDbsBytes) + '"></div>' +
           '<div class="storage-seg seg-sub" style="width:' + pct(rep.subagentDbsBytes) + '%" title="后台子任务: ' + fmt(rep.subagentDbsBytes) + '"></div>' +
@@ -269,17 +426,12 @@
       '</div>' +
 
       '<div class="action-grid">' +
-        '<div class="card">' +
-          '<div class="between" style="margin-bottom:8px"><strong>清理残留垃圾文件</strong><span class="badge badge-neutral">' + esc(orph.totalItems || 0) + ' 项残留</span></div>' +
-          '<div class="muted" style="font-size:12px;line-height:1.7;margin-bottom:10px">' +
-            '残留数据库：' + esc(orph.orphanDbFilesCount || 0) + ' · 残留 .db.bak：' + esc(orph.orphanDbBakCount || 0) + ' · 残留临时日志：' + esc(orph.orphanDbJournalCount || 0) + '<br>' +
-            '残留产物目录：' + esc(orph.orphanBrainDirsCount || 0) + ' · 残留标题文件：' + esc(orph.orphanAnnotationsCount || 0) + '<br>' +
-            '🛡 清理前先移入 <strong>回收站</strong>，30 天内随时可还原。' +
-            (leg.exists ? ('<br>旧版 CLI 历史摘要库：' + esc(leg.entryCount || 0) + ' 条 (' + fmt(leg.totalBytes) + ')') : '') +
-          '</div>' +
+        '<div class="card"' + (!hasOrphans && !hasLegacy ? ' style="opacity:0.82"' : '') + '>' +
+          '<div class="between" style="margin-bottom:8px"><strong>清理残留垃圾文件</strong>' + orphanBadgeHtml + '</div>' +
+          orphanCardBodyHtml +
           '<div class="row gap-sm wrap">' +
-            (leg.exists ? '<label class="row gap-xs" style="font-size:12px;cursor:pointer"><input type="checkbox" id="chkPruneLegacyCli"' + (st.storagePruneLegacyCli ? ' checked' : '') + ' /> 先生成清理前安全备份并清理旧版 CLI 历史库</label>' : '') +
-            '<button class="btn btn-danger-outline" id="btnRunCompleteOrphanGc" type="button">清理残留垃圾文件</button>' +
+            (hasLegacy ? '<label class="row gap-xs" style="font-size:12px;cursor:pointer"><input type="checkbox" id="chkPruneLegacyCli"' + (st.storagePruneLegacyCli ? ' checked' : '') + ' /> 先生成清理前安全备份并清理旧版 CLI 历史库</label>' : '') +
+            '<button class="' + orphanBtnClass + '" id="btnRunCompleteOrphanGc" type="button"' + (!canCleanOrphan ? ' disabled' : '') + '>' + orphanBtnLabel + '</button>' +
           '</div>' +
         '</div>' +
 
@@ -328,6 +480,12 @@
         '</div>' +
       '</details>';
 
+    el('numStoAge').addEventListener('input', syncStorageThresholdDirtyNotice);
+    el('numStoAge').addEventListener('change', syncStorageThresholdDirtyNotice);
+    el('numStoSize').addEventListener('input', syncStorageThresholdDirtyNotice);
+    el('numStoSize').addEventListener('change', syncStorageThresholdDirtyNotice);
+    syncStorageThresholdDirtyNotice();
+
     el('btnReanalyzeStorage').addEventListener('click', function () {
       var btn = this;
       st.storageMinAgeDays = numOrDefault(el('numStoAge').value, 7);
@@ -374,7 +532,15 @@
     }
 
     if (el('chkPruneLegacyCli')) {
-      el('chkPruneLegacyCli').addEventListener('change', function () { st.storagePruneLegacyCli = this.checked; });
+      el('chkPruneLegacyCli').addEventListener('change', function () {
+        st.storagePruneLegacyCli = this.checked;
+        var orphanBtn = el('btnRunCompleteOrphanGc');
+        if (orphanBtn) {
+          var canRun = hasOrphans || (hasLegacy && !!st.storagePruneLegacyCli);
+          orphanBtn.disabled = !canRun;
+          orphanBtn.className = canRun ? 'btn btn-danger-outline' : 'btn';
+        }
+      });
     }
 
     el('btnStoSelectEligible').addEventListener('click', function () {
@@ -394,19 +560,28 @@
     });
 
     el('btnRunMode5A').addEventListener('click', function () {
+      if (isStorageThresholdDirty()) {
+        promptRescanForChangedThresholds();
+        return;
+      }
       var cids = Object.keys(st.storageCheckedCids).filter(function (k) { return st.storageCheckedCids[k]; });
       if (cids.length === 0) return;
-      executeStorageSlimRequest('coldArchivePrune', cids, false, false, false, false, this);
+      confirmMode5AColdArchiveModal(cids, rep.topOffenders || []);
     });
 
     el('btnRunMode5C').addEventListener('click', function () {
+      if (isStorageThresholdDirty()) {
+        promptRescanForChangedThresholds();
+        return;
+      }
       var cids = Object.keys(st.storageCheckedCids).filter(function (k) { return st.storageCheckedCids[k]; });
       if (cids.length === 0) return;
       confirmMode5CLiposuctionModal(cids);
     });
 
     el('btnRunCompleteOrphanGc').addEventListener('click', function () {
-      executeStorageSlimRequest('orphanGcOnly', [], true, !!st.storagePruneLegacyCli, false, false, this);
+      if (!hasOrphans && !(hasLegacy && st.storagePruneLegacyCli)) return;
+      confirmOrphanGcModal(orph, leg, !!st.storagePruneLegacyCli);
     });
 
     function bindOffenderChks() {

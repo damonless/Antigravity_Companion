@@ -1,7 +1,7 @@
 @echo off
 setlocal
 echo ===================================================================
-echo   Compiling Antigravity Companion V1.0 Production E2E Test Suite
+echo   Compiling Antigravity Companion V1.1 Production E2E Test Suite
 echo ===================================================================
 
 set "CSC=%SystemRoot%\Microsoft.NET\Framework64\v4.0.30319\csc.exe"

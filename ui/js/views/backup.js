@@ -380,20 +380,47 @@
     }
 
     if (bd.loaded) {
+      function patchArchiveReviewPartial(resetTableScroll) {
+        var tabEls = root.querySelectorAll('[data-bktab]');
+        for (var ti = 0; ti < tabEls.length; ti++) {
+          tabEls[ti].classList.toggle('active', tabEls[ti].getAttribute('data-bktab') === st.backupTab);
+        }
+        var chkLegacy = el('chkRestoreLegacyCli');
+        if (chkLegacy) chkLegacy.checked = !!st.backupRestoreLegacyCli;
+        var chkUs = el('chkRestoreUserSettings');
+        if (chkUs) chkUs.checked = !!st.backupRestoreUserSettings;
+        var tblHost = el('bkTableHost');
+        if (tblHost) {
+          var prevTop = tblHost.scrollTop;
+          tblHost.innerHTML = renderArchiveInnerTableHtml(bd);
+          tblHost.scrollTop = resetTableScroll ? 0 : prevTop;
+        }
+        bindArchiveTableEvents(bd);
+        updateBackupImportBtn();
+      }
+
       if (bd.isColdArchive && st.backupTab !== 'sessions') {
         st.backupTab = 'sessions';
         el('bkTableHost').innerHTML = renderArchiveInnerTableHtml(bd);
       }
       var tabs = root.querySelectorAll('[data-bktab]');
       for (var i = 0; i < tabs.length; i++) {
-        tabs[i].addEventListener('click', function () { st.backupTab = this.getAttribute('data-bktab'); renderBackup(); });
+        tabs[i].addEventListener('click', function () {
+          var nextTab = this.getAttribute('data-bktab');
+          if (nextTab === st.backupTab) return;
+          st.backupTab = nextTab;
+          patchArchiveReviewPartial(true);
+        });
       }
-      el('btnBkAutoPick').addEventListener('click', function () { preselectRecommendedBackupItems(bd); renderBackup(); });
+      el('btnBkAutoPick').addEventListener('click', function () {
+        preselectRecommendedBackupItems(bd);
+        patchArchiveReviewPartial(false);
+      });
       el('btnBkClearPick').addEventListener('click', function () {
         st.backupCheckedCaps = {};
         st.backupCheckedConvs = {};
         st.backupRestoreLegacyCli = false;
-        renderBackup();
+        patchArchiveReviewPartial(false);
       });
       el('btnBkImportExec').addEventListener('click', function () { triggerBackupImport(false, false, this); });
       if (el('chkRestoreUserSettings')) {

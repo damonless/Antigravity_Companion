@@ -103,15 +103,112 @@
     }
   }
 
-  function renderLogsDrawer(logs) {
-    var esc = AGY.ui.escapeHtml;
-    var html = [];
-    for (var i = logs.length - 1; i >= 0; i--) {
-      var l = logs[i];
-      html.push('<div class="log-line ' + esc(l.level) + '">[' + esc(l.time) + '] ' + esc(l.message) + '</div>');
-    }
+  var renderedLogKeys = [];
+  var logDrawerInitialized = false;
+
+  function logItemKey(l) {
+    if (!l) return '';
+    if (l.seq !== undefined && l.seq !== null) return 'seq:' + l.seq;
+    return (l.time || '') + '|' + (l.level || '') + '|' + (l.message || '');
+  }
+
+  function createLogLineElement(l) {
+    var div = document.createElement('div');
+    var lvl = String((l && l.level) || 'info').replace(/[^a-zA-Z0-9_-]/g, '');
+    div.className = 'log-line' + (lvl ? (' ' + lvl) : '');
+    div.textContent = '[' + ((l && l.time) || '') + '] ' + ((l && l.message) || '');
+    return div;
+  }
+
+  function updateActivityStripLatest(latest) {
+    if (!latest) return;
+    AGY.dom.setText('activityLatest', '[' + (latest.time || '') + '] ' + (latest.message || ''));
+    var aDot = AGY.dom.el('activityDot');
+    if (aDot) aDot.className = 'activity-dot' + (latest.level === 'warn' ? ' warn' : (latest.level === 'error' ? ' error' : ''));
+  }
+
+  function prependSingleLogToDrawer(item) {
     var body = AGY.dom.el('logDrawerBody');
-    if (body) body.innerHTML = html.join('') || '<div class="muted">暂无活动记录</div>';
+    if (!body || !item) return;
+    var k = logItemKey(item);
+    if (renderedLogKeys.length > 0 && renderedLogKeys[renderedLogKeys.length - 1] === k) {
+      return;
+    }
+    var emptyEl = body.querySelector('.log-empty-placeholder');
+    if (emptyEl && emptyEl.parentNode) emptyEl.parentNode.removeChild(emptyEl);
+
+    var node = createLogLineElement(item);
+    var prevScrollTop = body.scrollTop;
+    body.insertBefore(node, body.firstChild);
+    renderedLogKeys.push(k);
+
+    while (renderedLogKeys.length > 300) {
+      renderedLogKeys.shift();
+      if (body.lastChild) body.removeChild(body.lastChild);
+    }
+    if (prevScrollTop > 0) {
+      body.scrollTop = prevScrollTop + (node.offsetHeight || 0);
+    }
+    logDrawerInitialized = true;
+  }
+
+  function renderLogsDrawer(logs) {
+    var body = AGY.dom.el('logDrawerBody');
+    if (!body) return;
+    var list = Array.isArray(logs) ? logs : [];
+
+    if (list.length === 0) {
+      if (!logDrawerInitialized || renderedLogKeys.length > 0) {
+        body.innerHTML = '<div class="muted log-empty-placeholder">暂无活动记录</div>';
+        renderedLogKeys = [];
+        logDrawerInitialized = true;
+      }
+      return;
+    }
+
+    if (logDrawerInitialized && renderedLogKeys.length > 0) {
+      var lastRenderedKey = renderedLogKeys[renderedLogKeys.length - 1];
+      var matchIdx = -1;
+      for (var m = list.length - 1; m >= 0; m--) {
+        if (logItemKey(list[m]) === lastRenderedKey) {
+          matchIdx = m;
+          break;
+        }
+      }
+      if (matchIdx >= 0) {
+        if (matchIdx < list.length - 1) {
+          for (var n = matchIdx + 1; n < list.length; n++) {
+            prependSingleLogToDrawer(list[n]);
+          }
+        }
+        return;
+      }
+    }
+
+    var frag = document.createDocumentFragment();
+    renderedLogKeys = [];
+    for (var i = list.length - 1; i >= 0; i--) {
+      frag.appendChild(createLogLineElement(list[i]));
+    }
+    for (var j = 0; j < list.length; j++) {
+      renderedLogKeys.push(logItemKey(list[j]));
+    }
+    body.innerHTML = '';
+    body.appendChild(frag);
+    logDrawerInitialized = true;
+  }
+
+  function setNavBadgeCount(id, count) {
+    var node = AGY.dom.el(id);
+    if (!node) return;
+    var n = Number(count) || 0;
+    if (n <= 0) {
+      node.textContent = '0';
+      node.classList.add('hidden');
+    } else {
+      node.textContent = String(n);
+      node.classList.remove('hidden');
+    }
   }
 
   function updateShellBars() {
@@ -122,15 +219,15 @@
     var counts = ov.counts || {};
 
     var actionable = counts.untaggedActionableCount !== undefined ? counts.untaggedActionableCount : (counts.untaggedFormalSessions || 0);
-    AGY.dom.setText('navCountUntagged', actionable);
+    setNavBadgeCount('navCountUntagged', actionable);
     AGY.dom.setText('navSessionTotalLabel', '主对话总数: ' + (counts.formalPrimarySessions || 0));
 
     var cs = counts.capabilitySummary || {};
     var capDiffCount = (cs.remoteOnly || 0) + (cs.remoteNewer || 0) + (cs.localNewer || 0) + (cs.bothModified || 0) + (cs.conflict || 0);
-    AGY.dom.setText('navCountCapDiffs', capDiffCount);
+    setNavBadgeCount('navCountCapDiffs', capDiffCount);
 
     var trashCnt = counts.trashCount || 0;
-    AGY.dom.setText('navCountTrash', trashCnt);
+    setNavBadgeCount('navCountTrash', trashCnt);
 
     var ide = ov.ide || {};
     var dot = el('ideStatusDot');
@@ -150,11 +247,10 @@
 
     var logs = ov.logs || [];
     if (logs.length > 0) {
-      var latest = logs[logs.length - 1];
-      AGY.dom.setText('activityLatest', '[' + latest.time + '] ' + latest.message);
-      var aDot = el('activityDot');
-      if (aDot) aDot.className = 'activity-dot' + (latest.level === 'warn' ? ' warn' : (latest.level === 'error' ? ' error' : ''));
+      updateActivityStripLatest(logs[logs.length - 1]);
       renderLogsDrawer(logs);
+    } else if (!logDrawerInitialized) {
+      renderLogsDrawer([]);
     }
 
     var job = ov.job || {};
@@ -178,7 +274,8 @@
     var foundFocused = false;
     for (var i = 0; i < cands.length; i++) {
       var c = cands[i];
-      if (st.renameChecked[c.cid] !== undefined) newChecked[c.cid] = st.renameChecked[c.cid];
+      if (c.isRunning) newChecked[c.cid] = false;
+      else if (st.renameChecked[c.cid] !== undefined) newChecked[c.cid] = st.renameChecked[c.cid];
       else newChecked[c.cid] = !!c.selected;
       if (c.cid === st.renameFocusedCid) foundFocused = true;
     }
@@ -615,7 +712,9 @@
         if (!st.overview) st.overview = { logs: [] };
         if (!st.overview.logs) st.overview.logs = [];
         st.overview.logs.push(item);
-        updateShellBars();
+        if (st.overview.logs.length > 300) st.overview.logs.shift();
+        updateActivityStripLatest(item);
+        prependSingleLogToDrawer(item);
       },
       onIdeStatus: function (payload) {
         if (!st.overview) st.overview = { logs: [] };
@@ -679,8 +778,23 @@
   };
 
   boot().catch(function (err) {
-    AGY.dom.el('mainCanvas').innerHTML =
-      '<div class="card empty-state"><strong>初始化失败</strong><div class="muted" style="margin-top:8px">' +
-      AGY.ui.escapeHtml(err && err.message ? err.message : String(err)) + '</div></div>';
+    var canvas = AGY.dom.el('mainCanvas');
+    if (!canvas) return;
+    canvas.innerHTML =
+      '<div class="card empty-state">' +
+        '<strong>初始化失败</strong>' +
+        '<div class="muted" style="margin-top:8px">' +
+          AGY.ui.escapeHtml(err && err.message ? err.message : String(err)) +
+        '</div>' +
+        '<div style="margin-top:14px"><button class="btn btn-primary" id="btnBootRetry" type="button">重新加载</button></div>' +
+      '</div>';
+    var retryBtn = AGY.dom.el('btnBootRetry');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', function () {
+        retryBtn.disabled = true;
+        retryBtn.textContent = '正在重新加载...';
+        window.location.reload();
+      });
+    }
   });
 })();

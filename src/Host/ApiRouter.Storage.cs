@@ -184,11 +184,19 @@ namespace AntigravityCompanion
 
                 if (!slimRes.Ok)
                 {
-                    return FailCommand(400, !string.IsNullOrEmpty(slimRes.ErrorMessage) ? slimRes.ErrorMessage : "存储瘦身执行失败。");
+                    return FailCommand(400, !string.IsNullOrEmpty(slimRes.ErrorMessage) ? slimRes.ErrorMessage : "空间清理执行失败。");
                 }
 
-                _host.AppendLog("success", string.Format("存储瘦身完成（模式={0}，处理={1}，释放={2:F2} MB）。",
-                    slimRes.Mode.ToString(), slimRes.ProcessedCount, slimRes.FreedMegabytes));
+                string modeLabel;
+                switch (slimRes.Mode)
+                {
+                    case StorageSlimMode.ColdArchivePrune: modeLabel = "备份后清理"; break;
+                    case StorageSlimMode.OrphanGcOnly: modeLabel = "残留垃圾清理"; break;
+                    default: modeLabel = "无损压缩"; break;
+                }
+
+                _host.AppendLog("success", string.Format("空间清理完成（{0}，处理 {1} 项，释放 {2:F2} MB）。",
+                    modeLabel, slimRes.ProcessedCount, slimRes.FreedMegabytes));
                 return OperationResult<Dictionary<string, object>>.Success(SerializeStorageSlimResult(slimRes));
             }
             finally

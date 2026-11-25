@@ -4,6 +4,25 @@
   var AGY = window.AGY = window.AGY || {};
   AGY.views = AGY.views || {};
 
+  function getCapDirectionLabel(direction, fallbackBadge) {
+    if (direction === 'Aligned') return '已一致';
+    if (direction === 'RemoteOnly') return '仅同步库有';
+    if (direction === 'RemoteNewer') return '同步库较新';
+    if (direction === 'LocalOnly') return '仅本机有';
+    if (direction === 'LocalNewer') return '本机较新';
+    if (direction === 'BothModified') return '两边均有改动';
+    if (direction === 'NeedsReview' || direction === 'Conflict') return '需人工确认';
+    return fallbackBadge || direction || '-';
+  }
+
+  function findCapItemByKey(key) {
+    var all = (AGY.state.capData && AGY.state.capData.items) || [];
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].key === key) return all[i];
+    }
+    return null;
+  }
+
   function renderCapRowsHtml(filtered) {
     var st = AGY.state;
     var esc = AGY.ui.escapeHtml;
@@ -19,14 +38,8 @@
       else if (it.direction === 'NeedsReview' || it.direction === 'Conflict') cls = 'badge-red';
       else if (it.direction === 'BothModified') cls = 'badge-accent';
 
-      var dirLabel = it.directionBadge || it.direction;
-      if (it.direction === 'Aligned') dirLabel = '已一致';
-      else if (it.direction === 'RemoteOnly') dirLabel = '仅同步库有';
-      else if (it.direction === 'RemoteNewer') dirLabel = '同步库较新';
-      else if (it.direction === 'LocalOnly') dirLabel = '仅本机有';
-      else if (it.direction === 'LocalNewer') dirLabel = '本机较新';
-      else if (it.direction === 'BothModified') dirLabel = '两边均有改动';
-      else if (it.direction === 'NeedsReview' || it.direction === 'Conflict') dirLabel = '需人工确认';
+      var dirLabel = getCapDirectionLabel(it.direction, it.directionBadge);
+      var isAligned = it.direction === 'Aligned';
 
       var tip = it.directionReason === 'baseline'
         ? '基于该配置同步库的上次对齐记录判断'
@@ -46,8 +59,8 @@
         '<td class="mono muted cap-time-cell">' + (it.remoteExists ? esc(it.remoteTime) : '—') + '</td>' +
         '<td style="white-space:nowrap"><div class="row gap-xs">' +
           '<button class="btn btn-xs" data-cap-act="diff" data-key="' + esc(it.key) + '" type="button">对比源码</button>' +
-          (it.remoteExists ? '<button class="btn btn-xs" data-cap-act="import" data-key="' + esc(it.key) + '" title="从配置同步库同步到本机" type="button">← 同步到本机</button>' : '') +
-          (it.localExists ? '<button class="btn btn-xs" data-cap-act="push" data-key="' + esc(it.key) + '" title="存入配置同步库" type="button">存入同步库 →</button>' : '') +
+          (!isAligned && it.remoteExists ? '<button class="btn btn-xs" data-cap-act="import" data-key="' + esc(it.key) + '" title="从配置同步库同步到本机" type="button">← 同步到本机</button>' : '') +
+          (!isAligned && it.localExists ? '<button class="btn btn-xs" data-cap-act="push" data-key="' + esc(it.key) + '" title="存入配置同步库" type="button">存入同步库 →</button>' : '') +
           (missCount > 0 ? '<button class="btn btn-xs btn-danger-outline" data-cap-act="fixpath" data-key="' + esc(it.key) + '" type="button">修复路径 (' + missCount + ')</button>' : '') +
         '</div></td>' +
       '</tr>';
@@ -99,8 +112,8 @@
         var act = this.getAttribute('data-cap-act');
         var k = this.getAttribute('data-key');
         if (act === 'diff' || act === 'fixpath') AGY.ui.openCapabilityDiffDrawer(k, 'repo');
-        else if (act === 'import') executeCapAction('/api/capabilities/import', { keys: [k], source: 'repo' }, '已同步到本机 ✓', this);
-        else if (act === 'push') executeCapAction('/api/capabilities/push', { keys: [k] }, '已存入配置同步库 ✓', this);
+        else if (act === 'import') confirmAndExecuteCapSync('import', [k], this);
+        else if (act === 'push') confirmAndExecuteCapSync('push', [k], this);
       });
     }
   }
@@ -378,29 +391,97 @@
     });
     el('btnCapSafeSelect').addEventListener('click', function () {
       st.capChecked = {};
-      var all = cd.items || [];
-      for (var x = 0; x < all.length; x++) {
-        if (all[x].direction === 'RemoteOnly' || all[x].direction === 'RemoteNewer')
-          st.capChecked[all[x].key] = true;
+      var visible = getFilteredCapabilities();
+      var picked = 0;
+      for (var x = 0; x < visible.length; x++) {
+        if (visible[x].direction === 'RemoteOnly' || visible[x].direction === 'RemoteNewer') {
+          st.capChecked[visible[x].key] = true;
+          picked++;
+        }
       }
       patchMatrixPartial();
+      if (picked === 0) {
+        AGY.api.showToast('当前筛选结果中没有「同步库新增/较新」的项目', '');
+      }
     });
 
     el('btnCapPushSel').addEventListener('click', function () {
       var keys = Object.keys(st.capChecked).filter(function (k) { return st.capChecked[k]; });
-      executeCapAction('/api/capabilities/push', { keys: keys }, '已存入配置同步库 ✓', this);
+      if (keys.length === 0) return;
+      confirmAndExecuteCapSync('push', keys, this);
     });
     el('btnCapImportSel').addEventListener('click', function () {
       var keys = Object.keys(st.capChecked).filter(function (k) { return st.capChecked[k]; });
-      executeCapAction('/api/capabilities/import', { keys: keys, source: 'repo' }, '已同步到本机 ✓', this);
+      if (keys.length === 0) return;
+      confirmAndExecuteCapSync('import', keys, this);
     });
     el('btnCapDeleteMenu').addEventListener('click', function () {
       var keys = Object.keys(st.capChecked).filter(function (k) { return st.capChecked[k]; });
+      if (keys.length === 0) return;
       openCapDeleteModal(keys);
     });
 
     bindCapMatrixRowEvents();
     updateCapBatchButtons();
+  }
+
+  function confirmAndExecuteCapSync(actionType, keys, btn) {
+    if (!keys || keys.length === 0) return;
+    var esc = AGY.ui.escapeHtml;
+    var isImport = actionType === 'import';
+    var risky = [];
+    for (var i = 0; i < keys.length; i++) {
+      var it = findCapItemByKey(keys[i]);
+      if (!it) continue;
+      var d = it.direction;
+      if (d === 'NeedsReview' || d === 'Conflict' || d === 'BothModified' ||
+          (isImport && d === 'LocalNewer') ||
+          (!isImport && d === 'RemoteNewer')) {
+        risky.push(it);
+      }
+    }
+
+    var runNow = function (activeBtn) {
+      if (isImport) {
+        executeCapAction('/api/capabilities/import', { keys: keys, source: 'repo' }, '已同步到本机 ✓', activeBtn);
+      } else {
+        executeCapAction('/api/capabilities/push', { keys: keys }, '已存入配置同步库 ✓', activeBtn);
+      }
+    };
+
+    if (risky.length === 0) {
+      runNow(btn);
+      return;
+    }
+
+    var rowsHtml = risky.slice(0, 12).map(function (it) {
+      return '<div class="del-manifest-row">' +
+        '<span><span class="badge badge-neutral">' + esc(AGY.ui.kindLabel(it.kind)) + '</span> <strong>' + esc(it.displayName) + '</strong></span>' +
+        '<span class="badge badge-red">' + esc(getCapDirectionLabel(it.direction, it.directionBadge)) + '</span>' +
+      '</div>';
+    }).join('');
+    if (risky.length > 12) {
+      rowsHtml += '<div class="muted" style="padding-top:4px">……以及其他 ' + (risky.length - 12) + ' 项存在覆盖风险的配置</div>';
+    }
+
+    AGY.ui.openModal(
+      isImport ? '确认覆盖本机较新或冲突的扩展配置？' : '确认覆盖配置同步库中较新或冲突的配置？',
+      '<div class="alert-banner" style="margin-bottom:10px">' +
+        '<strong>⚠ 覆盖警告：</strong>以下 <strong>' + esc(risky.length) + '</strong> 项存在冲突、两边均有改动或目标端较新。' +
+        (isImport
+          ? '继续同步将用配置同步库版本覆盖本机当前版本（覆盖前自动生成 .bak 历史版本）。建议先点「对比源码」核验。'
+          : '继续存入将用本机版本覆盖配置同步库中的较新或冲突版本。建议先点「对比源码」核验。') +
+      '</div>' +
+      '<div class="del-manifest-list">' + rowsHtml + '</div>',
+      '<button class="btn" data-act="cancel">取消</button><button class="btn btn-danger" data-act="confirm">' + (isImport ? '确认覆盖本机' : '确认覆盖同步库') + '</button>',
+      function (_mb, mf) {
+        mf.querySelector('[data-act="cancel"]').addEventListener('click', AGY.ui.closeModal);
+        mf.querySelector('[data-act="confirm"]').addEventListener('click', function () {
+          AGY.ui.closeModal();
+          runNow(null);
+        });
+      }
+    );
   }
 
   async function executeCapAction(endpoint, payload, msg, btn) {
@@ -414,13 +495,46 @@
   }
 
   function openCapDeleteModal(keys) {
+    if (!keys || keys.length === 0) return;
+    var esc = AGY.ui.escapeHtml;
+    var hasAnyLocal = false;
+    var hasAnyRepo = false;
+    var manifestRows = [];
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      var it = findCapItemByKey(k);
+      var kindText = it ? AGY.ui.kindLabel(it.kind) : (k.indexOf(':') > 0 ? AGY.ui.kindLabel(k.split(':')[0]) : '扩展');
+      var nameText = it ? it.displayName : (k.indexOf(':') > 0 ? k.slice(k.indexOf(':') + 1) : k);
+      var locTag = '';
+      if (it) {
+        if (it.localExists) hasAnyLocal = true;
+        if (it.remoteExists) hasAnyRepo = true;
+        locTag = (it.localExists && it.remoteExists) ? '本机 + 同步库' : (it.localExists ? '仅本机' : '仅同步库');
+      } else {
+        hasAnyLocal = true;
+        hasAnyRepo = true;
+      }
+      if (i < 15) {
+        manifestRows.push(
+          '<div class="del-manifest-row">' +
+            '<span><span class="badge badge-neutral">' + esc(kindText) + '</span> <strong>' + esc(nameText) + '</strong></span>' +
+            (locTag ? '<span class="muted" style="white-space:nowrap;font-size:11.5px">' + esc(locTag) + '</span>' : '') +
+          '</div>'
+        );
+      }
+    }
+    if (keys.length > 15) {
+      manifestRows.push('<div class="muted" style="padding-top:4px">……以及其他 ' + (keys.length - 15) + ' 项扩展配置</div>');
+    }
+
     AGY.ui.openModal(
       '移除选中的 ' + keys.length + ' 项扩展配置',
       '<div class="alert-banner success" style="margin-bottom:10px">🛡 <strong>可撤销删除：</strong>移除的配置项会先进入 <strong>回收站</strong>，30 天内随时可一键还原。</div>' +
-      '<div>请选择移除范围（仅从配置同步库移除不会影响本机正在使用的配置）：</div>',
+      '<div style="margin-bottom:6px">待移除清单（请选择移除范围，仅从配置同步库移除不会影响本机正在使用的配置）：</div>' +
+      '<div class="del-manifest-list">' + manifestRows.join('') + '</div>',
       '<button class="btn" data-act="cancel">取消</button>' +
-      '<button class="btn btn-danger-outline" data-act="del-repo">仅从配置同步库移除</button>' +
-      '<button class="btn btn-danger" data-act="del-local">移出本机配置</button>',
+      '<button class="btn btn-danger-outline" data-act="del-repo"' + (!hasAnyRepo ? ' disabled' : '') + '>仅从配置同步库移除</button>' +
+      '<button class="btn btn-danger" data-act="del-local"' + (!hasAnyLocal ? ' disabled' : '') + '>移出本机配置</button>',
       function (_mb, mf) {
         mf.querySelector('[data-act="cancel"]').addEventListener('click', AGY.ui.closeModal);
         mf.querySelector('[data-act="del-repo"]').addEventListener('click', function () {

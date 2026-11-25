@@ -691,9 +691,10 @@
         return warnHtml + '<div class="pill-group" style="margin-bottom:12px">' + fileTabs + '</div>' + codeHtml;
       }
 
+      var isAlignedDiff = data.direction === 'Aligned';
       var hdrBtns =
-        (data.remoteExists ? '<button class="btn btn-sm btn-primary" id="btnDiffAdoptRemote">← 同步到本机</button>' : '') +
-        (data.localExists && source !== 'backup' ? '<button class="btn btn-sm" id="btnDiffPushLocal">存入配置同步库 →</button>' : '');
+        (!isAlignedDiff && data.remoteExists ? '<button class="btn btn-sm btn-primary" id="btnDiffAdoptRemote" type="button">← 同步到本机</button>' : '') +
+        (!isAlignedDiff && data.localExists && source !== 'backup' ? '<button class="btn btn-sm" id="btnDiffPushLocal" type="button">存入配置同步库 →</button>' : '');
 
       openDrawer('源码差异对比 — [' + kindLabel(data.kind) + '] ' + data.id,
         '左侧为本机 (-)，右侧为' + (source === 'backup' ? '备份文件 (.agy) (+)' : '配置同步库 (+)') + ' · ' + data.directionBadge,
@@ -756,23 +757,55 @@
 
         var btnAdopt = ha.querySelector('#btnDiffAdoptRemote');
         if (btnAdopt) btnAdopt.onclick = function () {
-          AGY.api.withButtonBusy(btnAdopt, '同步中...', async function () {
-            try {
-              await AGY.api.apiFetch('/api/capabilities/import', { method: 'POST', body: JSON.stringify({ keys: [key], source: source || 'repo' }) });
-              closeDrawer(true);
-              if (AGY.app && AGY.app.refreshAll) await AGY.app.refreshAll('已同步到本机 ✓');
-            } catch (e) { AGY.api.showToast(e.message, 'error'); }
-          });
+          var doAdopt = function () {
+            AGY.api.withButtonBusy(btnAdopt, '同步中...', async function () {
+              try {
+                await AGY.api.apiFetch('/api/capabilities/import', { method: 'POST', body: JSON.stringify({ keys: [key], source: source || 'repo' }) });
+                closeDrawer(true);
+                if (AGY.app && AGY.app.refreshAll) await AGY.app.refreshAll('已同步到本机 ✓');
+              } catch (e) { AGY.api.showToast(e.message, 'error'); }
+            });
+          };
+          var dir = data.direction || '';
+          if (dir === 'NeedsReview' || dir === 'Conflict' || dir === 'BothModified' || dir === 'LocalNewer') {
+            openModal(
+              '确认用' + (source === 'backup' ? '备份文件' : '配置同步库') + '覆盖本机版本？',
+              '<div class="alert-banner" style="margin-bottom:8px"><strong>⚠ 覆盖提示：</strong>[' + escapeHtml(kindLabel(data.kind)) + '] <strong>' + escapeHtml(data.id) + '</strong> 当前状态为 <strong>' + escapeHtml(data.directionBadge || dir) + '</strong>，同步到本机将覆盖本机现有改动（覆盖前自动保留 .bak 备份）。</div>',
+              '<button class="btn" data-act="cancel">取消</button><button class="btn btn-danger" data-act="go">确认覆盖本机</button>',
+              function (_mb, mf) {
+                mf.querySelector('[data-act="cancel"]').addEventListener('click', closeModal);
+                mf.querySelector('[data-act="go"]').addEventListener('click', function () { closeModal(); doAdopt(); });
+              }
+            );
+          } else {
+            doAdopt();
+          }
         };
         var btnPush = ha.querySelector('#btnDiffPushLocal');
         if (btnPush) btnPush.onclick = function () {
-          AGY.api.withButtonBusy(btnPush, '存入中...', async function () {
-            try {
-              await AGY.api.apiFetch('/api/capabilities/push', { method: 'POST', body: JSON.stringify({ keys: [key] }) });
-              closeDrawer(true);
-              if (AGY.app && AGY.app.refreshAll) await AGY.app.refreshAll('已存入配置同步库 ✓');
-            } catch (e) { AGY.api.showToast(e.message, 'error'); }
-          });
+          var doPush = function () {
+            AGY.api.withButtonBusy(btnPush, '存入中...', async function () {
+              try {
+                await AGY.api.apiFetch('/api/capabilities/push', { method: 'POST', body: JSON.stringify({ keys: [key] }) });
+                closeDrawer(true);
+                if (AGY.app && AGY.app.refreshAll) await AGY.app.refreshAll('已存入配置同步库 ✓');
+              } catch (e) { AGY.api.showToast(e.message, 'error'); }
+            });
+          };
+          var dir = data.direction || '';
+          if (dir === 'NeedsReview' || dir === 'Conflict' || dir === 'BothModified' || dir === 'RemoteNewer') {
+            openModal(
+              '确认用本机版本覆盖配置同步库？',
+              '<div class="alert-banner" style="margin-bottom:8px"><strong>⚠ 覆盖提示：</strong>[' + escapeHtml(kindLabel(data.kind)) + '] <strong>' + escapeHtml(data.id) + '</strong> 当前状态为 <strong>' + escapeHtml(data.directionBadge || dir) + '</strong>，存入同步库将覆盖同步库中较新或存在冲突的版本。</div>',
+              '<button class="btn" data-act="cancel">取消</button><button class="btn btn-danger" data-act="go">确认覆盖同步库</button>',
+              function (_mb, mf) {
+                mf.querySelector('[data-act="cancel"]').addEventListener('click', closeModal);
+                mf.querySelector('[data-act="go"]').addEventListener('click', function () { closeModal(); doPush(); });
+              }
+            );
+          } else {
+            doPush();
+          }
         };
       }
     } catch (e) {

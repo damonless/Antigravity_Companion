@@ -1468,6 +1468,7 @@ namespace AntigravityCompanion
 
             // Validate incoming values before mutating
             Dictionary<string, string> literalMap = new Dictionary<string, string>(StringComparer.Ordinal);
+            List<string> keysToDelete = new List<string>();
             foreach (KeyValuePair<string, object> kvp in updates)
             {
                 if (string.IsNullOrWhiteSpace(kvp.Key))
@@ -1496,6 +1497,13 @@ namespace AntigravityCompanion
                     }
                     literalMap[key] = ((bool)val) ? "true" : "false";
                 }
+                else if (val == null ||
+                         (string.Equals(key, "conversationWidth", StringComparison.Ordinal) &&
+                          val is string &&
+                          string.IsNullOrWhiteSpace((string)val)))
+                {
+                    keysToDelete.Add(key);
+                }
                 else
                 {
                     literalMap[key] = UnifiedJson.Serialize(val, false);
@@ -1511,6 +1519,13 @@ namespace AntigravityCompanion
                         patched,
                         new string[] { "userSettings", kvp.Key },
                         kvp.Value);
+                }
+                for (int i = 0; i < keysToDelete.Count; i++)
+                {
+                    patched = UnifiedJson.DeleteObjectKeyPreservingComments(
+                        patched,
+                        "userSettings",
+                        keysToDelete[i]);
                 }
             }
             catch (Exception ex)

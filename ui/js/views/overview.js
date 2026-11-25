@@ -71,6 +71,19 @@
         var folderExists = ws ? ws.exists : !!fg.fullPath;
         var subLabel = fg.isDuplicateBasename && fg.distinguishingLabel ? fg.distinguishingLabel : fg.shortPath;
 
+        var missingDir = !folderExists && !!fg.fullPath;
+        var canLaunch = !!fg.fullPath && folderExists;
+        var actionButtonsHtml = missingDir
+          ? ('<button class="btn btn-xs btn-primary ov-proj-reloc-inline" data-pidx="' + idx + '" type="button">修复目录位置</button>' +
+             '<button class="btn btn-xs" data-ov-sessions="' + esc(fg.bucketKey) + '" type="button">看对话</button>')
+          : (!canLaunch
+            ? ('<button class="btn btn-xs ov-proj-reloc-inline" data-pidx="' + idx + '" type="button">关联本地目录</button>' +
+               '<button class="btn btn-xs" data-ov-sessions="' + esc(fg.bucketKey) + '" type="button">看对话</button>')
+            : ('<button class="btn btn-xs btn-primary" data-ov-launch="ide" data-path="' + esc(fg.fullPath || '') + '" type="button">主窗口打开</button>' +
+               '<button class="btn btn-xs" data-ov-launch="explorer" data-path="' + esc(fg.fullPath || '') + '" type="button">打开目录</button>' +
+               '<button class="btn btn-xs" data-ov-launch="powershell" data-path="' + esc(fg.fullPath || '') + '" type="button">开终端</button>' +
+               '<button class="btn btn-xs" data-ov-sessions="' + esc(fg.bucketKey) + '" type="button">看对话</button>'));
+
         return '<div class="proj-launch-card">' +
           '<div class="between gap-xs">' +
             '<div class="proj-launch-title" title="' + esc(fg.projectName) + '">' + esc(fg.projectName) + '</div>' +
@@ -90,14 +103,9 @@
             (fg.isMultiRoot ? '<span class="badge badge-blue">多目录</span>' : '') +
             (hasAgents ? '<span class="badge badge-green">' + esc(ws.agentsDirName || '.agents') + '</span>' : '') +
             (hasRules ? '<span class="badge badge-neutral">含项目规则</span>' : '') +
-            (!folderExists && fg.fullPath ? '<span class="badge badge-red">目录不存在</span>' : '') +
+            (missingDir ? '<span class="badge badge-red">目录不存在</span>' : '') +
           '</div>' +
-          '<div class="proj-launch-actions">' +
-            '<button class="btn btn-xs btn-primary" data-ov-launch="ide" data-path="' + esc(fg.fullPath || '') + '"' + (!fg.fullPath ? ' disabled' : '') + '>主窗口打开</button>' +
-            '<button class="btn btn-xs" data-ov-launch="explorer" data-path="' + esc(fg.fullPath || '') + '"' + (!fg.fullPath ? ' disabled' : '') + '>打开目录</button>' +
-            '<button class="btn btn-xs" data-ov-launch="powershell" data-path="' + esc(fg.fullPath || '') + '"' + (!fg.fullPath ? ' disabled' : '') + '>开终端</button>' +
-            '<button class="btn btn-xs" data-ov-sessions="' + esc(fg.bucketKey) + '">看对话</button>' +
-          '</div>' +
+          '<div class="proj-launch-actions">' + actionButtonsHtml + '</div>' +
         '</div>';
       }).join('') + '</div>';
     }
@@ -248,7 +256,7 @@
         if (menu && !wasOpen) menu.classList.remove('hidden');
       });
     }
-    var relocBtns = root.querySelectorAll('.ov-proj-reloc');
+    var relocBtns = root.querySelectorAll('.ov-proj-reloc, .ov-proj-reloc-inline');
     for (var rb = 0; rb < relocBtns.length; rb++) {
       relocBtns[rb].addEventListener('click', function (ev) {
         ev.stopPropagation();

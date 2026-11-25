@@ -51,7 +51,7 @@
     var visible = getFilteredRenameCandidates();
     var selectedToApply = [];
     for (var i = 0; i < visible.length; i++) {
-      if (st.renameChecked[visible[i].cid]) selectedToApply.push(visible[i]);
+      if (!visible[i].isRunning && st.renameChecked[visible[i].cid]) selectedToApply.push(visible[i]);
     }
 
     var stepperHtml =
@@ -109,14 +109,16 @@
     var rowsHtml = visible.length === 0
       ? '<tr><td colspan="5" class="empty-state">当前筛选范围内没有待整理对话，可调整上方筛选条件。</td></tr>'
       : visible.map(function (c) {
-          var checked = !!st.renameChecked[c.cid];
+          var checked = !c.isRunning && !!st.renameChecked[c.cid];
           var tagState = c.isRunning
             ? '<span class="badge badge-amber">进行中 (自动跳过)</span>'
             : (c.isTagged ? '<span class="badge badge-green">已带前缀</span>'
               : (c.isLowValue ? '<span class="badge badge-neutral">简短对话</span>' : '<span class="badge badge-accent">空闲 (可操作)</span>'));
           var pLabel = (c.projectName === 'Outside of Project' || !c.projectName) ? '未关联项目' : c.projectName;
           return '<tr class="' + (checked ? 'selected' : '') + '">' +
-            '<td style="width:36px"><input type="checkbox" class="ren-step1-chk" data-cid="' + esc(c.cid) + '"' + (checked ? ' checked' : '') + ' /></td>' +
+            '<td style="width:36px"><input type="checkbox" class="ren-step1-chk" data-cid="' + esc(c.cid) + '"' +
+              (checked ? ' checked' : '') +
+              (c.isRunning ? ' disabled title="进行中的对话将自动跳过"' : '') + ' /></td>' +
             '<td><span class="badge badge-neutral">' + esc(pLabel) + '</span></td>' +
             '<td>' + esc(c.oldTitle) + '</td>' +
             '<td>' + tagState + '</td>' +
@@ -124,14 +126,21 @@
           '</tr>';
         }).join('');
 
+    var isScopedMode = st.renameProjectFilter === '__SCOPED__';
+    var scopedCount = Object.keys(st.renameScopedCids).length;
+    var filterControlsHtml = isScopedMode
+      ? ('<span class="badge badge-blue">当前为「已勾选带入范围」模式（共 ' + esc(scopedCount) + ' 条）</span>' +
+         '<button class="btn btn-xs" id="btnRenExitScoped" type="button">切回全部项目筛选</button>')
+      : ('<button class="filter-pill ' + (st.renameShowTagged ? 'active' : '') + '" data-rtoggle="tagged" type="button">包含已带前缀</button>' +
+         '<button class="filter-pill ' + (st.renameShowAux ? 'active' : '') + '" data-rtoggle="aux" type="button">包含 CLI 与未关联项目</button>' +
+         '<button class="filter-pill ' + (st.renameShowRunning ? 'active' : '') + '" data-rtoggle="running" type="button">显示进行中</button>' +
+         '<button class="filter-pill ' + (st.renameShowLowValue ? 'active' : '') + '" data-rtoggle="low" type="button">包含简短对话</button>');
+
     return '<div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0;gap:12px">' +
       '<div class="between wrap gap-sm">' +
         '<div class="row gap-sm wrap">' +
           '<select class="select" id="selRenameProj" style="width:220px">' + projOpts + '</select>' +
-          '<button class="filter-pill ' + (st.renameShowTagged ? 'active' : '') + '" data-rtoggle="tagged" type="button">包含已带前缀</button>' +
-          '<button class="filter-pill ' + (st.renameShowAux ? 'active' : '') + '" data-rtoggle="aux" type="button">包含 CLI 与未关联项目</button>' +
-          '<button class="filter-pill ' + (st.renameShowRunning ? 'active' : '') + '" data-rtoggle="running" type="button">显示进行中</button>' +
-          '<button class="filter-pill ' + (st.renameShowLowValue ? 'active' : '') + '" data-rtoggle="low" type="button">包含简短水话</button>' +
+          filterControlsHtml +
         '</div>' +
         '<div class="row gap-sm">' +
           '<button class="btn btn-sm" id="btnRenSelAll" type="button">全选当前</button>' +
@@ -160,7 +169,7 @@
     var candHtml = visible.length === 0
       ? '<div class="empty-state">当前范围下没有候选对话，请返回第 1 步调整筛选条件。</div>'
       : visible.map(function (c) {
-          var checked = !!st.renameChecked[c.cid];
+          var checked = !c.isRunning && !!st.renameChecked[c.cid];
           var effNew = getEffectiveNewTitle(c);
           var edited = st.renameEdits[c.cid] !== undefined && st.renameEdits[c.cid] !== c.suggestedTitle;
           var aiMod = !!st.renameAiModified[c.cid];
@@ -170,7 +179,7 @@
               : (edited ? '<span class="badge badge-blue">已手动微调</span>' : '<span class="badge badge-accent">规则建议</span>'));
           var pLabel = (c.projectName === 'Outside of Project' || !c.projectName) ? '未关联项目' : c.projectName;
           return '<div class="cand-card ' + (focused && focused.cid === c.cid ? 'focused' : '') + '" data-cand-focus="' + esc(c.cid) + '">' +
-            '<input type="checkbox" class="ren-chk" data-cid="' + esc(c.cid) + '"' + (checked ? ' checked' : '') + ' style="margin-top:3px" />' +
+            '<input type="checkbox" class="ren-chk" data-cid="' + esc(c.cid) + '"' + (checked ? ' checked' : '') + (c.isRunning ? ' disabled title="进行中的对话将自动跳过"' : '') + ' style="margin-top:3px" />' +
             '<div class="cand-body">' +
               '<div class="cand-old">原：' + esc(c.oldTitle) + '</div>' +
               '<div class="cand-new" data-cand-new-cid="' + esc(c.cid) + '">新：' + esc(effNew) + '</div>' +
@@ -302,6 +311,12 @@
         st.renameProjectFilter = this.value;
         renderRenameWizard(root);
       });
+      if (el('btnRenExitScoped')) {
+        el('btnRenExitScoped').addEventListener('click', function () {
+          st.renameProjectFilter = '__ALL__';
+          renderRenameWizard(root);
+        });
+      }
       var rtoggles = root.querySelectorAll('[data-rtoggle]');
       for (var ti = 0; ti < rtoggles.length; ti++) {
         rtoggles[ti].addEventListener('click', function () {
@@ -314,7 +329,9 @@
         });
       }
       el('btnRenSelAll').addEventListener('click', function () {
-        for (var j = 0; j < visible.length; j++) st.renameChecked[visible[j].cid] = true;
+        for (var j = 0; j < visible.length; j++) {
+          if (!visible[j].isRunning) st.renameChecked[visible[j].cid] = true;
+        }
         renderRenameWizard(root);
       });
       el('btnRenSelNone').addEventListener('click', function () {
@@ -326,9 +343,10 @@
       var s1Chks = root.querySelectorAll('.ren-step1-chk');
       for (var s1 = 0; s1 < s1Chks.length; s1++) {
         s1Chks[s1].addEventListener('change', function () {
+          if (this.disabled) return;
           st.renameChecked[this.getAttribute('data-cid')] = this.checked;
           AGY.dom.patchCheckboxRow(this.closest('tr'), this.checked);
-          var cnt = getFilteredRenameCandidates().filter(function (x) { return !!st.renameChecked[x.cid]; }).length;
+          var cnt = getFilteredRenameCandidates().filter(function (x) { return !x.isRunning && !!st.renameChecked[x.cid]; }).length;
           var btn = el('btnStep1To2');
           if (btn) {
             btn.disabled = cnt === 0;
@@ -409,7 +427,7 @@
     }
 
     function getLiveSelectedInStep2() {
-      return getFilteredRenameCandidates().filter(function (x) { return !!st.renameChecked[x.cid]; });
+      return getFilteredRenameCandidates().filter(function (x) { return !x.isRunning && !!st.renameChecked[x.cid]; });
     }
     el('btnBackToStep1').addEventListener('click', function () { st.renameStep = 1; renderRenameWizard(root); });
     el('btnRenRecompute').addEventListener('click', function () {
@@ -431,8 +449,9 @@
     for (var ci = 0; ci < chks.length; ci++) {
       chks[ci].addEventListener('click', function (ev) { ev.stopPropagation(); });
       chks[ci].addEventListener('change', function () {
+        if (this.disabled) return;
         st.renameChecked[this.getAttribute('data-cid')] = this.checked;
-        var cnt = getFilteredRenameCandidates().filter(function (x) { return !!st.renameChecked[x.cid]; }).length;
+        var cnt = getFilteredRenameCandidates().filter(function (x) { return !x.isRunning && !!st.renameChecked[x.cid]; }).length;
         var nextBtn = el('btnNextToConfirm');
         if (nextBtn) {
           nextBtn.disabled = cnt === 0;
