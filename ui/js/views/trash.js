@@ -110,8 +110,8 @@
           method: 'POST',
           body: JSON.stringify({ id: trashId, closeIdeIfRunning: !!closeIde, forceKill: !!forceKill })
         });
-        var countNum = (res.restoredFiles || 0) + (res.restoredProtoEntries || 0);
-        await AGY.app.refreshAll('已成功还原 ' + (countNum > 0 ? countNum : 1) + ' 项内容 ✓');
+        var countNum = (res.restoredFiles || 0) + (res.restoredProtoEntries || 0) + (res.restoredDbRows || 0);
+        await AGY.app.refreshAll('已成功还原 ' + countNum + ' 项内容 ✓');
       } catch (e) {
         if (!AGY.ui.handleIdeConflictError(
           e,

@@ -109,7 +109,7 @@
     var btn5c = AGY.dom.el('btnRunMode5C');
     if (btn5c) {
       btn5c.disabled = cnt === 0;
-      btn5c.textContent = '执行高级压缩抽脂 (' + cnt + ')';
+      btn5c.textContent = '执行高级原位压缩 (' + cnt + ')';
     }
   }
 
@@ -254,7 +254,7 @@
         '<div class="storage-bar-track">' +
           '<div class="storage-seg seg-root" style="width:' + pct(rep.rootDbsBytes) + '%" title="主对话: ' + fmt(rep.rootDbsBytes) + '"></div>' +
           '<div class="storage-seg seg-sub" style="width:' + pct(rep.subagentDbsBytes) + '%" title="后台子任务: ' + fmt(rep.subagentDbsBytes) + '"></div>' +
-          '<div class="storage-seg seg-brain" style="width:' + pct(rep.brainDirsBytes) + '%" title="脑区产物: ' + fmt(rep.brainDirsBytes) + '"></div>' +
+          '<div class="storage-seg seg-brain" style="width:' + pct(rep.brainDirsBytes) + '%" title="产物目录: ' + fmt(rep.brainDirsBytes) + '"></div>' +
           '<div class="storage-seg seg-cli" style="width:' + pct(rep.cliDbsBytes) + '%" title="CLI 对话: ' + fmt(rep.cliDbsBytes) + '"></div>' +
           '<div class="storage-seg seg-annot" style="width:' + pct(rep.annotationsBytes) + '%" title="标题记录: ' + fmt(rep.annotationsBytes) + '"></div>' +
           '<div class="storage-seg seg-orphan" style="width:' + pct(rep.orphansBytes) + '%" title="残留垃圾文件: ' + fmt(rep.orphansBytes) + '"></div>' +
@@ -262,7 +262,7 @@
         '<div class="legend-row">' +
           '<span class="legend-item"><i class="legend-dot seg-root"></i>主对话 ' + fmt(rep.rootDbsBytes) + '</span>' +
           '<span class="legend-item"><i class="legend-dot seg-sub"></i>后台子任务 ' + fmt(rep.subagentDbsBytes) + '</span>' +
-          '<span class="legend-item"><i class="legend-dot seg-brain"></i>脑区目录 ' + fmt(rep.brainDirsBytes) + '</span>' +
+          '<span class="legend-item"><i class="legend-dot seg-brain"></i>产物目录 ' + fmt(rep.brainDirsBytes) + '</span>' +
           '<span class="legend-item"><i class="legend-dot seg-cli"></i>CLI 对话 ' + fmt(rep.cliDbsBytes) + '</span>' +
           '<span class="legend-item"><i class="legend-dot seg-orphan"></i>残留垃圾文件 ' + fmt(rep.orphansBytes) + '</span>' +
         '</div>' +
@@ -273,7 +273,7 @@
           '<div class="between" style="margin-bottom:8px"><strong>清理残留垃圾文件</strong><span class="badge badge-neutral">' + esc(orph.totalItems || 0) + ' 项残留</span></div>' +
           '<div class="muted" style="font-size:12px;line-height:1.7;margin-bottom:10px">' +
             '残留数据库：' + esc(orph.orphanDbFilesCount || 0) + ' · 残留 .db.bak：' + esc(orph.orphanDbBakCount || 0) + ' · 残留临时日志：' + esc(orph.orphanDbJournalCount || 0) + '<br>' +
-            '残留脑区目录：' + esc(orph.orphanBrainDirsCount || 0) + ' · 残留标题文件：' + esc(orph.orphanAnnotationsCount || 0) + '<br>' +
+            '残留产物目录：' + esc(orph.orphanBrainDirsCount || 0) + ' · 残留标题文件：' + esc(orph.orphanAnnotationsCount || 0) + '<br>' +
             '🛡 清理前先移入 <strong>回收站</strong>，30 天内随时可还原。' +
             (leg.exists ? ('<br>旧版 CLI 历史摘要库：' + esc(leg.entryCount || 0) + ' 条 (' + fmt(leg.totalBytes) + ')') : '') +
           '</div>' +
@@ -286,7 +286,7 @@
         '<div class="card">' +
           '<div class="between" style="margin-bottom:8px"><strong>安全清理陈旧后台子任务</strong><span class="badge badge-green">推荐 · 先备份后清理</span></div>' +
           '<div class="muted" style="font-size:12px;line-height:1.7;margin-bottom:10px">' +
-            '自动先将选中的超龄空闲后台子任务完整打包为 <strong>清理前安全备份 (.agy)</strong> 并校验可读，再释放本地空间（完全保留您的主对话与脑区产物）。' +
+            '自动先将选中的超龄空闲后台子任务完整打包为 <strong>清理前安全备份 (.agy)</strong> 并校验可读，再释放本机空间（完全保留您的主对话与产物目录）。' +
           '</div>' +
           '<button class="btn btn-primary" id="btnRunMode5A" type="button">备份并清理已选后台子任务 (0)</button>' +
         '</div>' +
@@ -314,7 +314,7 @@
 
       '<details class="experimental-details" id="detailsMode5C">' +
         '<summary class="experimental-summary">' +
-          '<span>▸ 高级选项（实验性） — 数据库原位压缩抽脂</span>' +
+          '<span>▸ 高级选项（实验性） — 数据库原位压缩</span>' +
           '<span class="badge badge-amber">高级 · 默认折叠</span>' +
         '</summary>' +
         '<div class="experimental-body">' +
@@ -323,7 +323,7 @@
           '</div>' +
           '<div class="between wrap gap-sm">' +
             '<div class="muted" style="font-size:12px">作用对象：上方列表已勾选的空闲后台子任务（主对话与进行中对话强制跳过）。</div>' +
-            '<button class="btn btn-danger-outline" id="btnRunMode5C" type="button">执行高级压缩抽脂 (0)</button>' +
+            '<button class="btn btn-danger-outline" id="btnRunMode5C" type="button">执行高级原位压缩 (0)</button>' +
           '</div>' +
         '</div>' +
       '</details>';

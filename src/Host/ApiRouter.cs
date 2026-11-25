@@ -744,10 +744,12 @@ namespace AntigravityCompanion
             string strategyStr,
             bool forceKill,
             out RenameBatchResult result,
+            out bool deferredToPbFlush,
             out int errCode,
             out string errMsg)
         {
             result = null;
+            deferredToPbFlush = false;
             errCode = 0;
             errMsg = null;
             if (!_host.TryAcquireJob("rename_execute", "正在保存对话新标题与改名撤销记录..."))
@@ -762,7 +764,8 @@ namespace AntigravityCompanion
                 if (!ResolveStrategyExecution(strategyStr, forceKill, out hotOnly, out errCode, out errMsg))
                     return false;
 
-                bool deferPb = hotOnly && _host.IsIdeRunning();
+                bool ideWasRunning = _host.IsIdeRunning();
+                bool deferPb = hotOnly && ideWasRunning;
                 OperationResult<RenameBatchResult> opRes;
                 lock (_host.MutationLock)
                 {
@@ -776,11 +779,13 @@ namespace AntigravityCompanion
                             if (!skippedSet.Contains(kvp.Key))
                                 appliedMap[kvp.Key] = kvp.Value;
                         }
-                        if (deferPb || !opRes.Data.Layer3Updated)
+                        bool shouldQueuePb = appliedMap.Count > 0 && (deferPb || (hotOnly && !opRes.Data.Layer3Updated && _host.IsIdeRunning()));
+                        if (shouldQueuePb)
                         {
                             TrashAndBackupService.EnqueuePendingPbSync(_host.GeminiPath, appliedMap);
+                            deferredToPbFlush = true;
                         }
-                        else
+                        else if (appliedMap.Count > 0)
                         {
                             TrashAndBackupService.RemovePendingPbSync(_host.GeminiPath, appliedMap.Keys);
                         }
@@ -796,7 +801,7 @@ namespace AntigravityCompanion
                     return false;
                 }
 
-                string deferHint = (hotOnly || !result.Layer3Updated)
+                string deferHint = deferredToPbFlush
                     ? "（已在主窗口运行时安全保存，关闭 Antigravity 主窗口后将自动同步到侧边栏）"
                     : string.Empty;
                 _host.AppendLog("success", string.Format("对话改名完成：请求 {0} 条，实际 {1} 条，跳过进行中 {2} 条{3}。",

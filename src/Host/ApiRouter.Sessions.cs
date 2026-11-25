@@ -37,7 +37,7 @@ namespace AntigravityCompanion
 
                 if (!SessionMetadataExtractor.IsLikelyConversationId(cid))
                 {
-                    HttpProtocolHelper.WriteJsonError(stream, 400, "无效的会话 ID。");
+                    HttpProtocolHelper.WriteJsonError(stream, 400, "无效的对话 ID。");
                     return true;
                 }
 
@@ -73,7 +73,7 @@ namespace AntigravityCompanion
                 bool fromLocal = !string.Equals(source, "backup", StringComparison.OrdinalIgnoreCase);
                 if (!SessionMetadataExtractor.IsLikelyConversationId(cid))
                 {
-                    HttpProtocolHelper.WriteJsonError(stream, 400, "无效的会话 ID。");
+                    HttpProtocolHelper.WriteJsonError(stream, 400, "无效的对话 ID。");
                     return true;
                 }
                 ConversationSummaryInfo info = FindSession(cid, fromLocal);
@@ -82,7 +82,7 @@ namespace AntigravityCompanion
                 {
                     string safeTitle = SanitizeFileName(safeInfo.DisplayTitle ?? cid);
                     bool dlgBusy;
-                    outPath = NativeDialogBridge.PickSaveFile("导出会话记录为 Markdown", "Markdown 文件 (*.md)|*.md|所有文件 (*.*)|*.*", safeTitle + ".md", out dlgBusy);
+                    outPath = NativeDialogBridge.PickSaveFile("导出对话记录为 Markdown", "Markdown 文件 (*.md)|*.md|所有文件 (*.*)|*.*", safeTitle + ".md", out dlgBusy);
                     if (dlgBusy) { HttpProtocolHelper.WriteJsonError(stream, 409, "已有文件选择窗口正在打开。"); return true; }
                     if (string.IsNullOrEmpty(outPath))
                     {
@@ -153,12 +153,12 @@ namespace AntigravityCompanion
 
                 if (cids.Count == 0 || string.IsNullOrWhiteSpace(targetProjName))
                 {
-                    HttpProtocolHelper.WriteJsonError(stream, 400, "请选择待移动的会话及目标工程名称。");
+                    HttpProtocolHelper.WriteJsonError(stream, 400, "请选择待移动的对话及目标项目名称。");
                     return true;
                 }
 
                 // FIX P1-11: Acquire job BEFORE closing IDE
-                if (!_host.TryAcquireJob("sessions_move", "正在迁移会话所属工程..."))
+                if (!_host.TryAcquireJob("sessions_move", "正在更换对话所属项目..."))
                 {
                     HttpProtocolHelper.WriteJsonError(stream, 409, "当前有其他后台任务正在执行，请稍后再试。");
                     return true;
@@ -185,7 +185,7 @@ namespace AntigravityCompanion
                     string warn = (moveRes.Warnings != null && moveRes.Warnings.Count > 0)
                         ? string.Join("; ", moveRes.Warnings.ToArray())
                         : string.Empty;
-                    _host.AppendLog("success", string.Format("已迁移 {0} 条会话至工程 [{1}]。", moveRes.Data, targetProjName));
+                    _host.AppendLog("success", string.Format("已将 {0} 条对话移动至项目 [{1}]。", moveRes.Data, targetProjName));
                     Dictionary<string, object> resp = new Dictionary<string, object>();
                     resp["ok"] = true;
                     resp["moved"] = moveRes.Data;
@@ -208,12 +208,12 @@ namespace AntigravityCompanion
 
                 if (cidArr.Count == 0 && projIdArr.Count == 0 && ghostArr.Count == 0)
                 {
-                    HttpProtocolHelper.WriteJsonError(stream, 400, "请先选择要删除的会话或工程。");
+                    HttpProtocolHelper.WriteJsonError(stream, 400, "请先选择要移除的对话或项目。");
                     return true;
                 }
 
                 // FIX P1-11: Acquire job BEFORE closing IDE
-                if (!_host.TryAcquireJob("sessions_delete", "正在物理删除选中会话或工程..."))
+                if (!_host.TryAcquireJob("sessions_delete", "正在将所选对话或项目移入回收站..."))
                 {
                     HttpProtocolHelper.WriteJsonError(stream, 409, "当前有其他后台任务正在执行，请稍后再试。");
                     return true;
@@ -274,12 +274,12 @@ namespace AntigravityCompanion
 
                 if (string.IsNullOrEmpty(projName) || string.IsNullOrEmpty(newFolderPath))
                 {
-                    HttpProtocolHelper.WriteJsonError(stream, 400, "工程名称与新物理目录不能为空。");
+                    HttpProtocolHelper.WriteJsonError(stream, 400, "项目名称与新本机目录不能为空。");
                     return true;
                 }
 
                 // FIX P1-11: Acquire job BEFORE closing IDE
-                if (!_host.TryAcquireJob("projects_relocate", "正在重定位工程物理目录..."))
+                if (!_host.TryAcquireJob("projects_relocate", "正在重新关联项目本机目录..."))
                 {
                     HttpProtocolHelper.WriteJsonError(stream, 409, "当前有其他后台任务正在执行，请稍后再试。");
                     return true;
@@ -307,7 +307,7 @@ namespace AntigravityCompanion
                     string warn = (relocOp.Warnings != null && relocOp.Warnings.Count > 0)
                         ? string.Join("; ", relocOp.Warnings.ToArray())
                         : string.Empty;
-                    _host.AppendLog("success", string.Format("工程 [{0}] 物理路径已重定向至 {1}（同步 {2} 条会话）。", projName, newFolderPath, relocOp.Data));
+                    _host.AppendLog("success", string.Format("项目 [{0}] 本机目录已重新关联至 {1}（同步 {2} 条对话）。", projName, newFolderPath, relocOp.Data));
                     Dictionary<string, object> resp = new Dictionary<string, object>();
                     resp["ok"] = true;
                     resp["updated"] = relocOp.Data;
@@ -344,7 +344,7 @@ namespace AntigravityCompanion
                 List<SessionRenameCandidate> selectedCands = BuildSelectedCandidatesForAi(cids);
                 if (selectedCands.Count == 0)
                 {
-                    HttpProtocolHelper.WriteJsonError(stream, 400, "请先勾选至少 1 条会话再生成 AI 润色提示词。");
+                    HttpProtocolHelper.WriteJsonError(stream, 400, "请先勾选至少 1 条对话再生成 AI 润色提示词。");
                     return true;
                 }
                 string prompt = AiPolishPromptExchange.BuildPolishPrompt(selectedCands);
@@ -361,7 +361,7 @@ namespace AntigravityCompanion
                 List<SessionRenameCandidate> selectedCands = BuildSelectedCandidatesForAi(cids);
                 if (selectedCands.Count == 0)
                 {
-                    HttpProtocolHelper.WriteJsonError(stream, 400, "请先勾选至少 1 条会话再导出 AI 提示词。");
+                    HttpProtocolHelper.WriteJsonError(stream, 400, "请先勾选至少 1 条对话再导出 AI 提示词。");
                     return true;
                 }
                 if (string.IsNullOrEmpty(outPath))
@@ -471,7 +471,7 @@ namespace AntigravityCompanion
             }
             if (path == "/api/rename/rules" && req.Method == "POST")
             {
-                if (!_host.TryAcquireJob("rename_rules", "正在保存会话命名规则..."))
+                if (!_host.TryAcquireJob("rename_rules", "正在保存对话命名规则..."))
                 {
                     HttpProtocolHelper.WriteJsonError(stream, 409, "当前有其他后台任务正在执行，请稍后再试。");
                     return true;
@@ -518,7 +518,7 @@ namespace AntigravityCompanion
                             return true;
                         }
                     }
-                    _host.AppendLog("success", "已保存并应用会话自动命名规则。");
+                    _host.AppendLog("success", "已保存并应用对话自动命名规则。");
                     Dictionary<string, object> resp = new Dictionary<string, object>();
                     resp["ok"] = true;
                     resp["rawJson"] = finalJson;
@@ -790,7 +790,7 @@ namespace AntigravityCompanion
 
                     if (batch.Count == 0)
                     {
-                        HttpProtocolHelper.WriteJsonError(stream, 400, "未找到可用的候选会话用于 CLI 智能建议。");
+                        HttpProtocolHelper.WriteJsonError(stream, 400, "未找到可用的候选对话用于 CLI 智能建议。");
                         return true;
                     }
 
@@ -830,7 +830,7 @@ namespace AntigravityCompanion
                     resp["count"] = sugList.Count;
                     resp["suggestions"] = sugList;
                     if (cliRes.Ok)
-                        _host.AppendLog("success", string.Format("agy CLI 已生成 {0} 条会话命名建议。", sugList.Count));
+                        _host.AppendLog("success", string.Format("agy CLI 已生成 {0} 条对话标题建议。", sugList.Count));
                     else
                         _host.AppendLog("warn", "agy CLI 命名建议未成功: " + (cliRes.ErrorOrHint ?? cliRes.Status.ToString()));
                     HttpProtocolHelper.WriteJsonResponse(stream, 200, resp);
@@ -893,16 +893,17 @@ namespace AntigravityCompanion
             }
 
             RenameBatchResult res;
+            bool deferredToPbFlush;
             int errCode;
             string errMsg;
-            if (!ExecuteRenameInternal(cidMap, strategyStr, forceKill, out res, out errCode, out errMsg))
+            if (!ExecuteRenameInternal(cidMap, strategyStr, forceKill, out res, out deferredToPbFlush, out errCode, out errMsg))
             {
                 return BuildStrategyOrErrorFailure(errCode, errMsg);
             }
 
             Dictionary<string, object> resp = SerializeBatchRenameResult(res);
             int pendingCnt = TrashAndBackupService.GetPendingPbSyncCount(_host.GeminiPath);
-            resp["deferredToPbFlush"] = res != null && !res.Layer3Updated && pendingCnt > 0;
+            resp["deferredToPbFlush"] = deferredToPbFlush;
             resp["pendingPbSyncCount"] = pendingCnt;
             return OperationResult<Dictionary<string, object>>.Success(resp);
         }

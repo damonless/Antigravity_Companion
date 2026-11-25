@@ -41,7 +41,7 @@
 
     var gcHtml = gc
       ? ('<div class="metric-value">' + esc(gc.totalMegabytes) + ' <span style="font-size:14px;font-weight:500">MB</span></div>' +
-         '<div class="metric-desc">数据库 ' + esc(gc.dbFilesCount || 0) + ' · 脑区 ' + esc(gc.brainDirsCount || 0) + ' · 标注 ' + esc(gc.annotationFilesCount || 0) +
+         '<div class="metric-desc">数据库 ' + esc(gc.dbFilesCount || 0) + ' · 产物目录 ' + esc(gc.brainDirsCount || 0) + ' · 标注 ' + esc(gc.annotationFilesCount || 0) +
          (((gc.orphanDbBakCount || 0) + (gc.orphanDbJournalCount || 0)) > 0 ? (' · 临时 ' + esc((gc.orphanDbBakCount || 0) + (gc.orphanDbJournalCount || 0))) : '') + '</div>')
       : '<div class="metric-value" style="font-size:18px">待体检</div><div class="metric-desc">随时在线只读体检，不打断主窗口</div>';
 
@@ -62,7 +62,7 @@
 
     var projectCardsHtml = '';
     if (formalGroups.length === 0) {
-      projectCardsHtml = '<div class="card empty-state" style="padding:20px">暂无已登记的本地项目。</div>';
+      projectCardsHtml = '<div class="card empty-state" style="padding:20px">暂无已登记的本机项目。</div>';
     } else {
       projectCardsHtml = '<div class="project-cards-grid">' + formalGroups.map(function (fg, idx) {
         var ws = (fg.projectId && wsById[fg.projectId.toLowerCase()]) || (fg.fullPath && wsByPath[fg.fullPath.toLowerCase()]) || null;
@@ -79,13 +79,13 @@
               '<div class="dropdown-wrap">' +
                 '<button class="btn-icon ov-proj-more-btn" data-pidx="' + idx + '" title="更多项目操作" type="button">' + AGY.ui.ICONS.more + '</button>' +
                 '<div class="dropdown-menu hidden" id="ovProjMenu_' + idx + '">' +
-                  '<button class="dropdown-item ov-proj-reloc" data-pidx="' + idx + '" type="button">重新关联本地目录...</button>' +
+                  '<button class="dropdown-item ov-proj-reloc" data-pidx="' + idx + '" type="button">重新关联本机目录...</button>' +
                   (fg.projectId ? '<div class="dropdown-divider"></div><button class="dropdown-item danger ov-proj-del" data-pidx="' + idx + '" type="button">移除项目记录...</button>' : '') +
                 '</div>' +
               '</div>' +
             '</div>' +
           '</div>' +
-          '<div class="proj-launch-path" title="' + esc(fg.fullPath || '') + '">' + esc(subLabel || fg.fullPath || '(未关联本地目录)') + '</div>' +
+          '<div class="proj-launch-path" title="' + esc(fg.fullPath || '') + '">' + esc(subLabel || fg.fullPath || '(未关联本机目录)') + '</div>' +
           '<div class="row gap-xs wrap">' +
             (fg.isMultiRoot ? '<span class="badge badge-blue">多目录</span>' : '') +
             (hasAgents ? '<span class="badge badge-green">' + esc(ws.agentsDirName || '.agents') + '</span>' : '') +
@@ -340,7 +340,7 @@
               '<li>残留对话数：<strong>' + res.sessionCount + '</strong> 个</li>' +
               '<li>残留数据库文件：<strong>' + res.dbFilesCount + '</strong> 个</li>' +
               (tmpCnt > 0 ? '<li>残留备份/临时文件 (.bak / -journal)：<strong>' + tmpCnt + '</strong> 个</li>' : '') +
-              '<li>残留脑区目录：<strong>' + res.brainDirsCount + '</strong> 个</li>' +
+              '<li>残留产物目录：<strong>' + res.brainDirsCount + '</strong> 个</li>' +
               '<li>残留标题记录 (.pbtxt)：<strong>' + res.annotationFilesCount + '</strong> 个</li>' +
               '<li>可释放空间：<strong>' + res.totalMegabytes + ' MB</strong></li>' +
             '</ul>',

@@ -85,7 +85,7 @@ namespace AntigravityCompanion
 
                 if (!trayOnly)
                 {
-                    if (!OpenUrlInPreferredShell(launchUrl))
+                    if (!OpenUrlInPreferredShell(launchUrl, false))
                     {
                         try { Clipboard.SetText(launchUrl); } catch { }
                         DialogResult dr = MessageBox.Show(
@@ -141,6 +141,38 @@ namespace AntigravityCompanion
         [DllImport("user32.dll")]
         private static extern bool BringWindowToTop(IntPtr hWnd);
 
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+        internal static bool IsMatchingWebShellWindow(string processName, string className, string title)
+        {
+            if (string.IsNullOrWhiteSpace(processName) || string.IsNullOrWhiteSpace(title))
+                return false;
+
+            string proc = processName.Trim().ToLowerInvariant();
+            if (proc != "msedge" && proc != "chrome")
+                return false;
+
+            if (!string.IsNullOrEmpty(className) &&
+                !string.Equals(className.Trim(), "Chrome_WidgetWin_1", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (title.IndexOf("AntigravityCompanionHotkeyWindow", StringComparison.OrdinalIgnoreCase) >= 0)
+                return false;
+
+            // Regular tabbed Edge/Chrome windows append " - Microsoft Edge" or " - Google Chrome";
+            // standalone --app WebShell windows use the bare page title without browser suffix.
+            if (title.IndexOf(" - Microsoft", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                title.IndexOf(" - Google Chrome", StringComparison.OrdinalIgnoreCase) >= 0)
+                return false;
+
+            return title.IndexOf("Antigravity Companion", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   title.IndexOf("Antigravity 伴侣", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         public static bool TryFocusExistingShellWindow()
         {
             IntPtr foundHwnd = IntPtr.Zero;
@@ -155,10 +187,29 @@ namespace AntigravityCompanion
                     GetWindowText(hWnd, sb, sb.Capacity);
                     string title = sb.ToString();
                     if (string.IsNullOrEmpty(title)) return true;
-                    if (title.IndexOf("AntigravityCompanionHotkeyWindow", StringComparison.OrdinalIgnoreCase) >= 0)
+
+                    StringBuilder clsSb = new StringBuilder(128);
+                    GetClassName(hWnd, clsSb, clsSb.Capacity);
+                    string clsName = clsSb.ToString();
+
+                    uint pid = 0;
+                    GetWindowThreadProcessId(hWnd, out pid);
+                    if (pid == 0) return true;
+
+                    string procName = string.Empty;
+                    try
+                    {
+                        using (Process p = Process.GetProcessById((int)pid))
+                        {
+                            procName = p.ProcessName ?? string.Empty;
+                        }
+                    }
+                    catch
+                    {
                         return true;
-                    if (title.IndexOf("Antigravity Companion", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                        title.IndexOf("Antigravity 伴侣", StringComparison.OrdinalIgnoreCase) >= 0)
+                    }
+
+                    if (IsMatchingWebShellWindow(procName, clsName, title))
                     {
                         foundHwnd = hWnd;
                         return false;

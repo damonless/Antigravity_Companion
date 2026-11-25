@@ -130,7 +130,7 @@ namespace AntigravityCompanion
 
         private OperationResult<Dictionary<string, object>> ExecuteStorageSlimCommand(Dictionary<string, object> args)
         {
-            if (!_host.TryAcquireJob("storage_slim", "正在执行存储瘦身与冷归档..."))
+            if (!_host.TryAcquireJob("storage_slim", "正在执行空间清理与清理前安全备份..."))
             {
                 return FailJobBusy("当前有其他后台写入任务正在执行，请稍后再试。");
             }
@@ -142,7 +142,7 @@ namespace AntigravityCompanion
                 Dictionary<string, object> errPayload;
                 if (!EnsureIdeClosedIfNeededResult(closeIde, forceKill, out errHttpCode, out errPayload))
                 {
-                    return FailCommandPayload(errHttpCode, errPayload, UnifiedJson.GetString(errPayload, "error", "IDE 正在运行。"));
+                    return FailCommandPayload(errHttpCode, errPayload, UnifiedJson.GetString(errPayload, "error", "Antigravity 主窗口正在运行。"));
                 }
 
                 string modeStr = UnifiedJson.GetString(args, "mode", "liposuction").Trim();

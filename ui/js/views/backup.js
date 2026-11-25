@@ -289,7 +289,7 @@
           '<div class="between wrap gap-sm" style="margin-bottom:10px">' +
             '<div class="pill-group">' +
               (!bd.isColdArchive ? '<button class="filter-pill ' + (st.backupTab === 'caps' ? 'active' : '') + '" data-bktab="caps" type="button">扩展配置差异 (' + capList.length + ')</button>' : '') +
-              '<button class="filter-pill ' + (st.backupTab === 'sessions' || bd.isColdArchive ? 'active' : '') + '" data-bktab="sessions" type="button">' + (bd.isColdArchive ? '归档的后台子任务' : '项目与对话') + ' (' + (bd.conversationsCount || 0) + ')</button>' +
+              '<button class="filter-pill ' + (st.backupTab === 'sessions' || bd.isColdArchive ? 'active' : '') + '" data-bktab="sessions" type="button">' + (bd.isColdArchive ? '备份中的后台子任务' : '项目与对话') + ' (' + (bd.conversationsCount || 0) + ')</button>' +
             '</div>' +
             '<div class="row gap-sm wrap">' +
               (!bd.isColdArchive ? '<label class="row gap-xs" style="font-size:12px;cursor:pointer"><input type="checkbox" id="chkRestoreUserSettings"' + (st.backupRestoreUserSettings ? ' checked' : '') + ' /> 同时恢复全局运行配置与插件开关</label>' : '') +
@@ -498,7 +498,7 @@
       } catch (e) {
         if (!AGY.ui.handleIdeConflictError(
           e,
-          '从备份文件 (.agy) 恢复到本地',
+          '从备份文件 (.agy) 恢复到本机',
           function () { triggerBackupImport(true, false, null); },
           function () { triggerBackupImport(true, true, null); }
         )) { AGY.api.showToast(e.message, 'error'); }

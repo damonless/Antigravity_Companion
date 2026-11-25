@@ -249,6 +249,8 @@ namespace AntigravityCompanion
         private int _lastIdeLs;
         private int _ideCheckInProgress;
         private int _fsReloadInProgress;
+        private string _lastFlushWarnMsg = string.Empty;
+        private DateTime _lastFlushWarnUtc = DateTime.MinValue;
 
         public LocalWebHost(string homePath, string geminiPath, string repoPath, int requestedPort, string explicitToken)
         {
@@ -501,16 +503,17 @@ namespace AntigravityCompanion
                 DisposeWatchersLocked();
                 if (!_running) return;
 
-                string[] dirsToWatch = new string[]
+                KeyValuePair<string, bool>[] watchTargets = new KeyValuePair<string, bool>[]
                 {
-                    Path.Combine(_geminiPath, "config"),
-                    Path.Combine(_geminiPath, "antigravity"),
-                    RepoPath
+                    new KeyValuePair<string, bool>(Path.Combine(_geminiPath, "config"), true),
+                    new KeyValuePair<string, bool>(Path.Combine(_geminiPath, "antigravity"), false),
+                    new KeyValuePair<string, bool>(RepoPath, true)
                 };
                 HashSet<string> added = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                for (int i = 0; i < dirsToWatch.Length; i++)
+                for (int i = 0; i < watchTargets.Length; i++)
                 {
-                    string d = dirsToWatch[i];
+                    string d = watchTargets[i].Key;
+                    bool includeSubs = watchTargets[i].Value;
                     if (string.IsNullOrWhiteSpace(d) || !Directory.Exists(d)) continue;
                     string full;
                     try { full = Path.GetFullPath(d).TrimEnd('\\', '/'); }
@@ -520,12 +523,13 @@ namespace AntigravityCompanion
                     try
                     {
                         FileSystemWatcher fsw = new FileSystemWatcher(full);
-                        fsw.IncludeSubdirectories = false;
-                        fsw.NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size;
+                        fsw.IncludeSubdirectories = includeSubs;
+                        fsw.NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size;
                         fsw.Changed += OnExternalFsEvent;
                         fsw.Created += OnExternalFsEvent;
                         fsw.Deleted += OnExternalFsEvent;
                         fsw.Renamed += OnExternalFsRenamedEvent;
+                        fsw.Error += OnExternalFsErrorEvent;
                         fsw.EnableRaisingEvents = true;
                         _fsWatchers.Add(fsw);
                     }
@@ -542,6 +546,11 @@ namespace AntigravityCompanion
         private void OnExternalFsRenamedEvent(object sender, RenamedEventArgs e)
         {
             ScheduleDebouncedFsReload(e != null ? e.FullPath : null);
+        }
+
+        private void OnExternalFsErrorEvent(object sender, ErrorEventArgs e)
+        {
+            ScheduleDebouncedFsReload("fsw_buffer_overflow");
         }
 
         private void ScheduleDebouncedFsReload(string changedPath)
@@ -570,11 +579,16 @@ namespace AntigravityCompanion
         private static bool IsIgnoredWatchPath(string path)
         {
             if (string.IsNullOrEmpty(path)) return true;
-            string lower = path.ToLowerInvariant();
+            if (string.Equals(path, "fsw_buffer_overflow", StringComparison.Ordinal)) return false;
+            string lower = path.Replace('/', '\\').ToLowerInvariant();
             if (lower.Contains(".tmp.") || lower.Contains(".bak.") ||
                 lower.EndsWith("-wal", StringComparison.Ordinal) ||
                 lower.EndsWith("-shm", StringComparison.Ordinal) ||
                 lower.EndsWith("-journal", StringComparison.Ordinal) ||
+                lower.Contains("\\.git\\") || lower.EndsWith("\\.git", StringComparison.Ordinal) ||
+                lower.Contains("\\node_modules\\") ||
+                lower.Contains("\\.evo\\") ||
+                lower.Contains("\\.codegraph\\") ||
                 lower.Contains("companion-trash") ||
                 lower.Contains("companion-snapshots") ||
                 lower.Contains("companion-cold-archives") ||
@@ -697,11 +711,20 @@ namespace AntigravityCompanion
             }
             if (ok && flushed > 0)
             {
+                _lastFlushWarnMsg = string.Empty;
                 AppendLog("success", string.Format("检测到 Antigravity 主窗口已退出，已自动补刷 {0} 条改名记录到侧边栏索引。", flushed));
             }
             else if (!ok && warns != null && warns.Count > 0)
             {
-                AppendLog("warn", string.Join("; ", warns.ToArray()));
+                string warnMsg = string.Join("; ", warns.ToArray());
+                DateTime nowUtc = DateTime.UtcNow;
+                if (!string.Equals(warnMsg, _lastFlushWarnMsg, StringComparison.Ordinal) ||
+                    (nowUtc - _lastFlushWarnUtc).TotalSeconds >= 60.0)
+                {
+                    _lastFlushWarnMsg = warnMsg;
+                    _lastFlushWarnUtc = nowUtc;
+                    AppendLog("warn", warnMsg);
+                }
             }
             return flushed;
         }

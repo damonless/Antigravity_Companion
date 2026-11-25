@@ -24,13 +24,15 @@
 
     var root = el('mainCanvas');
     root.innerHTML =
-      '<div class="subtab-bar">' +
-        '<div class="pill-group" id="sessionsSubTabs">' +
-          '<button class="filter-pill ' + (!isRename ? 'active' : '') + '" data-ssub="browse" type="button">对话列表</button>' +
-          '<button class="filter-pill ' + (isRename ? 'active' : '') + '" data-ssub="rename" type="button">批量整理标题 (' + actionable + ')</button>' +
+      '<div class="subview-shell">' +
+        '<div class="subtab-bar">' +
+          '<div class="pill-group" id="sessionsSubTabs">' +
+            '<button class="filter-pill ' + (!isRename ? 'active' : '') + '" data-ssub="browse" type="button">对话列表</button>' +
+            '<button class="filter-pill ' + (isRename ? 'active' : '') + '" data-ssub="rename" type="button">批量整理标题 (' + actionable + ')</button>' +
+          '</div>' +
         '</div>' +
-      '</div>' +
-      '<div id="sessionsSubHost" style="flex:1;min-height:0;display:flex;flex-direction:column"></div>';
+        '<div id="sessionsSubHost" class="subview-body"></div>' +
+      '</div>';
 
     var subBtns = root.querySelectorAll('[data-ssub]');
     for (var i = 0; i < subBtns.length; i++) {

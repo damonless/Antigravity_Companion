@@ -453,7 +453,9 @@
     var capDiffCount = (cs.remoteOnly || 0) + (cs.remoteNewer || 0) + (cs.localNewer || 0) + (cs.bothModified || 0) + (cs.conflict || 0);
 
     var root = el('mainCanvas');
+    var useFlexShell = (sub === 'vault');
     root.innerHTML =
+      (useFlexShell ? '<div class="subview-shell">' : '') +
       '<div class="subtab-bar">' +
         '<div class="pill-group" id="cockpitSubTabs">' +
           '<button class="filter-pill ' + (sub === 'settings' ? 'active' : '') + '" data-cpsub="settings" type="button">全局配置与开关</button>' +
@@ -461,23 +463,44 @@
           '<button class="filter-pill ' + (sub === 'vault' ? 'active' : '') + '" data-cpsub="vault" type="button">配置同步库' + (capDiffCount > 0 ? (' (' + capDiffCount + ' 项差异)') : '') + '</button>' +
         '</div>' +
       '</div>' +
-      '<div id="cockpitSubHost"></div>';
+      '<div id="cockpitSubHost"' + (useFlexShell ? ' class="subview-body"' : '') + '></div>' +
+      (useFlexShell ? '</div>' : '');
+
+    function applySubTabSwitch(next) {
+      st.formDirty.cockpit = false;
+      st.cockpitSubView = next;
+      if ((next === 'vault' && (st.dirty.vault || !st.capData)) ||
+          (next !== 'vault' && (st.dirty.cockpit || !st.cockpitData))) {
+        renderCockpit();
+        AGY.app.fetchViewDataOnly('cockpit').then(function () {
+          if (AGY.state.view === 'cockpit' && AGY.state.cockpitSubView === next) renderCockpit();
+        }).catch(function () {});
+      } else {
+        renderCockpit();
+      }
+    }
 
     var subBtns = root.querySelectorAll('[data-cpsub]');
     for (var i = 0; i < subBtns.length; i++) {
       subBtns[i].addEventListener('click', function () {
         var next = this.getAttribute('data-cpsub');
         if (next === st.cockpitSubView) return;
-        st.cockpitSubView = next;
-        if ((next === 'vault' && (st.dirty.vault || !st.capData)) ||
-            (next !== 'vault' && (st.dirty.cockpit || !st.cockpitData))) {
-          renderCockpit();
-          AGY.app.fetchViewDataOnly('cockpit').then(function () {
-            if (AGY.state.view === 'cockpit' && AGY.state.cockpitSubView === next) renderCockpit();
-          }).catch(function () {});
-        } else {
-          renderCockpit();
+        if (st.cockpitSubView === 'settings' && st.formDirty && st.formDirty.cockpit) {
+          AGY.ui.openModal(
+            '放弃尚未保存的配置修改？',
+            '<div>当前「全局配置与开关」还有未保存的修改，切换标签页将放弃这些改动。</div>',
+            '<button class="btn" data-act="cancel">继续编辑</button><button class="btn btn-danger" data-act="discard">放弃并切换</button>',
+            function (_mb, mf) {
+              mf.querySelector('[data-act="cancel"]').addEventListener('click', AGY.ui.closeModal);
+              mf.querySelector('[data-act="discard"]').addEventListener('click', function () {
+                AGY.ui.closeModal();
+                applySubTabSwitch(next);
+              });
+            }
+          );
+          return;
         }
+        applySubTabSwitch(next);
       });
     }
 

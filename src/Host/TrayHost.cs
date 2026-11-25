@@ -356,7 +356,8 @@ namespace AntigravityCompanion
 
             if (!string.IsNullOrEmpty(_launchUrl))
             {
-                WebShellLauncher.OpenUrlInPreferredShell(_launchUrl);
+                bool hasLiveWindow = (_host != null && _host.ActiveSseCount > 0);
+                WebShellLauncher.OpenUrlInPreferredShell(_launchUrl, hasLiveWindow);
             }
         }
 

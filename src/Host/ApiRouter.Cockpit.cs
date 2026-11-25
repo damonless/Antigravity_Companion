@@ -198,7 +198,7 @@ namespace AntigravityCompanion
                 resp["userSettings"] = serialized["userSettings"];
                 resp["ideRunning"] = ideRunning;
                 resp["ideRunningWarning"] = ideRunning
-                    ? "检测到 Antigravity 正在运行，部分配置需重启 IDE 或新开会话后生效（运行中修改存在被 IDE 内存态覆盖的风险）。"
+                    ? "检测到 Antigravity 主窗口正在运行，部分配置需重启 IDE 主窗口或新开对话后生效（运行中修改可能被主窗口内存状态覆盖）。"
                     : string.Empty;
                 return OperationResult<Dictionary<string, object>>.Success(resp);
             }
@@ -241,7 +241,7 @@ namespace AntigravityCompanion
                 }
             }
 
-            if (!_host.TryAcquireJob("cockpit_toggle", "正在切换能力启用状态..."))
+            if (!_host.TryAcquireJob("cockpit_toggle", "正在切换扩展配置启用状态..."))
             {
                 return FailJobBusy("当前有其他后台写入任务正在执行，请稍后再试。");
             }
@@ -273,7 +273,7 @@ namespace AntigravityCompanion
                 resp["backupPath"] = bakPath ?? string.Empty;
                 resp["ideRunning"] = ideRunning;
                 resp["ideRunningWarning"] = ideRunning
-                    ? "检测到 Antigravity 正在运行，部分配置需重启 IDE 或新开会话后生效（运行中修改存在被 IDE 内存态覆盖的风险）。"
+                    ? "检测到 Antigravity 主窗口正在运行，部分配置需重启 IDE 主窗口或新开对话后生效（运行中修改可能被主窗口内存状态覆盖）。"
                     : string.Empty;
                 return OperationResult<Dictionary<string, object>>.Success(resp);
             }

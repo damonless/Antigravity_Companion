@@ -146,7 +146,7 @@ namespace AntigravityCompanion
             }
 
             string kind = (projIds.Count > 0 || projNames.Count > 0 || ghostKeys.Count > 0) ? "project" : "session";
-            string summaryLabel = BuildSessionDeleteSummary(kind, finalConvIds, projIds, projNames, localProjects, byCid);
+            string summaryLabel = BuildSessionDeleteSummary(kind, finalConvIds, projIds, projNames, ghostKeys, localProjects, byCid);
 
             string trashFolder = CreateTrashBatchFolder(geminiPath, out trashId);
             string payloadDir = Path.Combine(trashFolder, "payload");
@@ -309,6 +309,12 @@ namespace AntigravityCompanion
                 DeleteDirQuiet(trashFolder);
                 trashId = string.Empty;
                 return delOp;
+            }
+
+            // Clean up any deferred Layer-3 .pb sync entries for deleted conversations
+            if (finalConvIds.Count > 0)
+            {
+                RemovePendingPbSync(geminiPath, finalConvIds);
             }
 
             if (manifestEntries.Count == 0 && string.IsNullOrEmpty(idePbRel) && string.IsNullOrEmpty(cliPbRel) && string.IsNullOrEmpty(summaryRowsRel))
@@ -666,81 +672,132 @@ namespace AntigravityCompanion
 
             try
             {
-                // 1. Restore archived files & directories
+                // 0. Pre-validate all file & JSON restore destinations BEFORE mutating disk or deleting trashDir
+                List<object> entries = null;
                 object entriesObj;
                 if (manifest.TryGetValue("entries", out entriesObj))
+                    entries = UnifiedJson.AsList(entriesObj);
+
+                List<object> jrList = null;
+                object jsonRestoresObj;
+                if (manifest.TryGetValue("jsonRestores", out jsonRestoresObj))
+                    jrList = UnifiedJson.AsList(jsonRestoresObj);
+
+                HashSet<string> manifestOrigFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                List<string> blockedPaths = new List<string>();
+                int expectedRestoreOps = 0;
+
+                if (entries != null)
                 {
-                    List<object> entries = UnifiedJson.AsList(entriesObj);
-                    if (entries != null)
+                    for (int i = 0; i < entries.Count; i++)
                     {
-                        for (int i = 0; i < entries.Count; i++)
+                        Dictionary<string, object> ed = UnifiedJson.AsDict(entries[i]);
+                        if (ed == null) continue;
+                        string origPath = UnifiedJson.GetString(ed, "originalPath", string.Empty);
+                        string relPath = UnifiedJson.GetString(ed, "trashRelPath", string.Empty);
+                        if (string.IsNullOrEmpty(origPath) || string.IsNullOrEmpty(relPath)) continue;
+                        expectedRestoreOps++;
+                        manifestOrigFiles.Add(origPath);
+                        if (!IsAllowedTrashRestoreDestination(origPath, geminiPath, repoPath))
+                            blockedPaths.Add(origPath);
+                    }
+                }
+                if (jrList != null)
+                {
+                    for (int i = 0; i < jrList.Count; i++)
+                    {
+                        Dictionary<string, object> jr = UnifiedJson.AsDict(jrList[i]);
+                        if (jr == null) continue;
+                        string filePath = UnifiedJson.GetString(jr, "filePath", string.Empty);
+                        string key = UnifiedJson.GetString(jr, "key", string.Empty);
+                        string rawVal = UnifiedJson.GetString(jr, "valueJson", string.Empty);
+                        if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(key) || string.IsNullOrEmpty(rawVal)) continue;
+                        expectedRestoreOps++;
+                        if (!IsAllowedTrashRestoreDestination(filePath, geminiPath, repoPath))
+                            blockedPaths.Add(filePath);
+                    }
+                }
+
+                if (blockedPaths.Count > 0)
+                {
+                    res.Ok = false;
+                    res.ErrorMessage = "无法还原：目标原始路径不在当前允许的本机目录或配置同步库内（若该记录来自其他配置同步库，请先切回原同步库后再还原）。回收站记录已完整保留。";
+                    for (int b = 0; b < blockedPaths.Count; b++)
+                        res.Warnings.Add("拒绝越界恢复路径: " + blockedPaths[b]);
+                    return res;
+                }
+
+                // 1. Restore archived files & directories
+                if (entries != null)
+                {
+                    for (int i = 0; i < entries.Count; i++)
+                    {
+                        Dictionary<string, object> ed = UnifiedJson.AsDict(entries[i]);
+                        if (ed == null) continue;
+                        string origPath = UnifiedJson.GetString(ed, "originalPath", string.Empty);
+                        string relPath = UnifiedJson.GetString(ed, "trashRelPath", string.Empty);
+                        bool isDir = UnifiedJson.GetBool(ed, "isDirectory", false);
+                        if (string.IsNullOrEmpty(origPath) || string.IsNullOrEmpty(relPath)) continue;
+
+                        string srcPath = CapabilityVaultService.CombineAndEnsureUnderRoot(payloadDir, relPath);
+                        if (isDir)
                         {
-                            Dictionary<string, object> ed = UnifiedJson.AsDict(entries[i]);
-                            if (ed == null) continue;
-                            string origPath = UnifiedJson.GetString(ed, "originalPath", string.Empty);
-                            string relPath = UnifiedJson.GetString(ed, "trashRelPath", string.Empty);
-                            bool isDir = UnifiedJson.GetBool(ed, "isDirectory", false);
-                            if (string.IsNullOrEmpty(origPath) || string.IsNullOrEmpty(relPath)) continue;
-
-                            string srcPath = CapabilityVaultService.CombineAndEnsureUnderRoot(payloadDir, relPath);
-                            if (!IsAllowedTrashRestoreDestination(origPath, geminiPath, repoPath))
+                            if (Directory.Exists(srcPath))
                             {
-                                res.Warnings.Add("跳过越界恢复路径: " + origPath);
-                                continue;
+                                CopyDirectoryOverwrite(srcPath, origPath);
+                                res.RestoredFilesCount++;
                             }
-
-                            if (isDir)
+                        }
+                        else
+                        {
+                            if (File.Exists(srcPath))
                             {
-                                if (Directory.Exists(srcPath))
+                                string parent = Path.GetDirectoryName(origPath);
+                                if (!string.IsNullOrEmpty(parent) && !Directory.Exists(parent))
+                                    Directory.CreateDirectory(parent);
+                                if (File.Exists(origPath))
+                                    UnifiedJson.CreateTimestampedBackup(origPath, 5);
+                                // Clean stale WAL/SHM/journal files when restoring a .db unless the trash batch includes them
+                                if (origPath.EndsWith(".db", StringComparison.OrdinalIgnoreCase))
                                 {
-                                    CopyDirectoryOverwrite(srcPath, origPath);
-                                    res.RestoredFilesCount++;
+                                    string[] sidecars = new string[] { "-wal", "-shm", "-journal" };
+                                    for (int sc = 0; sc < sidecars.Length; sc++)
+                                    {
+                                        string sidecarPath = origPath + sidecars[sc];
+                                        if (!manifestOrigFiles.Contains(sidecarPath) && File.Exists(sidecarPath))
+                                        {
+                                            try { File.SetAttributes(sidecarPath, FileAttributes.Normal); File.Delete(sidecarPath); } catch { }
+                                        }
+                                    }
                                 }
-                            }
-                            else
-                            {
-                                if (File.Exists(srcPath))
-                                {
-                                    string parent = Path.GetDirectoryName(origPath);
-                                    if (!string.IsNullOrEmpty(parent) && !Directory.Exists(parent))
-                                        Directory.CreateDirectory(parent);
-                                    if (File.Exists(origPath))
-                                        UnifiedJson.CreateTimestampedBackup(origPath, 5);
-                                    File.Copy(srcPath, origPath, true);
-                                    res.RestoredFilesCount++;
-                                }
+                                File.Copy(srcPath, origPath, true);
+                                res.RestoredFilesCount++;
                             }
                         }
                     }
                 }
 
                 // 2. Restore JSON key-level deletions (Plugin / MCP / Hook)
-                object jsonRestoresObj;
-                if (manifest.TryGetValue("jsonRestores", out jsonRestoresObj))
+                if (jrList != null)
                 {
-                    List<object> jrList = UnifiedJson.AsList(jsonRestoresObj);
-                    if (jrList != null)
+                    for (int i = 0; i < jrList.Count; i++)
                     {
-                        for (int i = 0; i < jrList.Count; i++)
-                        {
-                            Dictionary<string, object> jr = UnifiedJson.AsDict(jrList[i]);
-                            if (jr == null) continue;
-                            string filePath = UnifiedJson.GetString(jr, "filePath", string.Empty);
-                            string section = UnifiedJson.GetString(jr, "parentSection", string.Empty);
-                            string key = UnifiedJson.GetString(jr, "key", string.Empty);
-                            string rawVal = UnifiedJson.GetString(jr, "valueJson", string.Empty);
-                            if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(key) || string.IsNullOrEmpty(rawVal)) continue;
-                            if (!IsAllowedTrashRestoreDestination(filePath, geminiPath, repoPath)) continue;
+                        Dictionary<string, object> jr = UnifiedJson.AsDict(jrList[i]);
+                        if (jr == null) continue;
+                        string filePath = UnifiedJson.GetString(jr, "filePath", string.Empty);
+                        string section = UnifiedJson.GetString(jr, "parentSection", string.Empty);
+                        string key = UnifiedJson.GetString(jr, "key", string.Empty);
+                        string rawVal = UnifiedJson.GetString(jr, "valueJson", string.Empty);
+                        if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(key) || string.IsNullOrEmpty(rawVal)) continue;
 
-                            string existing = File.Exists(filePath)
-                                ? SessionLifecycleService.ReadUtf8TextShared(filePath)
-                                : (string.IsNullOrEmpty(section) ? "{}" : ("{\"" + UnifiedJson.EscapeString(section) + "\":{}}"));
-                            string patched = UnifiedJson.PatchObjectKeyPreservingComments(
-                                existing, string.IsNullOrEmpty(section) ? null : section, key, rawVal);
-                            if (File.Exists(filePath)) UnifiedJson.CreateTimestampedBackup(filePath, 5);
-                            SessionLifecycleService.WriteUtf8TextAtomicWithBackup(filePath, patched, false, null);
-                            res.RestoredFilesCount++;
-                        }
+                        string existing = File.Exists(filePath)
+                            ? SessionLifecycleService.ReadUtf8TextShared(filePath)
+                            : (string.IsNullOrEmpty(section) ? "{}" : ("{\"" + UnifiedJson.EscapeString(section) + "\":{}}"));
+                        string patched = UnifiedJson.PatchObjectKeyPreservingComments(
+                            existing, string.IsNullOrEmpty(section) ? null : section, key, rawVal);
+                        if (File.Exists(filePath)) UnifiedJson.CreateTimestampedBackup(filePath, 5);
+                        SessionLifecycleService.WriteUtf8TextAtomicWithBackup(filePath, patched, false, null);
+                        res.RestoredFilesCount++;
                     }
                 }
 
@@ -748,6 +805,7 @@ namespace AntigravityCompanion
                 string idePbRel = UnifiedJson.GetString(manifest, "idePbRelPath", string.Empty);
                 if (!string.IsNullOrEmpty(idePbRel))
                 {
+                    expectedRestoreOps++;
                     string srcPb = CapabilityVaultService.CombineAndEnsureUnderRoot(trashDir, idePbRel);
                     if (File.Exists(srcPb))
                     {
@@ -758,6 +816,7 @@ namespace AntigravityCompanion
                 string cliPbRel = UnifiedJson.GetString(manifest, "cliPbRelPath", string.Empty);
                 if (!string.IsNullOrEmpty(cliPbRel))
                 {
+                    expectedRestoreOps++;
                     string srcCliPb = CapabilityVaultService.CombineAndEnsureUnderRoot(trashDir, cliPbRel);
                     if (File.Exists(srcCliPb))
                     {
@@ -771,6 +830,7 @@ namespace AntigravityCompanion
                 string sumDbPath = Path.Combine(geminiPath, "antigravity", "conversation_summaries.db");
                 if (!string.IsNullOrEmpty(sumRowsRel) && File.Exists(sumDbPath))
                 {
+                    expectedRestoreOps++;
                     string rowsFile = CapabilityVaultService.CombineAndEnsureUnderRoot(trashDir, sumRowsRel);
                     if (File.Exists(rowsFile))
                     {
@@ -814,6 +874,16 @@ namespace AntigravityCompanion
                             }
                         }
                     }
+                }
+
+                if (expectedRestoreOps > 0 &&
+                    res.RestoredFilesCount == 0 &&
+                    res.RestoredProtoEntriesCount == 0 &&
+                    res.RestoredDbRowsCount == 0)
+                {
+                    res.Ok = false;
+                    res.ErrorMessage = "未找到可还原的有效载荷文件，已保留回收站记录以防数据丢失。";
+                    return res;
                 }
 
                 if (res.Kind == "capability_repo" && !string.IsNullOrEmpty(repoPath))
@@ -1044,6 +1114,12 @@ namespace AntigravityCompanion
             return res;
         }
 
+        private static readonly HashSet<string> SkippedBakScanDirNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".git", "node_modules", "bin", "obj", "__pycache__", ".venv", "venv",
+            "companion-trash", "companion-snapshots", "companion-cold-archives", ".codegraph"
+        };
+
         private static void ScanBakFilesInDirectory(
             string dir,
             string pattern,
@@ -1056,10 +1132,20 @@ namespace AntigravityCompanion
             List<Dictionary<string, object>> results)
         {
             if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
-            try
+            const int MaxDepth = 5;
+            Stack<KeyValuePair<string, int>> stack = new Stack<KeyValuePair<string, int>>();
+            stack.Push(new KeyValuePair<string, int>(dir, 0));
+
+            while (stack.Count > 0)
             {
-                SearchOption opt = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-                string[] files = Directory.GetFiles(dir, pattern, opt);
+                KeyValuePair<string, int> cur = stack.Pop();
+                string curDir = cur.Key;
+                int depth = cur.Value;
+
+                string[] files = null;
+                try { files = Directory.GetFiles(curDir, pattern, SearchOption.TopDirectoryOnly); }
+                catch { continue; }
+
                 for (int i = 0; i < files.Length; i++)
                 {
                     string bf = files[i];
@@ -1099,8 +1185,30 @@ namespace AntigravityCompanion
                     row["preview"] = preview;
                     results.Add(row);
                 }
+
+                if (recursive && depth < MaxDepth)
+                {
+                    try
+                    {
+                        string[] subDirs = Directory.GetDirectories(curDir);
+                        for (int s = 0; s < subDirs.Length; s++)
+                        {
+                            string sd = subDirs[s];
+                            string name = Path.GetFileName(sd);
+                            if (string.IsNullOrEmpty(name) || SkippedBakScanDirNames.Contains(name))
+                                continue;
+                            try
+                            {
+                                if ((File.GetAttributes(sd) & FileAttributes.ReparsePoint) != 0)
+                                    continue;
+                            }
+                            catch { continue; }
+                            stack.Push(new KeyValuePair<string, int>(sd, depth + 1));
+                        }
+                    }
+                    catch { }
+                }
             }
-            catch { }
         }
 
         public static bool TryParseBackupOriginalPath(string backupPath, out string originalPath, out string stamp)
@@ -1466,6 +1574,7 @@ namespace AntigravityCompanion
             HashSet<string> finalCids,
             HashSet<string> projIds,
             HashSet<string> projNames,
+            HashSet<string> ghostKeys,
             Dictionary<string, ProjectMetadata> localProjects,
             Dictionary<string, ConversationSummaryInfo> byCid)
         {
@@ -1481,6 +1590,19 @@ namespace AntigravityCompanion
                         names.Add(pid);
                 }
                 foreach (string pn in projNames) names.Add(pn);
+                if (names.Count == 0 && ghostKeys != null && ghostKeys.Count > 0)
+                {
+                    HashSet<string> seenGhostNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (string cid in finalCids)
+                    {
+                        ConversationSummaryInfo info;
+                        if (byCid != null && byCid.TryGetValue(cid, out info) && info != null &&
+                            !string.IsNullOrEmpty(info.ProjectName) && seenGhostNames.Add(info.ProjectName))
+                        {
+                            names.Add(info.ProjectName);
+                        }
+                    }
+                }
                 string label = names.Count > 0 ? string.Join("、", names.ToArray()) : "项目记录";
                 return string.Format("项目「{0}」（含 {1} 条对话/子任务）", label, finalCids.Count);
             }

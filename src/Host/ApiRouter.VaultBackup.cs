@@ -49,7 +49,7 @@ namespace AntigravityCompanion
                         _host.ReloadLoadedBackupLocked(loadedPathSnap);
                     }
                 }
-                _host.AppendLog("info", "已刷新本机三层数据与内置能力仓库状态。");
+                _host.AppendLog("info", "已刷新本机数据与配置同步库状态。");
                 HttpProtocolHelper.WriteJsonResponse(stream, 200, OverviewBuilder.BuildOverviewPayload(_host));
                 return true;
             }
@@ -94,10 +94,10 @@ namespace AntigravityCompanion
             if (path == "/api/capabilities/delete-local" && req.Method == "POST")
             {
                 List<string> keys = ReadStringArray(body, "keys");
-                if (keys.Count == 0) { HttpProtocolHelper.WriteJsonError(stream, 400, "请选择要删除的本机能力项。"); return true; }
+                if (keys.Count == 0) { HttpProtocolHelper.WriteJsonError(stream, 400, "请选择要移除的本机扩展配置项。"); return true; }
 
                 // FIX P1-11: Acquire job lock
-                if (!_host.TryAcquireJob("capabilities_delete_local", "正在删除本机能力配置..."))
+                if (!_host.TryAcquireJob("capabilities_delete_local", "正在将所选本机扩展配置移入回收站..."))
                 {
                     HttpProtocolHelper.WriteJsonError(stream, 409, "当前有其他后台任务正在执行，请稍后再试。");
                     return true;
@@ -133,10 +133,10 @@ namespace AntigravityCompanion
             if (path == "/api/capabilities/delete-repo" && req.Method == "POST")
             {
                 List<string> keys = ReadStringArray(body, "keys");
-                if (keys.Count == 0) { HttpProtocolHelper.WriteJsonError(stream, 400, "请选择要从仓库移除的能力项。"); return true; }
+                if (keys.Count == 0) { HttpProtocolHelper.WriteJsonError(stream, 400, "请选择要从配置同步库移除的扩展配置项。"); return true; }
 
                 // FIX P1-11: Acquire job lock
-                if (!_host.TryAcquireJob("capabilities_delete_repo", "正在从内置仓库移除能力快照..."))
+                if (!_host.TryAcquireJob("capabilities_delete_repo", "正在将配置同步库中的所选项移入回收站..."))
                 {
                     HttpProtocolHelper.WriteJsonError(stream, 409, "当前有其他后台任务正在执行，请稍后再试。");
                     return true;
@@ -241,7 +241,7 @@ namespace AntigravityCompanion
                 if (string.IsNullOrEmpty(agyPath))
                 {
                     bool dlgBusy;
-                    agyPath = NativeDialogBridge.PickOpenFile("打开 Antigravity 备份归档包 (.agy)", "Antigravity 备份包 (*.agy)|*.agy|ZIP 压缩包 (*.zip)|*.zip|所有文件 (*.*)|*.*", out dlgBusy);
+                    agyPath = NativeDialogBridge.PickOpenFile("打开 Antigravity 备份文件 (.agy)", "Antigravity 备份文件 (*.agy)|*.agy|ZIP 压缩包 (*.zip)|*.zip|所有文件 (*.*)|*.*", out dlgBusy);
                     if (dlgBusy) { HttpProtocolHelper.WriteJsonError(stream, 409, "已有文件选择窗口正在打开。"); return true; }
                     if (string.IsNullOrEmpty(agyPath))
                     {
@@ -260,13 +260,13 @@ namespace AntigravityCompanion
                         return true;
                     }
                 }
-                if (!File.Exists(agyPath)) { HttpProtocolHelper.WriteJsonError(stream, 404, "归档文件不存在: " + agyPath); return true; }
+                if (!File.Exists(agyPath)) { HttpProtocolHelper.WriteJsonError(stream, 404, "备份文件不存在: " + agyPath); return true; }
 
                 lock (_host.MutationLock)
                 {
                     _host.ReloadLoadedBackupLocked(agyPath);
                 }
-                _host.AppendLog("info", "已打开归档包：" + Path.GetFileName(agyPath));
+                _host.AppendLog("info", "已打开备份文件：" + Path.GetFileName(agyPath));
                 HttpProtocolHelper.WriteJsonResponse(stream, 200, OverviewBuilder.BuildBackupPayload(_host));
                 return true;
             }
@@ -280,7 +280,7 @@ namespace AntigravityCompanion
                 {
                     string defName = string.Format("Antigravity_FullBackup_{0}.agy", DateTime.Now.ToString("yyyyMMdd_HHmmss"));
                     bool dlgBusy;
-                    outPath = NativeDialogBridge.PickSaveFile("保存全量备份 (.agy)", "Antigravity 备份包 (*.agy)|*.agy", defName, out dlgBusy);
+                    outPath = NativeDialogBridge.PickSaveFile("保存本机备份文件 (.agy)", "Antigravity 备份文件 (*.agy)|*.agy", defName, out dlgBusy);
                     if (dlgBusy) { HttpProtocolHelper.WriteJsonError(stream, 409, "已有文件选择窗口正在打开。"); return true; }
                     if (string.IsNullOrEmpty(outPath))
                     {
@@ -313,14 +313,14 @@ namespace AntigravityCompanion
 
                 if (cids.Count == 0 && capKeys.Count == 0 && !includeGlobal)
                 {
-                    HttpProtocolHelper.WriteJsonError(stream, 400, "请先选择要导出的会话或能力项。");
+                    HttpProtocolHelper.WriteJsonError(stream, 400, "请先选择要导出的对话或扩展配置项。");
                     return true;
                 }
                 if (string.IsNullOrEmpty(outPath))
                 {
                     string defName = string.Format("Antigravity_Selective_{0}.agy", DateTime.Now.ToString("yyyyMMdd_HHmmss"));
                     bool dlgBusy;
-                    outPath = NativeDialogBridge.PickSaveFile("导出所选至轻量归档 (.agy)", "Antigravity 备份包 (*.agy)|*.agy", defName, out dlgBusy);
+                    outPath = NativeDialogBridge.PickSaveFile("导出所选内容为备份文件 (.agy)", "Antigravity 备份文件 (*.agy)|*.agy", defName, out dlgBusy);
                     if (dlgBusy) { HttpProtocolHelper.WriteJsonError(stream, 409, "已有文件选择窗口正在打开。"); return true; }
                     if (string.IsNullOrEmpty(outPath))
                     {
@@ -368,7 +368,7 @@ namespace AntigravityCompanion
                     int written;
                     lock (_host.MutationLock)
                     {
-                        _host.UpdateJobProgress("selective_export", "正在增量切片与压缩选择性 .agy 归档...", 40);
+                        _host.UpdateJobProgress("selective_export", "正在打包压缩所选备份文件 (.agy)...", 40);
                         written = SessionLifecycleService.ExportSelectiveBackup(
                             _host.GeminiPath, _host.HomePath, destSnap, selConvs, projSnap, includeGlobal, selCaps, selTier);
                     }
@@ -377,7 +377,7 @@ namespace AntigravityCompanion
                     res["entriesWritten"] = written;
                     res["outputPath"] = destSnap;
                     res["tier"] = selTier == BackupTier.FullForensic ? "full" : "fast";
-                    _host.AppendLog("success", string.Format("选择性 .agy 导出完成（写入 {0} 条目）：{1}", written, destSnap));
+                    _host.AppendLog("success", string.Format("备份文件 (.agy) 导出完成（写入 {0} 条目）：{1}", written, destSnap));
                     return res;
                 });
 
@@ -452,7 +452,7 @@ namespace AntigravityCompanion
                 if (string.IsNullOrEmpty(rawVault))
                 {
                     bool dlgBusy;
-                    rawVault = NativeDialogBridge.PickFolder("选择 Portable Vault 能力仓库目录", _host.RepoPath, out dlgBusy);
+                    rawVault = NativeDialogBridge.PickFolder("选择配置同步库目录", _host.RepoPath, out dlgBusy);
                     if (dlgBusy) { HttpProtocolHelper.WriteJsonError(stream, 409, "已有目录选择窗口正在打开。"); return true; }
                     if (string.IsNullOrEmpty(rawVault))
                     {
@@ -483,7 +483,7 @@ namespace AntigravityCompanion
                     _host.ReloadAllLocalStateLocked();
                 }
 
-                _host.AppendLog("success", "已切换 Portable Vault 目录至：" + _host.RepoPath);
+                _host.AppendLog("success", "已切换配置同步库目录至：" + _host.RepoPath);
                 Dictionary<string, object> resp = BuildVaultStatusPayload();
                 resp["ok"] = true;
                 HttpProtocolHelper.WriteJsonResponse(stream, 200, resp);
@@ -625,11 +625,11 @@ namespace AntigravityCompanion
             List<string> keys = ReadStringArray(args, "keys");
             if (keys.Count == 0)
             {
-                return FailCommand(400, "请选择要存入内置仓库的能力项。");
+                return FailCommand(400, "请选择要存入配置同步库的扩展配置项。");
             }
 
             // FIX P1-11: Acquire job lock
-            if (!_host.TryAcquireJob("capabilities_push", "正在将本地能力写入内置仓库..."))
+            if (!_host.TryAcquireJob("capabilities_push", "正在将本机扩展配置存入配置同步库..."))
             {
                 return FailJobBusy("当前有其他后台任务正在执行，请稍后再试。");
             }
@@ -646,13 +646,13 @@ namespace AntigravityCompanion
                     List<CapabilityItem> selected = SelectCapsByKeys(localSnap, keys);
                     if (selected.Count == 0)
                     {
-                        return FailCommand(404, "本机未找到所选能力项。");
+                        return FailCommand(404, "本机未找到所选扩展配置项。");
                     }
                     written = CapabilityVaultService.PushCapabilitiesToRepository(_host.RepoPath, _host.HomePath, selected);
                     _host.UpdateBaselineForCapabilities(selected);
                     _host.ReloadAllLocalStateLocked();
                 }
-                _host.AppendLog("success", string.Format("已将 {0} 项本地能力写入内置仓库 Vault。", keys.Count));
+                _host.AppendLog("success", string.Format("已将 {0} 项本机扩展配置存入配置同步库。", keys.Count));
                 Dictionary<string, object> resp = new Dictionary<string, object>();
                 resp["ok"] = true;
                 resp["written"] = written;
@@ -741,7 +741,7 @@ namespace AntigravityCompanion
             }
 
             // FIX P1-11: Acquire job BEFORE closing IDE!
-            if (!_host.TryAcquireJob("full_backup", "正在创建全量备份归档 (.agy)..."))
+            if (!_host.TryAcquireJob("full_backup", "正在创建本机备份文件 (.agy)..."))
             {
                 return FailJobBusy("当前有其他后台任务正在执行。");
             }
@@ -755,7 +755,7 @@ namespace AntigravityCompanion
                     Dictionary<string, object> errPayload;
                     if (!EnsureIdeClosedIfNeededResult(closeIde, forceKill, out errHttpCode, out errPayload))
                     {
-                        return FailCommandPayload(errHttpCode, errPayload, UnifiedJson.GetString(errPayload, "error", "IDE 正在运行。"));
+                        return FailCommandPayload(errHttpCode, errPayload, UnifiedJson.GetString(errPayload, "error", "Antigravity 主窗口正在运行。"));
                     }
                 }
 
@@ -784,8 +784,8 @@ namespace AntigravityCompanion
                     res["tier"] = backupTier == BackupTier.FullForensic ? "full" : "fast";
                     res["backupTier"] = backupTier.ToString();
                     res["warnings"] = new List<object>(OverviewBuilder.ToObjList(warnings));
-                    _host.AppendLog("success", string.Format("全量备份完成（{0}，打包 {1} 文件）：{2}",
-                        backupTier.ToString(), fileCount, destSnap));
+                    _host.AppendLog("success", string.Format("本机备份完成（{0}，打包 {1} 文件）：{2}",
+                        backupTier == BackupTier.FullForensic ? "完整备份" : "日常备份", fileCount, destSnap));
                     return res;
                 });
 
@@ -829,11 +829,11 @@ namespace AntigravityCompanion
             }
             if (backupCheck == null || string.IsNullOrEmpty(backupPathCheck))
             {
-                return FailCommand(400, "当前未打开任何 .agy 备份归档包。");
+                return FailCommand(400, "当前未打开任何 .agy 备份文件。");
             }
 
             // FIX P1-11: Acquire job BEFORE closing IDE!
-            if (!_host.TryAcquireJob("selective_import", "正在执行三层选择性合流导入..."))
+            if (!_host.TryAcquireJob("selective_import", "正在从备份文件恢复所选内容到本机..."))
             {
                 return FailJobBusy("当前有其他后台任务正在执行。");
             }
@@ -847,7 +847,7 @@ namespace AntigravityCompanion
                     Dictionary<string, object> errPayload;
                     if (!EnsureIdeClosedIfNeededResult(closeIde, forceKill, out errHttpCode, out errPayload))
                     {
-                        return FailCommandPayload(errHttpCode, errPayload, UnifiedJson.GetString(errPayload, "error", "IDE 正在运行。"));
+                        return FailCommandPayload(errHttpCode, errPayload, UnifiedJson.GetString(errPayload, "error", "Antigravity 主窗口正在运行。"));
                     }
                 }
 
@@ -903,12 +903,12 @@ namespace AntigravityCompanion
 
                     if (ok)
                     {
-                        _host.AppendLog("success", string.Format("备份包导入完成：能力 {0} 项、会话 {1} 条（写入 {2} 项）。",
+                        _host.AppendLog("success", string.Format("备份文件恢复完成：扩展配置 {0} 项、对话 {1} 条（写入 {2} 项）。",
                             res["capabilitiesImported"], res["conversationsImported"], res["filesImported"]));
                     }
                     else
                     {
-                        _host.AppendLog("error", "备份包导入失败: " + errMsg);
+                        _host.AppendLog("error", "备份文件恢复失败: " + errMsg);
                     }
                     return res;
                 });

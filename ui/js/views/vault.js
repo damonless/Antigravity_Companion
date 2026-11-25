@@ -232,7 +232,7 @@
         '</div>' +
       '</div>' +
       '<div class="card">' +
-        '<div class="between" style="margin-bottom:8px"><strong>本机技能 (Skills)</strong></div>' +
+        '<div class="between" style="margin-bottom:8px"><strong>本机技能</strong></div>' +
         '<div style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:8px">' +
           '<table class="data-table"><thead><tr><th>技能名称</th><th>作用域</th><th>操作</th></tr></thead><tbody>' + skillRows + '</tbody></table>' +
         '</div>' +
@@ -289,7 +289,7 @@
       ];
 
       bodyHtml =
-        '<div class="matrix-card" style="height:calc(100vh - 285px);min-height:360px">' +
+        '<div class="matrix-card" style="flex:1;min-height:300px">' +
           '<div class="matrix-toolbar">' +
             '<div class="row gap-sm wrap">' +
               '<div class="pill-group" id="capCatPills">' + cats.map(function (c) {

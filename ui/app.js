@@ -29,12 +29,24 @@
     }
   }
 
+  function hasUnsavedFormInCurrentView() {
+    var st = AGY.state;
+    if (!st.formDirty) return false;
+    if (st.view === 'cockpit' && (st.cockpitSubView || 'settings') === 'settings' && st.formDirty.cockpit) {
+      return true;
+    }
+    if (st.view === 'settings' && st.formDirty.settings) {
+      return true;
+    }
+    return false;
+  }
+
   function hasUnsavedWork() {
     var st = AGY.state;
     if (st.drawerDirtyCheck) {
       try { if (st.drawerDirtyCheck()) return true; } catch (_e) {}
     }
-    if (st.formDirty && (st.formDirty.cockpit || st.formDirty.settings)) {
+    if (hasUnsavedFormInCurrentView()) {
       return true;
     }
     if (st.view === 'sessions' && st.sessionsSubView === 'rename' && st.renameEdits && Object.keys(st.renameEdits).length > 0) {
@@ -58,6 +70,19 @@
     if (b) b.classList.add('hidden');
   }
 
+  var sseSource = null;
+  var sseHandlersRef = null;
+
+  function ensureSseConnected() {
+    if (!sseHandlersRef) return;
+    if (sseSource && sseSource.readyState !== 2) return;
+    if (sseSource) {
+      try { sseSource.close(); } catch (_e) {}
+      sseSource = null;
+    }
+    sseSource = AGY.api.connectSse(sseHandlersRef);
+  }
+
   function setDisconnectedState(disconnected, desc) {
     var st = AGY.state;
     var wasDisconnected = !!st.disconnected;
@@ -68,6 +93,7 @@
       if (desc) AGY.dom.setText('disconnectDesc', desc);
     }
     if (wasDisconnected && !st.disconnected) {
+      ensureSseConnected();
       AGY.api.showToast('已恢复与 Antigravity 伴侣后台的连接 ✓', 'success');
       if (!hasUnsavedWork()) {
         refreshAll();
@@ -329,16 +355,45 @@
     if (trashBtn) trashBtn.classList.toggle('active', view === 'trash');
   }
 
-  function switchView(view) {
+  function switchView(view, force) {
     var st = AGY.state;
-    if (view === 'rename') {
-      st.sessionsSubView = 'rename';
-      view = 'sessions';
-    } else if (view === 'vault') {
-      st.cockpitSubView = 'vault';
-      view = 'cockpit';
+    var targetView = view;
+    var nextSessionsSub = st.sessionsSubView;
+    var nextCockpitSub = st.cockpitSubView;
+    if (targetView === 'rename') {
+      nextSessionsSub = 'rename';
+      targetView = 'sessions';
+    } else if (targetView === 'vault') {
+      nextCockpitSub = 'vault';
+      targetView = 'cockpit';
     }
-    st.view = view;
+
+    var isLeavingCurrentForm = (targetView !== st.view) ||
+      (targetView === 'cockpit' && nextCockpitSub !== st.cockpitSubView);
+    if (!force && isLeavingCurrentForm && hasUnsavedFormInCurrentView()) {
+      AGY.ui.openModal(
+        '放弃尚未保存的配置修改？',
+        '<div>当前页面还有未保存的配置修改，切换页面将放弃这些改动。</div>',
+        '<button class="btn" data-act="cancel">继续编辑</button><button class="btn btn-danger" data-act="discard">放弃并切换</button>',
+        function (_mb, mf) {
+          mf.querySelector('[data-act="cancel"]').addEventListener('click', AGY.ui.closeModal);
+          mf.querySelector('[data-act="discard"]').addEventListener('click', function () {
+            AGY.ui.closeModal();
+            switchView(view, true);
+          });
+        }
+      );
+      return;
+    }
+
+    if (isLeavingCurrentForm && st.formDirty) {
+      st.formDirty.cockpit = false;
+      st.formDirty.settings = false;
+    }
+    st.sessionsSubView = nextSessionsSub;
+    st.cockpitSubView = nextCockpitSub;
+    st.view = targetView;
+    view = targetView;
     updateSidebarActiveState(view);
 
     var needsLazy = false;
@@ -388,17 +443,20 @@
   }
 
   async function doQuickCloseIde(forceKill) {
-    try {
-      await AGY.api.apiFetch('/api/ide/close', {
-        method: 'POST',
-        body: JSON.stringify({ forceKill: !!forceKill })
-      });
-      await refreshAll('Antigravity 主窗口已关闭 ✓');
-    } catch (e) {
-      if (!AGY.ui.handleIdeConflictError(e, '关闭 Antigravity 主窗口', null, function () { doQuickCloseIde(true); })) {
-        AGY.api.showToast(e.message, 'error');
+    var btn = AGY.dom.el('btnQuickCloseIde');
+    await AGY.api.withButtonBusy(btn, '正在关闭...', async function () {
+      try {
+        await AGY.api.apiFetch('/api/ide/close', {
+          method: 'POST',
+          body: JSON.stringify({ forceKill: !!forceKill })
+        });
+        await refreshAll('Antigravity 主窗口已关闭 ✓');
+      } catch (e) {
+        if (!AGY.ui.handleIdeConflictError(e, '关闭 Antigravity 主窗口', null, function () { doQuickCloseIde(true); })) {
+          AGY.api.showToast(e.message, 'error');
+        }
       }
-    }
+    });
   }
 
   async function boot() {
@@ -524,10 +582,29 @@
       }
     });
 
-    AGY.api.connectSse({
+    function probeHeartbeatOnce() {
+      if (!st.token) return;
+      AGY.api.apiFetch('/api/app/heartbeat', { method: 'POST', body: '{}' })
+        .then(function () {
+          st.heartbeatFailures = 0;
+          if (st.disconnected) setDisconnectedState(false);
+          else ensureSseConnected();
+        })
+        .catch(function () {
+          st.heartbeatFailures = (st.heartbeatFailures || 0) + 1;
+          if (st.heartbeatFailures >= 2 && !st.disconnected) {
+            setDisconnectedState(true);
+          }
+        });
+    }
+
+    sseHandlersRef = {
       onOpen: function () {
         st.heartbeatFailures = 0;
         if (st.disconnected) setDisconnectedState(false);
+      },
+      onError: function () {
+        probeHeartbeatOnce();
       },
       onProgress: function (payload) {
         if (!st.overview) st.overview = { logs: [] };
@@ -579,22 +656,10 @@
           await refreshAll();
         }
       }
-    });
+    };
+    ensureSseConnected();
 
-    setInterval(function () {
-      if (!st.token) return;
-      AGY.api.apiFetch('/api/app/heartbeat', { method: 'POST', body: '{}' })
-        .then(function () {
-          st.heartbeatFailures = 0;
-          if (st.disconnected) setDisconnectedState(false);
-        })
-        .catch(function () {
-          st.heartbeatFailures = (st.heartbeatFailures || 0) + 1;
-          if (st.heartbeatFailures >= 2 && !st.disconnected) {
-            setDisconnectedState(true);
-          }
-        });
-    }, 2500);
+    setInterval(probeHeartbeatOnce, 2500);
 
     await refreshCoreAndActiveView();
     renderCurrentView();

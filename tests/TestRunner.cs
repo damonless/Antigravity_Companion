@@ -114,6 +114,7 @@ namespace AntigravityCompanion.Tests
             Run("T86_Phase2_ConfigBackupVersionHistoryAndRestore", T86_Phase2_ConfigBackupVersionHistoryAndRestore);
             Run("T87_Phase2_OnlineHotBackupSmartAutoFlushAndLiveSse", T87_Phase2_OnlineHotBackupSmartAutoFlushAndLiveSse);
             Run("T88_Phase2_TrayDebounceUnifiedOrphanEngineAndUiParity", T88_Phase2_TrayDebounceUnifiedOrphanEngineAndUiParity);
+            Run("T89_Phase2_ReviewHardening_TrashVaultSafetySubdirWatchAndShellMatch", T89_Phase2_ReviewHardening_TrashVaultSafetySubdirWatchAndShellMatch);
 
             sw.Stop();
             Console.WriteLine("-------------------------------------------------------------------------------");
@@ -8845,6 +8846,199 @@ namespace AntigravityCompanion.Tests
                     RawHttpTestResponse bkJs = SendRawTcpHttp(host.Port, null, "GET", "/js/views/backup.js", apiHdr, null);
                     AssertTrue(bkJs.BodyText.Contains("onlineHotBackup: true") && bkJs.BodyText.Contains("existingSnapshots"),
                         "T88: backup.js uses onlineHotBackup and renders existingSnapshots");
+
+                    host.Stop();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(sb)) Directory.Delete(sb, true);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // T89: Review Hardening — Cross-Vault Trash Preservation, Project+Subagent
+        //      Restore, Corrupt .bak Rejection, Exact deferredToPbFlush,
+        //      Subdirectory FileSystemWatcher & Strict WebShell Window Matching
+        // ══════════════════════════════════════════════════════════════════════
+        private static void T89_Phase2_ReviewHardening_TrashVaultSafetySubdirWatchAndShellMatch()
+        {
+            string sb = Path.Combine(Path.GetTempPath(), "agy_t89_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string homeDir = Path.Combine(sb, "Home");
+                string geminiDir = Path.Combine(homeDir, ".gemini");
+                string agyDir = Path.Combine(geminiDir, "antigravity");
+                string convDir = Path.Combine(agyDir, "conversations");
+                string annotDir = Path.Combine(agyDir, "annotations");
+                string cfgDir = Path.Combine(geminiDir, "config");
+                string projDir = Path.Combine(cfgDir, "projects");
+                string rulesDir = Path.Combine(cfgDir, "rules");
+                string vaultA = Path.Combine(sb, "VaultA");
+                string vaultB = Path.Combine(sb, "VaultB");
+                string wsFolder = Path.Combine(sb, "Proj89");
+
+                Directory.CreateDirectory(convDir);
+                Directory.CreateDirectory(annotDir);
+                Directory.CreateDirectory(projDir);
+                Directory.CreateDirectory(rulesDir);
+                Directory.CreateDirectory(Path.Combine(vaultA, "rules"));
+                Directory.CreateDirectory(Path.Combine(vaultB, "rules"));
+                Directory.CreateDirectory(wsFolder);
+
+                // 1. WebShellLauncher strict window matching checks
+                AssertTrue(WebShellLauncher.IsMatchingWebShellWindow("msedge", "Chrome_WidgetWin_1", "Antigravity Companion V1.0"),
+                    "T89: Matches Edge --app WebShell window");
+                AssertTrue(WebShellLauncher.IsMatchingWebShellWindow("chrome", "Chrome_WidgetWin_1", "Antigravity 伴侣"),
+                    "T89: Matches Chrome --app WebShell window");
+                AssertTrue(!WebShellLauncher.IsMatchingWebShellWindow("msedge", "Chrome_WidgetWin_1", "Antigravity Companion V1.0 - Personal - Microsoft Edge"),
+                    "T89: Rejects regular Edge tabbed browser window");
+                AssertTrue(!WebShellLauncher.IsMatchingWebShellWindow("chrome", "Chrome_WidgetWin_1", "Antigravity Companion - Google Chrome"),
+                    "T89: Rejects regular Chrome tabbed browser window");
+                AssertTrue(!WebShellLauncher.IsMatchingWebShellWindow("Code", "Chrome_WidgetWin_1", "Antigravity Companion - Visual Studio Code"),
+                    "T89: Rejects VS Code window");
+                AssertTrue(!WebShellLauncher.IsMatchingWebShellWindow("notepad", "Notepad", "Antigravity Companion.txt - Notepad"),
+                    "T89: Rejects Notepad window");
+
+                // Seed VaultA rule for cross-vault trash restore safety test
+                string vaultARule = CapabilityVaultService.ResolveRepoRulePath(vaultA, "rules/rule89.md");
+                Directory.CreateDirectory(Path.GetDirectoryName(vaultARule));
+                File.WriteAllText(vaultARule, "# VaultA Rule 89\n", Encoding.UTF8);
+
+                // Seed config.json + corrupt .bak.*
+                string cfgJson = Path.Combine(cfgDir, "config.json");
+                File.WriteAllText(cfgJson, "{\"userSettings\":{\"themeMode\":\"THEME_MODE_LIGHT\"}}", Encoding.UTF8);
+                string badBak = Path.Combine(cfgDir, "config.json.bak.20261125_010101");
+                File.WriteAllText(badBak, "{ BROKEN JSON !!!", Encoding.UTF8);
+
+                // Seed formal project with parent + subagent + one SQLite-only session (not in .pb)
+                string pid89 = "proj-uuid-89";
+                string parentCid = "89000000-0000-0000-0000-000000000001";
+                string subCid = "89000000-0000-0000-0000-000000000002";
+                string sqliteOnlyCid = "89000000-0000-0000-0000-000000000003";
+                string wsUri = SessionLifecycleService.ToFileUri(wsFolder);
+
+                string projJsonPath = Path.Combine(projDir, pid89 + ".json");
+                File.WriteAllText(projJsonPath,
+                    "{\"id\":\"" + pid89 + "\",\"name\":\"Proj89\",\"projectResources\":{\"resources\":[{\"gitFolder\":{\"folderUri\":\"" + UnifiedJson.EscapeString(wsUri) + "\"}}]}}",
+                    Encoding.UTF8);
+
+                ProtoNode nPar = BuildRealProtoEntry(parentCid, "Parent 89", null, wsUri, "Proj89", pid89, 5, 2, 1);
+                ProtoNode nSub = BuildRealProtoEntry(subCid, "Subagent 89", null, wsUri, "Proj89", pid89, 2, 1, 0);
+                nSub.GetChild(2).GetChild(17).Children.Add(new ProtoNode(11, 2) { RawBytes = Encoding.UTF8.GetBytes(parentCid), IsModified = true });
+                File.WriteAllBytes(Path.Combine(agyDir, "agyhub_summaries_proto.pb"), ProtoCodec.Encode(new List<ProtoNode> { nPar, nSub }));
+
+                CreateMinimalValidSqliteDb(Path.Combine(convDir, parentCid + ".db"), "p89");
+                CreateMinimalValidSqliteDb(Path.Combine(convDir, subCid + ".db"), "s89");
+                CreateMinimalValidSqliteDb(Path.Combine(convDir, sqliteOnlyCid + ".db"), "sq89");
+                File.WriteAllText(Path.Combine(annotDir, sqliteOnlyCid + ".pbtxt"), "title: \"SqliteOnly89\"\n", Encoding.UTF8);
+
+                string sumDbPath = Path.Combine(agyDir, "conversation_summaries.db");
+                IntPtr db = OpenAndCreateSummaryWalDb(sumDbPath);
+                try
+                {
+                    InsertSummaryDbRow(db, parentCid, "Parent 89", "prev", 5, "[\"" + wsUri + "\"]", "IDLE", pid89, string.Empty, string.Empty, 0, 0, ProtoCodec.Encode(nPar.Children));
+                    InsertSummaryDbRow(db, subCid, "Subagent 89", "subprev", 2, "[\"" + wsUri + "\"]", "IDLE", pid89, "worker", parentCid, 1, 0, ProtoCodec.Encode(nSub.Children));
+                    InsertSummaryDbRow(db, sqliteOnlyCid, "SqliteOnly89", "sqprev", 3, "[\"" + wsUri + "\"]", "IDLE", pid89, string.Empty, string.Empty, 0, 0, new byte[] { 1 });
+                    t_sqlite3_exec(db, Utf8Z("PRAGMA wal_checkpoint(TRUNCATE);"), IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+                }
+                finally { t_sqlite3_close(db); }
+
+                string token = "t89_tok_hardening";
+                Dictionary<string, string> apiHdr = new Dictionary<string, string> { { "X-AGY-Token", token } };
+                using (LocalWebHost host = new LocalWebHost(homeDir, geminiDir, vaultA, 0, token))
+                {
+                    bool ideRunning89 = false;
+                    host.IdeRunningOverride = delegate() { return ideRunning89; };
+                    host.Start();
+
+                    // 2. Corrupt JSON .bak.* rejected with 400 and preserves config.json
+                    RawHttpTestResponse corruptResp = SendRawTcpHttp(host.Port, null, "POST", "/api/config-backups/restore", apiHdr,
+                        "{\"backupPath\":\"" + UnifiedJson.EscapeString(badBak) + "\"}");
+                    AssertEqual(400, corruptResp.StatusCode, "T89: Corrupt JSON .bak.* rejected with 400");
+                    AssertTrue(File.ReadAllText(cfgJson, Encoding.UTF8).Contains("THEME_MODE_LIGHT"), "T89: Valid config.json preserved after corrupt .bak rejection");
+
+                    // 3. Cross-Vault Trash Restore Protection: delete from VaultA -> switch to VaultB -> restore MUST FAIL AND KEEP TRASH!
+                    RawHttpTestResponse delVaultCap = SendRawTcpHttp(host.Port, null, "POST", "/api/capabilities/delete-repo", apiHdr,
+                        "{\"keys\":[\"Rule:rules/rule89.md\"]}");
+                    AssertEqual(200, delVaultCap.StatusCode, "T89: Soft-delete VaultA rule returns 200");
+                    string capTrashId = UnifiedJson.GetString(UnifiedJson.AsDict(UnifiedJson.Parse(delVaultCap.BodyText)), "trashId", string.Empty);
+                    AssertTrue(!string.IsNullOrEmpty(capTrashId) && !File.Exists(vaultARule), "T89: VaultA rule moved to trash");
+
+                    RawHttpTestResponse swB = SendRawTcpHttp(host.Port, null, "POST", "/api/vault/select", apiHdr,
+                        "{\"vaultPath\":\"" + UnifiedJson.EscapeString(vaultB) + "\"}");
+                    AssertEqual(200, swB.StatusCode, "T89: Switch to VaultB returns 200");
+
+                    RawHttpTestResponse blockedRestore = SendRawTcpHttp(host.Port, null, "POST", "/api/trash/restore", apiHdr,
+                        "{\"id\":\"" + UnifiedJson.EscapeString(capTrashId) + "\"}");
+                    AssertEqual(400, blockedRestore.StatusCode, "T89: Cross-vault trash restore blocked with 400");
+                    string trashItemDir = Path.Combine(TrashAndBackupService.GetTrashRoot(geminiDir), capTrashId);
+                    AssertTrue(Directory.Exists(trashItemDir), "T89: Blocked trash restore PRESERVES trash directory (zero data loss!)");
+
+                    // Switch back to VaultA -> restore succeeds!
+                    SendRawTcpHttp(host.Port, null, "POST", "/api/vault/select", apiHdr,
+                        "{\"vaultPath\":\"" + UnifiedJson.EscapeString(vaultA) + "\"}");
+                    RawHttpTestResponse okRestore = SendRawTcpHttp(host.Port, null, "POST", "/api/trash/restore", apiHdr,
+                        "{\"id\":\"" + UnifiedJson.EscapeString(capTrashId) + "\"}");
+                    AssertEqual(200, okRestore.StatusCode, "T89: Switching back to VaultA restores rule89.md with 200");
+                    AssertTrue(File.Exists(vaultARule) && File.ReadAllText(vaultARule, Encoding.UTF8).Contains("VaultA Rule 89"),
+                        "T89: VaultA rule89.md content intact after restore");
+
+                    // 4. Rename non-.pb session when IDE is closed -> MUST NOT falsely set deferredToPbFlush=true!
+                    RawHttpTestResponse renNoPb = SendRawTcpHttp(host.Port, null, "POST", "/api/sessions/rename-single", apiHdr,
+                        "{\"cid\":\"" + sqliteOnlyCid + "\",\"newTitle\":\"SqliteOnly89 Renamed\",\"strategy\":\"SmartAuto\"}");
+                    AssertEqual(200, renNoPb.StatusCode, "T89: Rename SQLite-only session returns 200");
+                    Dictionary<string, object> renNoPbDict = UnifiedJson.AsDict(UnifiedJson.Parse(renNoPb.BodyText));
+                    AssertEqual(false, UnifiedJson.GetBool(renNoPbDict, "deferredToPbFlush", true), "T89: Non-.pb session rename when IDE closed has deferredToPbFlush=false");
+                    AssertEqual(0, UnifiedJson.GetInt(renNoPbDict, "pendingPbSyncCount", -1), "T89: pendingPbSyncCount stays 0 when IDE closed");
+
+                    // 5. SmartAuto rename while IDE running enqueues pending; deleting that session clears pending!
+                    ideRunning89 = true;
+                    RawHttpTestResponse renDef = SendRawTcpHttp(host.Port, null, "POST", "/api/sessions/rename-single", apiHdr,
+                        "{\"cid\":\"" + parentCid + "\",\"newTitle\":\"Parent 89 Pending\",\"strategy\":\"SmartAuto\"}");
+                    AssertEqual(200, renDef.StatusCode, "T89: SmartAuto rename while IDE running succeeds");
+                    AssertEqual(1, TrashAndBackupService.GetPendingPbSyncCount(geminiDir), "T89: Pending .pb queue has 1 entry");
+
+                    // Delete entire formal project (parent + subagent) when IDE stopped -> clears pending AND restores cleanly!
+                    ideRunning89 = false;
+                    RawHttpTestResponse delProj = SendRawTcpHttp(host.Port, null, "POST", "/api/sessions/delete", apiHdr,
+                        "{\"projectIds\":[\"" + pid89 + "\"]}");
+                    AssertEqual(200, delProj.StatusCode, "T89: Soft-delete formal project returns 200");
+                    string projTrashId = UnifiedJson.GetString(UnifiedJson.AsDict(UnifiedJson.Parse(delProj.BodyText)), "trashId", string.Empty);
+                    AssertEqual(0, TrashAndBackupService.GetPendingPbSyncCount(geminiDir), "T89: Deleting session clears its stale PendingPbSync entry");
+                    AssertTrue(!File.Exists(projJsonPath) && !File.Exists(Path.Combine(convDir, subCid + ".db")), "T89: Project JSON and subagent DB removed");
+
+                    RawHttpTestResponse resProj = SendRawTcpHttp(host.Port, null, "POST", "/api/trash/restore", apiHdr,
+                        "{\"id\":\"" + UnifiedJson.EscapeString(projTrashId) + "\"}");
+                    AssertEqual(200, resProj.StatusCode, "T89: Restoring formal project from trash returns 200");
+                    AssertTrue(File.Exists(projJsonPath), "T89: projects/<pid>.json restored");
+                    AssertTrue(File.Exists(Path.Combine(convDir, parentCid + ".db")) && File.Exists(Path.Combine(convDir, subCid + ".db")),
+                        "T89: Both parent and subagent .db restored");
+                    Dictionary<string, SummaryDbRowInfo> snapAfter = SummarySqliteBridge.ReadSummaryDbSnapshot(sumDbPath);
+                    AssertTrue(snapAfter.ContainsKey(subCid) && string.Equals(snapAfter[subCid].ParentConversationId, parentCid, StringComparison.OrdinalIgnoreCase),
+                        "T89: Restored subagent preserves ParentConversationId link in SQLite");
+
+                    // 6. FileSystemWatcher watches config/rules/ AND Vault/rules/ subdirectories!
+                    using (TcpClient sseClient = new TcpClient("127.0.0.1", host.Port))
+                    {
+                        sseClient.ReceiveTimeout = 6000;
+                        NetworkStream sseStream = sseClient.GetStream();
+                        byte[] reqBytes = Encoding.ASCII.GetBytes(
+                            "GET /api/events HTTP/1.1\r\nHost: 127.0.0.1:" + host.Port + "\r\nX-AGY-Token: " + token + "\r\nConnection: keep-alive\r\n\r\n");
+                        sseStream.Write(reqBytes, 0, reqBytes.Length);
+                        sseStream.Flush();
+                        ReadSseUntilEvent(sseStream, "connected", 3000);
+
+                        System.Threading.Thread.Sleep(950); // Allow self-write suppression window to expire
+                        File.WriteAllText(Path.Combine(rulesDir, "subdir_rule_89.md"), "# Subdir Rule Change\n", Encoding.UTF8);
+                        string fsEv1 = ReadSseUntilEvent(sseStream, "fs_changed", 4500);
+                        AssertTrue(fsEv1.Contains("event: fs_changed"), "T89: FileSystemWatcher detects subdirectory edits under config/rules/");
+
+                        System.Threading.Thread.Sleep(950);
+                        File.WriteAllText(Path.Combine(vaultA, "rules", "subdir_vault_89.md"), "# Vault Subdir Change\n", Encoding.UTF8);
+                        string fsEv2 = ReadSseUntilEvent(sseStream, "fs_changed", 4500);
+                        AssertTrue(fsEv2.Contains("event: fs_changed"), "T89: FileSystemWatcher detects subdirectory edits under Vault/rules/");
+                    }
 
                     host.Stop();
                 }
